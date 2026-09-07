@@ -2,7 +2,17 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { LessonSettings, OutputType, UploadedFile, GenerationResult } from '@/types';
 import { INSTITUTIONS } from '@/types';
 
-const MODEL_NAMES = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-pro'] as const;
+// The free-tier request quota is counted PER MODEL PER PROJECT, so each of
+// these models has its own independent daily allowance. Listing several
+// working models multiplies the effective capacity (models x keys).
+// Verified available for generateContent on v1beta.
+const MODEL_NAMES = [
+  'gemini-3.6-flash',
+  'gemini-3.7-flash',
+  'gemini-3.5-flash',
+  'gemini-flash-latest',
+  'gemini-3.5-flash-lite',
+] as const;
 
 // Built-in default keys so the app works immediately without manual setup.
 // These can be overridden via VITE_GEMINI_API_KEYS / NEXT_PUBLIC_GEMINI_API_KEYS.
@@ -293,34 +303,41 @@ async function generateWithFallback(request: GeminiRequest) {
   const keys = getApiKeys();
   let lastError: unknown;
 
-  // Start with the first key; on any quota/overload error, silently rotate
-  // to the next key and immediately retry the same request.
-  for (const apiKey of keys) {
-    const genAI = new GoogleGenerativeAI(apiKey);
+  // Because the daily quota is per-model-per-project, we iterate model-first:
+  // for each model we try every key (each key = its own fresh quota bucket)
+  // before falling back to the next model. All rotation is silent — a busy
+  // message is only surfaced once every combination is exhausted.
+  for (const modelName of MODEL_NAMES) {
+    let modelIsDead = false;
 
-    for (const modelName of MODEL_NAMES) {
+    for (const apiKey of keys) {
+      const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({ model: modelName });
       try {
         return await model.generateContent(request);
       } catch (error) {
         lastError = error;
-        if (isQuotaOrOverloadError(error)) {
-          // This key is exhausted/overloaded — stop trying models and
-          // move to the next key right away.
+        if (isModelUnavailableError(error)) {
+          // This model doesn't exist / isn't callable — no key will help,
+          // so skip straight to the next model.
+          modelIsDead = true;
           break;
         }
-        if (isModelUnavailableError(error)) {
-          // Try the next fallback model with the same key.
+        if (isQuotaOrOverloadError(error)) {
+          // Quota hit or temporarily overloaded on this key — try the next
+          // key, which has an independent quota for this same model.
           continue;
         }
         // Any other error is a genuine failure (bad request, auth, etc.).
         throw error;
       }
     }
+
+    if (modelIsDead) continue;
   }
 
-  // Every key's quota is exhausted — only now surface a message to the user.
-  throw lastError && !isQuotaOrOverloadError(lastError)
+  // Every model on every key is exhausted — only now surface a message.
+  throw lastError && !isQuotaOrOverloadError(lastError) && !isModelUnavailableError(lastError)
     ? lastError
     : new Error(SERVICE_BUSY_MESSAGE);
 }
