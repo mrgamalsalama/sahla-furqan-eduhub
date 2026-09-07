@@ -302,7 +302,7 @@ export default function HomePage({ onOpenResult, uiLang }: HomePageProps) {
                         : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'
                     }`}
                   >
-                    <img src={INSTITUTIONS.sahlah.logo} alt="Sahlah" className="h-6 w-6 object-contain" />
+                    <img src={INSTITUTIONS.sahlah.logo} alt="Sahlah" className="h-6 w-auto max-w-[72px] object-contain" />
                     {s.sahlahAcademy}
                   </button>
                   <button
@@ -313,7 +313,7 @@ export default function HomePage({ onOpenResult, uiLang }: HomePageProps) {
                         : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'
                     }`}
                   >
-                    <img src={INSTITUTIONS.furqan.logo} alt="Furqan" className="h-6 w-6 object-contain" />
+                    <img src={INSTITUTIONS.furqan.logo} alt="Furqan" className="h-6 w-auto object-contain" />
                     {s.furqanSchool}
                   </button>
                   <button
@@ -324,9 +324,9 @@ export default function HomePage({ onOpenResult, uiLang }: HomePageProps) {
                         : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'
                     }`}
                   >
-                    <div className="flex -space-x-1">
-                      <img src={INSTITUTIONS.sahlah.logo} alt="Sahlah" className="h-6 w-6 object-contain" />
-                      <img src={INSTITUTIONS.furqan.logo} alt="Furqan" className="h-6 w-6 object-contain" />
+                    <div className="flex items-center gap-1.5">
+                      <img src={INSTITUTIONS.sahlah.logo} alt="Sahlah" className="h-6 w-auto max-w-[64px] object-contain" />
+                      <img src={INSTITUTIONS.furqan.logo} alt="Furqan" className="h-6 w-auto object-contain" />
                     </div>
                     {s.bothInstitutions}
                   </button>

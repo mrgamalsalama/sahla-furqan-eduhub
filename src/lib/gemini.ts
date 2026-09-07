@@ -55,24 +55,42 @@ function isNonNativeSubject(subject: string): boolean {
   return subject.includes('غير الناطقين') || subject.includes('Non-Native') || subject.includes('AFL') || subject.includes('Non-Arabic');
 }
 
+// Keeps each logo at a consistent 60px cap while preserving its native aspect
+// ratio (object-fit:contain + width:auto), so it never stretches on screen,
+// in the print window, or inside exported PDF/Word documents.
+const LOGO_IMG_STYLE =
+  'max-height:60px; max-width:100%; height:auto; width:auto; object-fit:contain; vertical-align:middle;';
+
 function getInstitutionHeader(settings: LessonSettings): string {
   const isAr = settings.contentLanguage === 'ar';
   const inst = settings.institution;
 
+  const logoImg = (logo: string, alt: string): string =>
+    `<img src="${logo}" alt="${alt}" style="${LOGO_IMG_STYLE}" />`;
+
+  const wrap = (inner: string, caption: string): string =>
+    `<div style="text-align:center; margin-bottom:16px;">${inner}<p style="font-weight:bold; font-size:1.1rem; margin-top:4px;">${caption}</p></div>`;
+
   if (inst === 'sahlah') {
     return isAr
-      ? `<div style="text-align:center; margin-bottom:16px;"><img src="${INSTITUTIONS.sahlah.logo}" alt="شعار أكاديمية سهلة الدولية" style="max-height:60px; height:auto; width:auto;" /><p style="font-weight:bold; font-size:1.1rem; margin-top:4px;">${INSTITUTIONS.sahlah.ar}</p></div>`
-      : `<div style="text-align:center; margin-bottom:16px;"><img src="${INSTITUTIONS.sahlah.logo}" alt="Sahlah Academy Logo" style="max-height:60px; height:auto; width:auto;" /><p style="font-weight:bold; font-size:1.1rem; margin-top:4px;">${INSTITUTIONS.sahlah.en}</p></div>`;
+      ? wrap(logoImg(INSTITUTIONS.sahlah.logo, 'شعار أكاديمية سهلة الدولية'), INSTITUTIONS.sahlah.ar)
+      : wrap(logoImg(INSTITUTIONS.sahlah.logo, 'Sahlah Academy Logo'), INSTITUTIONS.sahlah.en);
   }
   if (inst === 'furqan') {
     return isAr
-      ? `<div style="text-align:center; margin-bottom:16px;"><img src="${INSTITUTIONS.furqan.logo}" alt="شعار مدرسة الفرقان العالمية" style="max-height:60px; height:auto; width:auto;" /><p style="font-weight:bold; font-size:1.1rem; margin-top:4px;">${INSTITUTIONS.furqan.ar}</p></div>`
-      : `<div style="text-align:center; margin-bottom:16px;"><img src="${INSTITUTIONS.furqan.logo}" alt="Al-Furqan International School Logo" style="max-height:60px; height:auto; width:auto;" /><p style="font-weight:bold; font-size:1.1rem; margin-top:4px;">${INSTITUTIONS.furqan.en}</p></div>`;
+      ? wrap(logoImg(INSTITUTIONS.furqan.logo, 'شعار مدرسة الفرقان العالمية'), INSTITUTIONS.furqan.ar)
+      : wrap(logoImg(INSTITUTIONS.furqan.logo, 'Al-Furqan International School Logo'), INSTITUTIONS.furqan.en);
   }
   // both
+  const pair = (sahlahAlt: string, furqanAlt: string): string =>
+    `<div style="display:inline-flex; gap:20px; align-items:center; justify-content:center; flex-wrap:wrap;">${logoImg(
+      INSTITUTIONS.sahlah.logo,
+      sahlahAlt
+    )}${logoImg(INSTITUTIONS.furqan.logo, furqanAlt)}</div>`;
+
   return isAr
-    ? `<div style="text-align:center; margin-bottom:16px;"><div style="display:inline-flex; gap:12px; align-items:center;"><img src="${INSTITUTIONS.sahlah.logo}" alt="شعار سهلة" style="max-height:60px; height:auto; width:auto;" /><img src="${INSTITUTIONS.furqan.logo}" alt="شعار الفرقان" style="max-height:60px; height:auto; width:auto;" /></div><p style="font-weight:bold; font-size:1.1rem; margin-top:4px;">${INSTITUTIONS.sahlah.ar} & ${INSTITUTIONS.furqan.ar}</p></div>`
-    : `<div style="text-align:center; margin-bottom:16px;"><div style="display:inline-flex; gap:12px; align-items:center;"><img src="${INSTITUTIONS.sahlah.logo}" alt="Sahlah Logo" style="max-height:60px; height:auto; width:auto;" /><img src="${INSTITUTIONS.furqan.logo}" alt="Furqan Logo" style="max-height:60px; height:auto; width:auto;" /></div><p style="font-weight:bold; font-size:1.1rem; margin-top:4px;">${INSTITUTIONS.sahlah.en} & ${INSTITUTIONS.furqan.en}</p></div>`;
+    ? wrap(pair('شعار أكاديمية سهلة الدولية', 'شعار مدرسة الفرقان العالمية'), `${INSTITUTIONS.sahlah.ar} & ${INSTITUTIONS.furqan.ar}`)
+    : wrap(pair('Sahlah Academy Logo', 'Al-Furqan International School Logo'), `${INSTITUTIONS.sahlah.en} & ${INSTITUTIONS.furqan.en}`);
 }
 
 function buildSubjectGuidance(settings: LessonSettings): string {

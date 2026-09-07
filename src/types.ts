@@ -1,3 +1,5 @@
+import { SAHLAH_LOGO, FURQAN_LOGO } from '@/lib/logos';
+
 export type View = 'home' | 'editor' | 'library';
 
 export type OutputType = 'lesson-plan' | 'worksheet' | 'quiz' | 'slides';
@@ -90,19 +92,14 @@ export const OUTPUT_LABELS_EN: Record<OutputType, string> = {
   slides: 'Slide Summary',
 };
 
-const sahlahLogoSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="110" viewBox="0 0 320 110"><rect width="320" height="110" rx="16" fill="#ffffff"/><circle cx="55" cy="55" r="37" fill="#13b8b2"/><path d="M55 24c-18 0-31 14-31 31s13 31 31 31c12 0 22-6 27-16H63c-3 4-7 6-12 6-12 0-21-9-21-21s9-21 21-21c5 0 9 2 12 6h19C77 30 67 24 55 24Z" fill="#ffffff"/><circle cx="55" cy="55" r="7" fill="#13b8b2"/><circle cx="92" cy="20" r="9" fill="#f47b4a"/><text x="112" y="52" font-family="Arial, sans-serif" font-size="25" font-weight="700" fill="#13b8b2">Sahlah</text><text x="112" y="78" font-family="Arial, sans-serif" font-size="14" fill="#f47b4a">International Academy</text></svg>`;
-const furqanLogoSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="110" viewBox="0 0 320 110"><rect width="320" height="110" rx="16" fill="#ffffff"/><circle cx="55" cy="42" r="29" fill="#10b7b1"/><path d="M40 42c0-12 9-21 21-21 7 0 13 3 17 8-5-12-16-20-29-20-18 0-33 15-33 33s15 33 33 33c13 0 24-8 29-20-4 5-10 8-17 8-12 0-21-9-21-21Z" fill="#ffffff"/><circle cx="55" cy="42" r="7" fill="#10b7b1"/><circle cx="92" cy="16" r="9" fill="#f47b4a"/><text x="113" y="48" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#10b7b1">Al-Furqan</text><text x="113" y="72" font-family="Arial, sans-serif" font-size="13" fill="#f47b4a">International School</text></svg>`;
-
-const embeddedLogo = (svg: string): string => `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
-
 export const INSTITUTIONS = {
   sahlah: {
-    logo: embeddedLogo(sahlahLogoSvg),
+    logo: SAHLAH_LOGO,
     ar: 'أكاديمية سهلة الدولية',
     en: 'Sahlah Academy',
   },
   furqan: {
-    logo: embeddedLogo(furqanLogoSvg),
+    logo: FURQAN_LOGO,
     ar: 'مدرسة الفرقان العالمية',
     en: 'Al-Furqan International School',
   },
