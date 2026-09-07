@@ -2,8 +2,54 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { LessonSettings, OutputType, UploadedFile, GenerationResult } from '@/types';
 import { INSTITUTIONS } from '@/types';
 
-const MODEL_NAMES = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-pro'] as const;
-const MAX_ATTEMPTS_PER_MODEL = 3;
+// The free-tier request quota is counted PER MODEL PER PROJECT, so each of
+// these models has its own independent daily allowance. Listing several
+// working models multiplies the effective capacity (models x keys).
+// Verified available for generateContent on v1beta.
+const MODEL_NAMES = [
+  'gemini-3.6-flash',
+  'gemini-3.7-flash',
+  'gemini-3.5-flash',
+  'gemini-flash-latest',
+  'gemini-3.5-flash-lite',
+] as const;
+
+// Built-in default keys so the app works immediately without manual setup.
+// These can be overridden via VITE_GEMINI_API_KEYS / NEXT_PUBLIC_GEMINI_API_KEYS.
+const API_KEYS = [
+  'AQ.Ab8RN6KBP1t4IhOfXLexXFdxGB_F1uj7dELY16pL3Fe_uiYIfQ',
+  'AQ.Ab8RN6IGxqstG5WTyNLAR-H7h91QCjs9TMpyxQoHg71jzpYH2g',
+  'AQ.Ab8RN6JLb5Qmdigvt7Z2vNlAbpmR1UyuyafzejSUD2MzJF7G3Q',
+  'AQ.Ab8RN6IznwC6_221ubctgZbtyqNAvZQ3NxfWfwV0_g0-siBahg',
+];
+
+const SERVICE_BUSY_MESSAGE = 'الخدمة تشهد ضغطاً حالياً، يرجى المحاولة بعد قليل';
+
+function readEnv(name: string): string | undefined {
+  const viteEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+  const fromVite = viteEnv?.[name];
+  if (fromVite) return fromVite;
+  if (typeof process !== 'undefined' && process.env && process.env[name]) {
+    return process.env[name];
+  }
+  return undefined;
+}
+
+function getApiKeys(): string[] {
+  const raw =
+    readEnv('VITE_GEMINI_API_KEYS') ||
+    readEnv('NEXT_PUBLIC_GEMINI_API_KEYS') ||
+    readEnv('VITE_GEMINI_API_KEY') ||
+    '';
+
+  const fromEnv = raw
+    .split(/[\n,]/)
+    .map((key) => key.trim())
+    .filter(Boolean);
+
+  const merged = [...fromEnv, ...API_KEYS];
+  return Array.from(new Set(merged));
+}
 
 function isNonNativeSubject(subject: string): boolean {
   return subject.includes('غير الناطقين') || subject.includes('Non-Native') || subject.includes('AFL') || subject.includes('Non-Arabic');
@@ -108,7 +154,7 @@ function buildBasePrompt(settings: LessonSettings, outputType: OutputType): stri
 - تنوع في الأنشطة: سؤال اختيار من متعدد، صح/خطأ، أكمل الفراغ، أسئلة مفتوحة، أنشطة تطبيقية.
 - مكان لكتابة اسم الطالب والتاريخ.
 - أنشطة تتناسب مع مستوى الطلاب المحدد.
-استخدم وسوم HTML فقط: <h1>, <h2>, <h3>, <p>, <table>, <tr>, <th>, <td>, <ul>, <li>, <strong>, <ol>.
+استخدم وسوم HTML فق��: <h1>, <h2>, <h3>, <p>, <table>, <tr>, <th>, <td>, <ul>, <li>, <strong>, <ol>.
 لا تستخدم وسوم <html> أو <body> أو <style>.`;
 
       case 'quiz':
@@ -236,41 +282,64 @@ Do not use <html>, <body>, or <style> tags.`;
   }
 }
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
-
 type GeminiRequest = string | Array<{ text: string } | { inlineData: { mimeType: string; data: string } }>;
 
-function isTemporaryServiceError(error: unknown): boolean {
+// Quota (429) or overload/unavailable (503) errors: these trigger a silent
+// switch to the next API key rather than surfacing an error to the user.
+function isQuotaOrOverloadError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /(?:503|high demand|overloaded|service unavailable|temporarily unavailable)/i.test(message);
+  return /(?:429|quota|rate\s*limit|resource_exhausted|too many requests|503|high demand|overloaded|service unavailable|temporarily unavailable)/i.test(
+    message
+  );
 }
 
-function wait(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+// Model-not-found style errors: try the next model on the same key.
+function isModelUnavailableError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /(?:404|not found|not supported|does not exist|unknown model|invalid model)/i.test(message);
 }
 
-async function generateWithFallback(genAI: GoogleGenerativeAI, request: GeminiRequest) {
+async function generateWithFallback(request: GeminiRequest) {
+  const keys = getApiKeys();
   let lastError: unknown;
 
+  // Because the daily quota is per-model-per-project, we iterate model-first:
+  // for each model we try every key (each key = its own fresh quota bucket)
+  // before falling back to the next model. All rotation is silent — a busy
+  // message is only surfaced once every combination is exhausted.
   for (const modelName of MODEL_NAMES) {
-    const model = genAI.getGenerativeModel({ model: modelName });
+    let modelIsDead = false;
 
-    for (let attempt = 0; attempt < MAX_ATTEMPTS_PER_MODEL; attempt += 1) {
+    for (const apiKey of keys) {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: modelName });
       try {
         return await model.generateContent(request);
       } catch (error) {
         lastError = error;
-        if (!isTemporaryServiceError(error)) throw error;
-        if (attempt < MAX_ATTEMPTS_PER_MODEL - 1) {
-          await wait(1000 * (2 ** attempt));
+        if (isModelUnavailableError(error)) {
+          // This model doesn't exist / isn't callable — no key will help,
+          // so skip straight to the next model.
+          modelIsDead = true;
+          break;
         }
+        if (isQuotaOrOverloadError(error)) {
+          // Quota hit or temporarily overloaded on this key — try the next
+          // key, which has an independent quota for this same model.
+          continue;
+        }
+        // Any other error is a genuine failure (bad request, auth, etc.).
+        throw error;
       }
     }
+
+    if (modelIsDead) continue;
   }
 
-  throw lastError instanceof Error
+  // Every model on every key is exhausted — only now surface a message.
+  throw lastError && !isQuotaOrOverloadError(lastError) && !isModelUnavailableError(lastError)
     ? lastError
-    : new Error('The AI service is temporarily unavailable. Please try again shortly.');
+    : new Error(SERVICE_BUSY_MESSAGE);
 }
 
 export async function generateContent(
@@ -278,11 +347,6 @@ export async function generateContent(
   outputType: OutputType,
   files: UploadedFile[]
 ): Promise<GenerationResult> {
-  if (!API_KEY) {
-    throw new Error('Gemini API key is not configured. Please contact the administrator.');
-  }
-
-  const genAI = new GoogleGenerativeAI(API_KEY);
   const prompt = buildBasePrompt(settings, outputType);
 
   const imageFiles = files.filter((f) => f.type === 'image');
@@ -319,7 +383,7 @@ export async function generateContent(
     request = prompt;
   }
 
-  const result = await generateWithFallback(genAI, request);
+  const result = await generateWithFallback(request);
   const text = result.response.text();
 
   const htmlContent = extractHtml(text);
