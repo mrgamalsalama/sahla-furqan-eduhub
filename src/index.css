@@ -1,0 +1,182 @@
+@import url('https://fonts.googleapis.com/css2?family=Alexandria:wght@400;600;700&family=Almarai:wght@400;700;800&family=Amiri:ital,wght@0,400;0,700;1,400&family=Cairo:wght@400;600;700;800&family=Changa:wght@400;600;700&family=Inter:wght@400;600;700&family=Kufam:wght@400;600;700&family=Lateef:wght@400;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Noto+Naskh+Arabic:wght@400;600;700&family=Noto+Sans:wght@400;600;700&family=Poppins:wght@400;600;700&family=Readex+Pro:wght@400;600;700&family=Roboto:wght@400;500;700&family=Scheherazade+New:wght@400;700&family=Tajawal:wght@400;500;700;800&family=Traditional+Arabic&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    direction: rtl;
+  }
+  body {
+    font-family: 'Cairo', 'Tajawal', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary-600 text-white font-semibold rounded-xl shadow-sm hover:bg-primary-700 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-white text-primary-700 border border-primary-200 font-semibold rounded-xl shadow-sm hover:bg-primary-50 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-gray-600 font-medium rounded-lg hover:bg-gray-100 transition-all duration-200;
+  }
+  .btn-accent {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-accent-500 text-white font-semibold rounded-xl shadow-sm hover:bg-accent-600 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .card {
+    @apply bg-white rounded-2xl shadow-sm border border-gray-100;
+  }
+  .input-field {
+    @apply w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:border-transparent transition-all duration-200;
+  }
+  .label-field {
+    @apply block text-sm font-semibold text-gray-700 mb-1.5;
+  }
+}
+
+/* Rich text editor content styling */
+.rte-content {
+  line-height: 1.8;
+  color: #1e293b;
+}
+
+.rte-content h1 { font-size: 1.75rem; font-weight: 800; margin: 1.25rem 0 0.75rem; color: #1a3c8f; }
+.rte-content h2 { font-size: 1.35rem; font-weight: 700; margin: 1rem 0 0.5rem; color: #1551e1; }
+.rte-content h3 { font-size: 1.15rem; font-weight: 700; margin: 0.85rem 0 0.5rem; color: #1843b6; }
+.rte-content p { margin: 0.5rem 0; }
+
+/* تنسيق الجداول وضمان وضوح رؤوس الأعمدة */
+.rte-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.25rem 0;
+}
+.rte-content th,
+.rte-content td {
+  border: 1px solid #cbd5e1;
+  padding: 0.75rem 1rem;
+  vertical-align: top;
+}
+.rte-content th {
+  background-color: #f1f5f9;
+  color: #0f172a !important; /* لون غامق وواضح جداً للرؤوس */
+  font-weight: 800;
+}
+.rte-content tr:nth-child(even) {
+  background-color: #f8fafc;
+}
+.rte-content strong {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* الضبط القاطع للغة العربية (RTL) */
+[dir="rtl"] .rte-content,
+.rte-content[dir="rtl"],
+.rte-content [dir="rtl"] {
+  direction: rtl !important;
+  text-align: right !important;
+}
+
+[dir="rtl"] .rte-content table,
+.rte-content[dir="rtl"] table {
+  direction: rtl !important;
+}
+
+[dir="rtl"] .rte-content th,
+[dir="rtl"] .rte-content td,
+.rte-content[dir="rtl"] th,
+.rte-content[dir="rtl"] td {
+  text-align: right !important;
+  direction: rtl !important;
+}
+
+[dir="rtl"] .rte-content ul,
+.rte-content[dir="rtl"] ul {
+  list-style-type: disc !important;
+  list-style-position: outside !important;
+  padding-right: 1.5rem !important;
+  padding-left: 0 !important;
+  margin: 0.5rem 0 !important;
+  direction: rtl !important;
+  text-align: right !important;
+}
+
+[dir="rtl"] .rte-content ol,
+.rte-content[dir="rtl"] ol {
+  list-style-type: decimal !important;
+  list-style-position: outside !important;
+  padding-right: 1.5rem !important;
+  padding-left: 0 !important;
+  margin: 0.5rem 0 !important;
+  direction: rtl !important;
+  text-align: right !important;
+}
+
+[dir="rtl"] .rte-content li,
+.rte-content[dir="rtl"] li {
+  text-align: right !important;
+  direction: rtl !important;
+  margin: 0.35rem 0 !important;
+}
+
+/* الضبط القاطع للغة الإنجليزية (LTR) */
+[dir="ltr"] .rte-content,
+.rte-content[dir="ltr"],
+.rte-content [dir="ltr"] {
+  direction: ltr !important;
+  text-align: left !important;
+}
+
+[dir="ltr"] .rte-content table,
+.rte-content[dir="ltr"] table {
+  direction: ltr !important;
+}
+
+[dir="ltr"] .rte-content th,
+[dir="ltr"] .rte-content td,
+.rte-content[dir="ltr"] th,
+.rte-content[dir="ltr"] td {
+  text-align: left !important;
+  direction: ltr !important;
+}
+
+[dir="ltr"] .rte-content ul,
+.rte-content[dir="ltr"] ul {
+  list-style-type: disc !important;
+  list-style-position: outside !important;
+  padding-left: 1.5rem !important;
+  padding-right: 0 !important;
+  margin: 0.5rem 0 !important;
+  direction: ltr !important;
+  text-align: left !important;
+}
+
+[dir="ltr"] .rte-content ol,
+.rte-content[dir="ltr"] ol {
+  list-style-type: decimal !important;
+  list-style-position: outside !important;
+  padding-left: 1.5rem !important;
+  padding-right: 0 !important;
+  margin: 0.5rem 0 !important;
+  direction: ltr !important;
+  text-align: left !important;
+}
+
+[dir="ltr"] .rte-content li,
+.rte-content[dir="ltr"] li {
+  text-align: left !important;
+  direction: ltr !important;
+  margin: 0.35rem 0 !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
