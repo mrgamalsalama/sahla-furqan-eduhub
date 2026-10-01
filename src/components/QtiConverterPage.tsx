@@ -139,8 +139,8 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
                         : 'border-gray-200 hover:border-gray-300 text-gray-700'
                     }`}
                   >
-                    <div className="font-bold text-sm mb-0.5">أكاديمية سهلة</div>
-                    <div className="text-[11px] text-gray-500">Cypher / NEO LMS (v2.1)</div>
+                    <div className="font-bold text-xs mb-0.5">أكاديمية سهلة</div>
+                    <div className="text-[11px] text-gray-600 font-semibold">QTI v1.2 ZIP</div>
                   </button>
 
                   <button
@@ -152,8 +152,8 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
                         : 'border-gray-200 hover:border-gray-300 text-gray-700'
                     }`}
                   >
-                    <div className="font-bold text-sm mb-0.5">مدارس الفرقان</div>
-                    <div className="text-[11px] text-gray-500">Canvas / Classera (QTI 1.2/2.1)</div>
+                    <div className="font-bold text-xs mb-0.5">مدارس الفرقان</div>
+                    <div className="text-[11px] text-gray-600 font-semibold">QTI v2.1 ZIP</div>
                   </button>
                 </div>
               </div>

@@ -176,10 +176,49 @@ function buildSubjectGuidance(settings: any): string {
 }
 
 function getLmsXmlSchemaDirective(lmsTarget?: string, isAr: boolean = true): string {
-  const isCypher = lmsTarget === 'sahlah_cypher';
-  if (isCypher) {
+  const isSahlah = lmsTarget === 'sahlah_cypher';
+  if (isSahlah) {
     return isAr
-      ? `\nتَنْبِيهٌ إِصْدَارِ QTI لِمِنَصَّةِ سَهْلَةَ (Cypher / NEO LMS):
+      ? `\nتَنْبِيهٌ إِصْدَارِ QTI لِأَكَادِيمِيَّةِ سَهْلَةَ (QTI v1.2 ZIP):
+يَجِبُ أَنْ يَكُونَ كُودُ XML مُتَوَافِقاً مَعَ مِعْيَارِ IMS QTI v1.2 القياسي مع استخدام وسوم:
+<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2">
+  <assessment ident="SAHLAH_ASSESSMENT_01" title="...">
+    <section ident="root_section">
+      <item ident="Q_01" title="...">
+        <itemmetadata>
+          <qtimetadata>
+            <qtimetadatafield><fieldlabel>question_type</fieldlabel><fieldentry>multiple_choice_question</fieldentry></qtimetadatafield>
+            <qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>1.0</fieldentry></qtimetadatafield>
+          </qtimetadata>
+        </itemmetadata>
+        <presentation>
+          <material><mattext texttype="text/html"><![CDATA[نص السؤال المشكول كاملاً]]></mattext></material>
+          <response_lid ident="response1" rcardinality="Single">
+            <render_choice>
+              <response_label ident="A"><material><mattext texttype="text/plain">الخيار الأول</mattext></material></response_label>
+              <response_label ident="B"><material><mattext texttype="text/plain">الخيار الثاني</mattext></material></response_label>
+              <response_label ident="C"><material><mattext texttype="text/plain">الخيار الثالث</mattext></material></response_label>
+              <response_label ident="D"><material><mattext texttype="text/plain">الخيار الرابع</mattext></material></response_label>
+            </render_choice>
+          </response_lid>
+        </presentation>
+        <resprocessing>
+          <outcomes><decvar varname="SCORE" vartype="Decimal" defaultval="0"/></outcomes>
+          <respcondition continue="No">
+            <conditionvar><varequal respident="response1">A</varequal></conditionvar>
+            <setvar action="Set" varname="SCORE">100</setvar>
+          </respcondition>
+        </resprocessing>
+      </item>
+    </section>
+  </assessment>
+</questestinterop>`
+      : `\nQTI Schema Directive for Sahlah Academy (QTI v1.2): Use IMS QTI v1.2 <questestinterop> with <assessment>, <section>, and <item> format.`;
+  }
+
+  // Furqan International School (QTI v2.1)
+  return isAr
+    ? `\nتَنْبِيهٌ إِصْدَارِ QTI لِمَدْرَسَةِ الْفُرْقَانِ الْعَالَمِيَّةِ (QTI v2.1 ZIP):
 يَجِبُ أَنْ يَكُونَ كُودُ XML مُتَوَافِقاً مَعَ مِعْيَارِ IMS QTI v2.1 القياسي مع استخدام وسوم:
 <assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqtiasi_v2p1" identifier="Q_01" title="..." adaptive="false" timeDependent="false">
   <responseDeclaration identifier="RESPONSE" cardinality="single" baseType="identifier">
@@ -197,40 +236,7 @@ function getLmsXmlSchemaDirective(lmsTarget?: string, isAr: boolean = true): str
   </itemBody>
   <responseProcessing template="http://www.imsglobal.org/question/qti_v2p1/rptemplates/match_correct"/>
 </assessmentItem>`
-      : `\nQTI Schema Directive for Sahlah Cypher / NEO LMS: Use standard IMS QTI v2.1 XML items with <assessmentItem>, <responseDeclaration>, <itemBody>, and <choiceInteraction>.`;
-  }
-
-  // Furqan Canvas / Classera
-  return isAr
-    ? `\nتَنْبِيهٌ إِصْدَارِ QTI لِمَدَارِسِ الْفُرْقَانِ (Canvas LMS / Classera / Standard QTI):
-يَجِبُ أَنْ يَكُونَ كُودُ XML مُتَوَافِقاً مَعَ حُزَمِ Canvas QTI 1.2 / 2.1 مع استخدام وسوم:
-<item ident="Q_01" title="...">
-  <itemmetadata>
-    <qtimetadata>
-      <qtimetadatafield><fieldlabel>question_type</fieldlabel><fieldentry>multiple_choice_question</fieldentry></qtimetadatafield>
-      <qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>1.0</fieldentry></qtimetadatafield>
-    </qtimetadata>
-  </itemmetadata>
-  <presentation>
-    <material><mattext texttype="text/html"><![CDATA[نص السؤال المشكول كاملاً]]></mattext></material>
-    <response_lid ident="response1" rcardinality="Single">
-      <render_choice>
-        <response_label ident="A"><material><mattext texttype="text/plain">الخيار الأول</mattext></material></response_label>
-        <response_label ident="B"><material><mattext texttype="text/plain">الخيار الثاني</mattext></material></response_label>
-        <response_label ident="C"><material><mattext texttype="text/plain">الخيار الثالث</mattext></material></response_label>
-        <response_label ident="D"><material><mattext texttype="text/plain">الخيار الرابع</mattext></material></response_label>
-      </render_choice>
-    </response_lid>
-  </presentation>
-  <resprocessing>
-    <outcomes><decvar varname="SCORE" vartype="Decimal" defaultval="0"/></outcomes>
-    <respcondition continue="No">
-      <conditionvar><varequal respident="response1">A</varequal></conditionvar>
-      <setvar action="Set" varname="SCORE">100</setvar>
-    </respcondition>
-  </resprocessing>
-</item>`
-    : `\nQTI Schema Directive for Furqan Canvas LMS: Use Canvas QTI 1.2 / 2.1 <item> format with <itemmetadata>, <presentation>, <render_choice>, and <resprocessing>.`;
+    : `\nQTI Schema Directive for Al-Furqan International School (QTI v2.1): Use IMS QTI v2.1 XML items with <assessmentItem>, <responseDeclaration>, <itemBody>, and <choiceInteraction>.`;
 }
 
 function buildStandardizedPrompt(settings: any, isAr: boolean, ctx: string): string {

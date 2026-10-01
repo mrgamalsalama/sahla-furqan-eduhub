@@ -156,8 +156,8 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
                   : 'border-gray-200 hover:bg-gray-50 text-gray-700'
               }`}
             >
-              <div className="font-bold text-xs mb-0.5">أكاديمية سهلة الدولية</div>
-              <div className="text-[11px] text-gray-500">حزمة QTI v2.1 مع ملف imsmanifest.xml القياسي لمنصة Cypher/NEO</div>
+              <div className="font-bold text-xs mb-0.5">أكاديمية سهلة الدولية (QTI v1.2 ZIP)</div>
+              <div className="text-[11px] text-gray-500">حزمة معيارية QTI v1.2 متوافقة مع منصة أكاديمية سهلة (Cypher LMS)</div>
             </button>
 
             <button
@@ -169,8 +169,8 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
                   : 'border-gray-200 hover:bg-gray-50 text-gray-700'
               }`}
             >
-              <div className="font-bold text-xs mb-0.5">مدارس الفرقان العالمية</div>
-              <div className="text-[11px] text-gray-500">حزمة Canvas QTI 1.2/2.1 القياسية المتوافقة مع Canvas و Classera</div>
+              <div className="font-bold text-xs mb-0.5">مدرسة الفرقان العالمية (QTI v2.1 ZIP)</div>
+              <div className="text-[11px] text-gray-500">حزمة معيارية QTI v2.1 متوافقة مع منصة مدرسة الفرقان (Canvas / LMS)</div>
             </button>
           </div>
         </div>

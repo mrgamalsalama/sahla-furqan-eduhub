@@ -1024,16 +1024,16 @@ ${itemsXml}    </section>
             <button
               onClick={() => handleDownloadQtiZip('sahlah_cypher')}
               className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition flex items-center gap-1"
-              title="أكاديمية سهلة الدولية - Cypher / NEO LMS"
+              title="أكاديمية سهلة الدولية - QTI v1.2 ZIP"
             >
-              <span>{isAr ? 'تحميل حزمة سهلة (Cypher)' : 'Sahlah (Cypher)'}</span>
+              <span>{isAr ? 'أكاديمية سهلة QTI v1.2 zip' : 'Sahlah QTI v1.2 ZIP'}</span>
             </button>
             <button
               onClick={() => handleDownloadQtiZip('furqan_canvas')}
               className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-xs transition flex items-center gap-1"
-              title="مدارس الفرقان العالمية - Canvas / Classera"
+              title="مدرسة الفرقان العالمية - QTI v2.1 ZIP"
             >
-              <span>{isAr ? 'تحميل حزمة الفرقان (Canvas)' : 'Furqan (Canvas)'}</span>
+              <span>{isAr ? 'الفرقان العالمية QTI v2.1 zip' : 'Furqan QTI v2.1 ZIP'}</span>
             </button>
           </div>
         )}
