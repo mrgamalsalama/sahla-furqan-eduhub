@@ -1,6 +1,6 @@
 import { SAHLAH_LOGO, FURQAN_LOGO } from './lib/logos';
 
-export type View = 'home' | 'editor' | 'library' | 'advisor' | 'benchmark' | 'grader';
+export type View = 'home' | 'editor' | 'library' | 'advisor' | 'benchmark' | 'grader' | 'qti-converter';
 
 export type OutputType =
   | 'lesson-plan'
@@ -18,6 +18,27 @@ export type TermType = 'term-1' | 'term-2' | 'term-3';
 export type ContentLang = 'ar' | 'en';
 export type InstitutionId = 'sahlah' | 'furqan' | 'both';
 
+export type LmsTarget = 'sahlah_cypher' | 'furqan_canvas';
+
+export type WorksheetTheme = 'classic' | 'modern' | 'minimal' | 'custom';
+export interface WorksheetSettings {
+  pageCount?: number; // 1, 2, 3, 4
+  teacherCustomPrompt?: string;
+  standardsSelection?: string;
+  themeStyle?: WorksheetTheme;
+  customThemeDescription?: string;
+  aiAutoPilot?: boolean;
+}
+
+export type PresentationDepth = 'concise' | 'detailed' | 'comprehensive_script';
+export type PresentationTheme = 'minimal' | 'tech_blue' | 'warm_edu' | 'creative_k12' | 'custom';
+export interface PresentationSettings {
+  slideCount?: number; // 6, 10, 15, 20
+  depthLevel?: PresentationDepth;
+  visualTheme?: PresentationTheme;
+  customThemeDescription?: string;
+}
+
 export interface LessonSettings {
   subject: string;
   grade: string;
@@ -34,6 +55,9 @@ export interface LessonSettings {
   questionFormat?: QuestionFormat; // نمط الأسئلة: اختيار من متعدد فقط أو متنوع
   term?: TermType; // الفصل الدراسي: الأول، الثاني، الثالث
   questionCount?: number; // عدد الأسئلة المطلوب
+  worksheetSettings?: WorksheetSettings;
+  presentationSettings?: PresentationSettings;
+  lmsTarget?: LmsTarget;
 }
 
 export interface UploadedFile {
@@ -43,6 +67,7 @@ export interface UploadedFile {
   dataUrl: string;
   base64: string;
   mimeType: string;
+  textContent?: string;
 }
 
 export interface SavedLesson {
@@ -112,19 +137,19 @@ export const QUESTION_COUNT_OPTIONS = [5, 10, 15, 20, 25, 30, 40, 50];
 
 export const OUTPUT_LABELS_AR: Record<OutputType, string> = {
   'lesson-plan': 'خطة الدرس المعتمدة',
-  worksheet: 'ورقة عمل',
-  quiz: 'اختبار قصير',
-  'qti-exam': 'اختبار QTI شامل',
-  slides: 'عرض شرائح ملخص',
+  worksheet: 'ورقة عمل تفاعلية (بلوم)',
+  quiz: 'اختبار قصير (QTI)',
+  'qti-exam': 'امتحان بلوم الشامل (50 سؤال QTI)',
+  slides: 'استوديو العروض التقديمية',
   'standardized-test': 'اختبار معياري / تشخيصي (ABT / IB / تشخيص فجوات)',
 };
 
 export const OUTPUT_LABELS_EN: Record<OutputType, string> = {
-  'lesson-plan': 'Lesson Plan',
-  worksheet: 'Worksheet',
-  quiz: 'Short Quiz',
-  'qti-exam': 'Comprehensive QTI Exam',
-  slides: 'Slide Summary',
+  'lesson-plan': 'Approved Lesson Plan',
+  worksheet: 'Interactive Worksheet (Bloom)',
+  quiz: 'Short Quiz (QTI)',
+  'qti-exam': 'Comprehensive Bloom Exam (50 MCQs)',
+  slides: 'Presentation Studio',
   'standardized-test': 'Standardized / Diagnostic Test',
 };
 

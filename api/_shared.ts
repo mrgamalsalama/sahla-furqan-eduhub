@@ -9,10 +9,10 @@ function getInstitutionHeader(settings: any): string {
 
   const titleText =
     inst === 'sahlah'
-      ? (isAr ? 'أكاديمية سهلة الدولية' : 'Sahlah Academy')
+      ? (isAr ? 'أَكَادِيمِيَّةُ سَهْلَةَ الدَّوْلِيَّةُ' : 'Sahlah Academy')
       : inst === 'furqan'
-      ? (isAr ? 'مدرسة الفرقان العالمية' : 'Al-Furqan International School')
-      : (isAr ? 'أكاديمية سهلة الدولية & مدرسة الفرقان العالمية' : 'Sahlah Academy & Al-Furqan International School');
+      ? (isAr ? 'مَدْرَسَةُ الْفُرْقَانِ الْعَالَمِيَّةُ' : 'Al-Furqan International School')
+      : (isAr ? 'أَكَادِيمِيَّةُ سَهْلَةَ الدَّوْلِيَّةُ & مَدْرَسَةُ الْفُرْقَانِ الْعَالَمِيَّةُ' : 'Sahlah Academy & Al-Furqan International School');
 
   return `<div style="text-align:center; margin-bottom:18px; padding-bottom:12px; border-bottom:2px solid #e2e8f0;">
     <h2 style="font-size:1.35rem; font-weight:800; color:#1e3a8a; margin:0 0 4px 0;">${titleText}</h2>
@@ -108,11 +108,12 @@ export function formatApiError(error: any): { status: number; message: string } 
     rawMessage.includes('API_KEY_INVALID') ||
     rawMessage.includes('401') ||
     rawMessage.includes('Unauthorized') ||
-    rawMessage.includes('غير مهيأ')
+    rawMessage.includes('غير مهيأ') ||
+    rawMessage.includes('ACCOUNT_STATE_INVALID')
   ) {
     return {
       status: 401,
-      message: 'مفتاح الذكاء الاصطناعي (GEMINI_API_KEY) غير مصرح أو غير مهيأ في Vercel. يرجى مراجعة Environment Variables.',
+      message: 'مفتاح الذكاء الاصطناعي (GEMINI_API_KEY) غير صالح أو تم إلغاؤه في Google Cloud. يرجى توليد مفتاح جديد وضبطه في Vercel.',
     };
   }
 
@@ -143,57 +144,454 @@ export function formatApiError(error: any): { status: number; message: string } 
 export function extractHtml(text: string): string {
   let cleaned = text.trim();
   cleaned = cleaned.replace(/^```html\s*/i, '');
+  cleaned = cleaned.replace(/^```xml\s*/i, '');
   cleaned = cleaned.replace(/^```\s*/i, '');
   cleaned = cleaned.replace(/```$/i, '');
   return cleaned.trim();
 }
 
-function buildBasePrompt(settings: any, outputType: string): string {
+function isNonNativeSubject(subject?: string): boolean {
+  if (!subject) return false;
+  const s = subject.toLowerCase();
+  return (
+    s.includes('nonnative') ||
+    s.includes('non-native') ||
+    s.includes('غير الناطقين') ||
+    s.includes('afl') ||
+    s.includes('foreign')
+  );
+}
+
+function buildSubjectGuidance(settings: any): string {
   const isAr = settings.contentLanguage === 'ar';
-  let typeDescription = '';
-  switch (outputType) {
-    case 'lesson-plan':
-      typeDescription = isAr ? 'خطة درس تعليمية شاملة ومفصلة' : 'Comprehensive lesson plan';
-      break;
-    case 'worksheet':
-      typeDescription = isAr ? 'ورقة عمل تفاعلية وتمارين تطبيقية' : 'Interactive worksheet';
-      break;
-    case 'quiz':
-      typeDescription = isAr ? 'اختبار قصير متدرج الصعوبة مع الإجابات النموذجية' : 'Quiz with answer key';
-      break;
-    case 'presentation':
-      typeDescription = isAr ? 'عرض تقديمي تعليمي مقسم إلى شرائح' : 'Slide presentation outline';
-      break;
-    case 'qti':
-      typeDescription = isAr ? 'حزمة اختبار معياري متوافقة مع معايير IMS QTI' : 'IMS QTI-compatible standard assessment';
-      break;
-    default:
-      typeDescription = isAr ? 'محتوى تعليمي شامل' : 'Comprehensive educational content';
+  const nonNative = isNonNativeSubject(settings.subject);
+  if (nonNative) {
+    return isAr
+      ? `\n\nتَوْجِيهَاتٌ خَاصَّةٌ: الْمَادَّةُ مُخَصَّصَةٌ لِغَيْرِ النَّاطِقِينَ بِاللُّغَةِ (AFL). يَجِبُ تَبْسِيطُ التَّرَاكِيبِ اللُّغَوِيَّةِ، وَاقْتِرَاحُ وَسَائِلَ بَصَرِيَّةٍ وَمُعْجَمٍ مُسَاعِدٍ لِلْمُصْطَلَحَاتِ، وَتَكْيِيفُ الْأَسْئِلَةِ لِتُنَاسِبَ مُتَعَلِّمِي اللُّغَةِ الثَّانِيَةِ مَعَ التَّشْكِيلِ التَّامِ.`
+      : `\n\nSpecial guidance: This subject is designed for non-native speakers (AFL / Second Language Learners). Simplify language structures, include visual supports and bilingual glossaries, and calibrate difficulty accordingly.`;
+  }
+  return isAr
+    ? `\n\nتَوْجِيهَاتٌ خَاصَّةٌ: الْمَادَّةُ مُخَصَّصَةٌ لِلنَّاطِقِينَ بِاللُّغَةِ. رَكِّزْ عَلَى الْمَهَارَاتِ التَّحْلِيلِيَّةِ وَالْبَلَاغِيَّةِ وَالتَّعْبِيرِ الْعَمِيقِ الْمُنَاسِبِ لِلْمَرْحَلَةِ الْعُمْرِيَّةِ وَالْمَعَايِيرِ الْوَطَنِيَّةِ وَالدَّوْلِيَّةِ.`
+    : `\n\nSpecial guidance: Designed for native-level learners. Focus on higher-order analytical, literary, and evaluative competencies appropriate for the grade level.`;
+}
+
+function getLmsXmlSchemaDirective(lmsTarget?: string, isAr: boolean = true): string {
+  const isCypher = lmsTarget === 'sahlah_cypher';
+  if (isCypher) {
+    return isAr
+      ? `\nتَنْبِيهٌ إِصْدَارِ QTI لِمِنَصَّةِ سَهْلَةَ (Cypher / NEO LMS):
+يَجِبُ أَنْ يَكُونَ كُودُ XML مُتَوَافِقاً مَعَ مِعْيَارِ IMS QTI v2.1 القياسي مع استخدام وسوم:
+<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqtiasi_v2p1" identifier="Q_01" title="..." adaptive="false" timeDependent="false">
+  <responseDeclaration identifier="RESPONSE" cardinality="single" baseType="identifier">
+    <correctResponse><value>A</value></correctResponse>
+  </responseDeclaration>
+  <outcomeDeclaration identifier="SCORE" cardinality="single" baseType="float"><defaultValue><value>0</value></defaultValue></outcomeDeclaration>
+  <itemBody>
+    <prompt>نص السؤال المشكول كاملاً</prompt>
+    <choiceInteraction responseIdentifier="RESPONSE" shuffle="true" maxChoices="1">
+      <simpleChoice identifier="A">الخيار الأول</simpleChoice>
+      <simpleChoice identifier="B">الخيار الثاني</simpleChoice>
+      <simpleChoice identifier="C">الخيار الثالث</simpleChoice>
+      <simpleChoice identifier="D">الخيار الرابع</simpleChoice>
+    </choiceInteraction>
+  </itemBody>
+  <responseProcessing template="http://www.imsglobal.org/question/qti_v2p1/rptemplates/match_correct"/>
+</assessmentItem>`
+      : `\nQTI Schema Directive for Sahlah Cypher / NEO LMS: Use standard IMS QTI v2.1 XML items with <assessmentItem>, <responseDeclaration>, <itemBody>, and <choiceInteraction>.`;
   }
 
+  // Furqan Canvas / Classera
   return isAr
-    ? `أنت خبير تربوي ومصمم مناهج متخصص في أكاديمية سهلة الدولية ومدارس الفرقان العالمية.
-المطلوب منك إنشاء: ${typeDescription}.
+    ? `\nتَنْبِيهٌ إِصْدَارِ QTI لِمَدَارِسِ الْفُرْقَانِ (Canvas LMS / Classera / Standard QTI):
+يَجِبُ أَنْ يَكُونَ كُودُ XML مُتَوَافِقاً مَعَ حُزَمِ Canvas QTI 1.2 / 2.1 مع استخدام وسوم:
+<item ident="Q_01" title="...">
+  <itemmetadata>
+    <qtimetadata>
+      <qtimetadatafield><fieldlabel>question_type</fieldlabel><fieldentry>multiple_choice_question</fieldentry></qtimetadatafield>
+      <qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>1.0</fieldentry></qtimetadatafield>
+    </qtimetadata>
+  </itemmetadata>
+  <presentation>
+    <material><mattext texttype="text/html"><![CDATA[نص السؤال المشكول كاملاً]]></mattext></material>
+    <response_lid ident="response1" rcardinality="Single">
+      <render_choice>
+        <response_label ident="A"><material><mattext texttype="text/plain">الخيار الأول</mattext></material></response_label>
+        <response_label ident="B"><material><mattext texttype="text/plain">الخيار الثاني</mattext></material></response_label>
+        <response_label ident="C"><material><mattext texttype="text/plain">الخيار الثالث</mattext></material></response_label>
+        <response_label ident="D"><material><mattext texttype="text/plain">الخيار الرابع</mattext></material></response_label>
+      </render_choice>
+    </response_lid>
+  </presentation>
+  <resprocessing>
+    <outcomes><decvar varname="SCORE" vartype="Decimal" defaultval="0"/></outcomes>
+    <respcondition continue="No">
+      <conditionvar><varequal respident="response1">A</varequal></conditionvar>
+      <setvar action="Set" varname="SCORE">100</setvar>
+    </respcondition>
+  </resprocessing>
+</item>`
+    : `\nQTI Schema Directive for Furqan Canvas LMS: Use Canvas QTI 1.2 / 2.1 <item> format with <itemmetadata>, <presentation>, <render_choice>, and <resprocessing>.`;
+}
 
-بيانات الدرس:
-- عنوان الدرس: ${settings.lessonTitle || 'غير محدد'}
-- المادة: ${settings.subject}
-- الصف: ${settings.grade}
-- أهداف التعلم: ${settings.objectives || 'شاملة لمفاهيم الدرس'}
-- النواتج التعليمية: ${settings.outcomes || 'تحقيق الفهم العميق'}
-- التمهيد: ${settings.warmup || 'نشاط تمهيدي مشوق'}
-- الأنشطة: ${settings.activities || 'استراتيجيات تدريس نشط وتمايز'}
-- التقويم الختامي: ${settings.closure || 'تقويم تكويني'}
+function buildStandardizedPrompt(settings: any, isAr: boolean, ctx: string): string {
+  const fw = settings.standardFramework || 'abt';
+  const sourceText = settings.sourceText?.trim();
+  const isAllMcq = settings.questionFormat === 'all-mcq';
+  const lmsTarget = settings.lmsTarget || 'sahlah_cypher';
 
-شروط المخرجات:
-1. الناتج كود HTML نظيف فقط جاهز للعرض مباشرة داخل div، بدون علامات \`\`\`html وبدون \`\`\`.
-2. استخدم تنسيق CSS مدمج (Inline Styles) أنيق.
-3. التزم باللغة المطلوبة بالكامل.`
-    : `You are an expert curriculum designer.
-Task: Create ${typeDescription}.
-Subject: ${settings.subject}, Grade: ${settings.grade}, Title: ${settings.lessonTitle || 'Untitled'}
-Objectives: ${settings.objectives || 'Core concepts'}
-Return clean HTML snippet only without markdown code fences.`;
+  let sourceDirective = '';
+  if (sourceText) {
+    sourceDirective = isAr
+      ? `\n\nالْمَادَّةُ الْعِلْمِيَّةُ / النَّصُّ الْمَصْدَرِيُّ الْإِلْزَامِيُّ لِلِاخْتِبَارِ:\n"""\n${sourceText}\n"""\nقَاعِدَةٌ صَارِمَةٌ جِدّاً: يَجِبُ أَنْ تَكُونَ جَمِيعُ أَسْئِلَةِ الِاخْتِبَارِ وَالْفَهْمِ مُسْتَخْرَجَةً حَصْراً مِنْ هَذَا النَّصِّ الْمُرْفَقِ أَعْلَاهُ.`
+      : `\n\nMandatory Source Text / Material:\n"""\n${sourceText}\n"""\nStrict rule: All assessment questions must be derived directly from this provided text.`;
+  } else {
+    sourceDirective = isAr
+      ? `\n\nلَمْ يَتِمَّ إِرْفَاقُ نَصٍّ مَصْدَرِيٍّ مُحَدَّدٍ، لِذَلِكَ قُمْ بِتَوْلِيدِ نَصٍّ قِرَائِيٍّ أَوْ سِيَاقٍ عِلْمِيٍّ أَصِيلٍ وَمُلْهِمٍ مُنَاسِبٍ لِلصَّفِّ وَالْمَرْحَلَةِ، وَاضْبِطْهُ بِالشَّكْلِ التَّامِّ ثُمَّ ابْنِ الْأَسْئِلَةَ عَلَيْهِ.`
+      : `\n\nNo source text was provided. Generate an authentic, grade-appropriate context/passage and base the assessment upon it.`;
+  }
+
+  const formatDirectiveAr = isAllMcq
+    ? `\nتَوْجِيهٌ إِلْزَامِيٌّ لِصِيغَةِ الْأَسْئِلَةِ: طَلَبَ الْمُعَلِّمُ صَرَاحَةً نَمَطَ "اخْتِيَارٌ مِنْ مُتَعَدِّدٍ فَقَطْ (All MCQ)". جَمِيعُ الْأَسْئِلَةِ بِلَا اسْتِثْنَاءِ (15 إِلَى 20 سُؤَالاً) يَجِبُ أَنْ تَكُونَ مِنْ نَوْعِ الِاخْتِيَارِ مِنْ مُتَعَدِّدٍ مَعَ 4 بَدَائِلَ (أ، ب، ج، د)، وَمَعَ كُلِّ سُؤَالٍ اكْتُبِ اسْمَ الْمِعْيَارِ الْمَقَاسِ. لَا تَضَعْ أَيَّ أَسْئِلَةٍ مَقَالِيَّةٍ أَوْ مَهَمَّةِ تَعْبِيرٍ فِي هَذَا النَّمَطِ، وَاكْتَفِ بِأَسْئِلَةِ الِاخْتِيَارِ مِنْ مُتَعَدِّدٍ وَمَصْفُوفَةِ الْمَعَايِيرِ وَنَمُوذَجِ الْإِجَابَةِ.`
+    : `\nتَوْجِيهٌ لِصِيغَةِ الْأَسْئِلَةِ: اعْتَمِدِ النَّمَطَ الْمُتَنَوِّعَ الشَّامِلَ الْأَصْلِيَّ تَمَاماً (أَسْئِلَةُ اخْتِيَارٍ مِنْ مُتَعَدِّدٍ، وَأَسْئِلَةُ فَهْمٍ وَتَحْلِيلٍ مَقَالِيَّةٍ، وَمَهَمَّةُ إِنْتَاجٍ كِتَابِيٍّ/تَعْبِيرٍ، وَمَصْفُوفَةُ نَوَاتِجِ التَّعَلُّمِ).`;
+
+  const formatDirectiveEn = isAllMcq
+    ? `\nMandatory Question Format: The teacher specified "Multiple Choice Only (All MCQ)". All questions (15 to 20 items) must strictly be 4-option multiple choice items mapped to standards without essay questions.`
+    : `\nQuestion Format: Keep the authentic mixed format (MCQs + in-depth analytical questions + writing production task + benchmark matrix).`;
+
+  const lmsXmlDirective = getLmsXmlSchemaDirective(lmsTarget, isAr);
+
+  if (isAr) {
+    let frameworkDetails = '';
+    if (fw === 'diagnostic') {
+      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: الِاخْتِبَارُ التَّشْخِيصِيُّ وَرَصْدُ الْفَجَوَاتِ التَّعْلِيمِيَّةِ (Diagnostic Assessment & Learning Gap Analysis).
+الْهَدَفُ التَّرْبَوِيُّ: قِيَاسُ جَاهِزِيَّةِ الطَّالِبِ لِلصَّفِّ الْحَالِيِّ (${settings.grade || 'الحالي'}) عَبْرَ فَحْصِ الْمَهَارَاتِ الْقَبْلِيَّةِ التَّرَاكُمِيَّةِ (Prerequisite Skills) لِلسَّنَوَاتِ وَالصُّفُوفِ السَّابِقَةِ لِكَشْفِ الْفَاقِدِ التَّعْلِيمِيِّ بِدِقَّةٍ.
+أَقْسَامُ الِاخْتِبَارِ الْإِلْزَامِيَّةُ:
+1. نَصٌّ قِرَائِيٌّ أَوْ سِيَاقٌ تَقْوِيمِيٌّ تَأْسِيسِيٌّ مَشْكُولٌ بِالْكَامِلِ.
+2. أَسْئِلَةُ التَّشْخِيصِ: كُلُّ سُؤَالٍ يَقِيسُ مَهَارَةً أَسَاسِيَّةً قَبْلِيَّةً مُحَدَّدَةً. الْبَدَائِلُ غَيْرُ الصَّحِيحَةِ (الْمُشَتَّتَاتُ) مَبْنِيَّةٌ عَلَى أَخْطَاءٍ مَفَاهِيمِيَّةٍ شَائِعَةٍ لَدَى الطُّلَّابِ (Diagnostic Distractors).
+3. جَدْوَلُ مَصْفُوفَةِ تَشْخِيصِ الْفَجَوَاتِ (Diagnostic Gap Matrix) يَحْتَوِي عَلَى:
+   * رَقْمِ السُّؤَالِ.
+   * الْمَهَارَةِ الْقَبْلِيَّةِ الْمُسْتَهْدَفَةِ (مِنَ الصُّفُوفِ السَّابِقَةِ).
+   * نَوْعِ الْفَجْوَةِ أَوْ سَبَبِ الْخَطَأِ الْمُتَوَقَّعِ عِنْدَ اخْتِيَارِ إِجَابَةٍ خَاطِئَةٍ.
+   * مُسْتَوَى إِتْقَانِ الْمَهَارَةِ (مُتْقَنٌ / بِحَاجَةٍ لِدَعْمٍ / فَجْوَةٌ حَرِجَةٌ).
+4. الْخُطَّةُ الْإِجْرَائِيَّةُ وَالْعِلَاجِيَّةُ الْمُقْتَرَحَةُ لِلْمُعَلِّمِ (Targeted Remediation Plan): إِرْشَادَاتٌ وَتَدَخُّلَاتٌ تَدْرِيسِيَّةٌ مُبَاشِرَةٌ وَسَرِيعَةٌ لِعِلَاجِ الْفَجَوَاتِ الْمَرْصُودَةِ فِي الْحِصَصِ الْقَادِمَةِ.
+5. نَمُوذَجُ الْإِجَابَةِ وَسُلَّمُ التَّصْحِيحِ.`;
+    } else if (fw === 'abt') {
+      const isArabicA = settings.abtTrack !== 'arabic-b';
+      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: اخْتِبَارُ الْقِيَاسِ الْمِعْيَارِيِّ لِلُّغَةِ الْعَرَبِيَّةِ (ABT - Arabic Benchmark Test) - مَسَارُ: ${
+        isArabicA ? 'Arabic A (لِلنَّاطِقِينَ بِاللُّغَةِ الْعَرَبِيَّةِ)' : 'Arabic B (لِغَيْرِ النَّاطِقِينَ بِهَا)'
+      }.
+أَقْسَامُ الِاخْتِبَارِ الْإِلْزَامِيَّةُ:
+1. نَصُّ الِانْطِلَاقِ (الْقِطْعَةُ الْقِرَائِيَّةُ): نَصٌّ أَدَبِيٌّ أَوْ مَعْلُومَاتِيٌّ مَشْكُولٌ بِالْكَامِلِ.
+2. مَهَارَةُ فَهْمِ الْمَقْرُوءِ وَالتَّحْلِيلِ (Reading Comprehension): أَسْئِلَةٌ تَقِيسُ الْفَهْمَ الصَّرِيحَ، الْفَهْمَ الضِّمْنِيَّ وَالِاسْتِنْتَاجَ، اسْتِخْرَاجَ الْفِكْرَةِ الرَّئِيسَةِ، وَدَلَالَاتِ الْأَلْفَاظِ وَتَوْظِيفَهَا السِّيَاقِيَّ.
+3. مَهَارَةُ قَوَاعِدِ اللُّغَةِ وَالتَّرَاكِيبِ (Language Mechanics & Grammar): أَسْئِلَةٌ نَحْوِيَّةٌ وَصَرْفِيَّةٌ وَإِمْلَائِيَّةٌ تَطْبِيقِيَّةٌ مُسْتَمَدَّةٌ مِنْ سِيَاقِ النَّصِّ.
+4. ${isAllMcq ? 'أَسْئِلَةُ التَّطْبِيقِ اللُّغَوِيِّ وَالْبَلَاغِيِّ الْمُتَقَدِّمِ بِنَمَطِ الِاخْتِيَارِ مِنْ مُتَعَدِّدٍ' : 'مَهَارَةُ الْكِتَابَةِ وَالْإِنْتَاجِ اللُّغَوِيِّ (Writing Task): مَهَمَّةٌ كِتَابِيَّةٌ تَعْبِيرِيَّةٌ مُحَدَّدَةُ الْعَنَاصِرِ مَعَ مَعَايِيرِ التَّقْيِيمِ'}.
+5. جَدْوَلُ مَصْفُوفَةِ نَوَاتِجِ التَّعَلُّمِ الْمُسْتَهْدَفَةِ (Learning Outcomes & Benchmark Grid): يُوَضِّحُ الْمَهَارَةَ، رَقْمَ السُّؤَالِ، وَنَاتِجَ التَّعَلُّمِ الْمِعْيَارِيَّ الْمَقَاسَ.
+6. نَمُوذَجُ الْإِجَابَةِ وَسُلَّمُ التَّقْدِيرِ اللَّفْظِيِّ (Answer Key & Rubric).`;
+    } else if (fw === 'ib') {
+      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: تَقْيِيمُ الْبَكَالُورْيَا الدَّوْلِيَّةِ (IB MYP / DP Assessment Criteria).
+يَجِبُ تَقْسِيمُ الْأَسْئِلَةِ وَتَصْنِيفُ كُلِّ سُؤَالٍ بِوُضُوحٍ تَحْتَ الْمَعَايِيرِ الْآتِيَةِ:
+- الْمِعْيَارُ أ (Criterion A: Analysing / التَّحْلِيلُ): تَحْلِيلُ النُّصُوصِ وَالْأَفْكَارِ وَالْأُسْلُوبِ الْأَدَبِيِّ.
+- الْمِعْيَارُ ب (Criterion B: Organising / التَّنْظِيمُ): هَيْكَلَةُ الْأَفْكَارِ وَاسْتِخْدَامُ أَدَوَاتِ الرَّبْطِ وَالتَّمَاسُكِ.
+- الْمِعْيَارُ ج (Criterion C: Producing Text / إِنْتَاجُ النَّصِّ): التَّعْبِيرُ وَالْإِبْدَاعُ الْكِتَابِيُّ وَتَطْوِيرُ الْأَفْكَارِ.
+- الْمِعْيَارُ د (Criterion D: Using Language / اسْتِخْدَامُ اللُّغَةِ): دِقَّةُ النَّحْوِ، الصَّرْفِ، الْإِمْلَاءِ، وَتَنَوُّعِ الْمُفْرَدَاتِ.
+يَجِبُ إِرْفَاقُ جَدْوَلِ مُوَاصَفَاتٍ وَسَلَالِمِ تَقْدِيرٍ (Rubrics مِنْ 1 إِلَى 8).`;
+    } else if (fw === 'cefr') {
+      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: الْإِطَارُ الْأُورُوبِّيُّ الْمَرْجِعِيُّ الْمُشْتَرَكُ لِلُّغَاتِ (CEFR Levels A1 - C2).
+يَجِبُ أَنْ تَتَدَرَّجَ الْأَسْئِلَةُ فِي قِيَاسِ الْكَفَايَاتِ اللُّغَوِيَّةِ:
+- الْكَفَايَةُ الْمُعْجَمِيَّةُ وَالدَّلَالِيَّةُ (Vocabulary & Lexical Competence).
+- الْكَفَايَةُ النَّحْوِيَّةُ وَالتَّرَاكِيبُ (Grammatical Accuracy).
+- كَفَايَةُ الِاسْتِيعَابِ الْمَقْرُوءِ (Reading Comprehension & Cohesion).
+- تَحْدِيدُ الْمُسْتَوَى الدَّقِيقِ الْمُتَوَقَّعِ لِلطَّالِبِ (Target Band: A1/A2/B1/B2/C1).`;
+    } else if (fw === 'bloom') {
+      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: مُسْتَوَيَاتُ هَرَمِ بِلُومَ الْمَعْرِفِيِّ (Bloom's Taxonomy).
+يَجِبُ تَصْنِيفُ كُلِّ سُؤَالٍ وَفْقَ مُسْتَوَاهُ الْمَعْرِفِيِّ:
+- الْمُسْتَوَيَاتُ التَّأْسِيسِيَّةُ: التَّذَكُّرُ (Remembering) وَالْفَهْمُ (Understanding).
+- الْمُسْتَوَيَاتُ الْمُتَوَسِّطَةُ: التَّطْبِيقُ (Applying) وَالتَّحْلِيلُ (Analyzing).
+- الْمُسْتَوَيَاتُ الْمُتَقَدِّمَةُ (HOTS): التَّقْوِيمُ (Evaluating) وَالِابْتِكَارُ (Creating).
+يَجِبُ إِرْفَاقُ جَدْوَلِ مُوَاصَفَاتٍ يُوَضِّحُ نِسَبَ تَوْزِيعِ الْأَسْئِلَةِ وَالدَّرَجَاتِ عَلَى كُلِّ مُسْتَوًى.`;
+    } else {
+      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: مَعَايِيرُ وَمُؤَشِّرَاتٌ خَاصَّةٌ حَدَّدَهَا الْمُعَلِّمُ:
+"""\n${settings.customStandards || 'الِالْتِزَامُ بِنَوَاتِجِ التَّعَلُّمِ الْخَاصَّةِ بِالدَّرْسِ'}\n"""
+قُمْ بِصِيَاغَةِ أَسْئِلَةٍ تَقِيسُ هَذِهِ الْمُؤَشِّرَاتِ الْمُحَدَّدَةَ بِدِقَّةٍ وَاكْتُبِ اسْمَ الْمُؤَشِّرِ بِجَانِبِ كُلِّ سُؤَالٍ.`;
+    }
+
+    return `${ctx}${sourceDirective}${formatDirectiveAr}
+الْمَطْلُوبُ: تَوْلِيدُ "اخْتِبَارٍ مِعْيَارِيٍّ / تَشْخِيصِيٍّ مُتَكَامِلٍ" بِاللُّغَةِ الْعَرَبِيَّةِ وَمَشْكُولٍ بِالْكَامِلِ تَشْكِيلاً تَامّاً (100%) عَلَى شَكْلِ HTML احْتِرَافِيٍّ جَاهِزٍ لِلْعَرْضِ وَالطِّبَاعَةِ وَالتَّصْدِيرِ.
+تَفَاصِيلُ الْمَعَايِيرِ الْمَطْلُوبَةِ:
+${frameworkDetails}
+الْهَيْكَلُ الْإِلْزَامِيُّ لِلْـ HTML:
+1. تَرْوِيسَةُ الِاخْتِبَارِ: الْمَادَّةُ، الصَّفُّ، نَوْعُ التَّقْيِيمِ (مِعْيَارِيٌّ/تَشْخِيصِيٌّ)، التَّارِيخُ، الدَّرَجَةُ الْكُلِّيَّةُ، اسْمُ الطَّالِبِ.
+2. نَصُّ الِانْطِلَاقِ أَوْ الْمَادَّةُ الْعِلْمِيَّةُ (دَاخِلَ إِطَارٍ أَنِيقٍ blockquote أَوْ div مُمَيَّزٍ).
+3. الْأَسْئِلَةُ مُصَنَّفَةٌ بِدِقَّةٍ وَمَعَ كُلِّ سُؤَالٍ يُوَضَّحُ الْمِعْيَارُ أَوْ الْمَهَارَةُ الْمَقَاسَةُ.
+4. جَدْوَلُ مَصْفُوفَةِ قِيَاسِ الْمَعَايِيرِ وَنَوَاتِجِ التَّعَلُّمِ أَوْ مَصْفُوفَةِ الْفَجَوَاتِ.
+5. ${fw === 'diagnostic' ? 'التَّوْصِيَاتُ وَالْخُطَّةُ الْعِلَاجِيَّةُ الْمُبَاشِرَةُ لِلْمُعَلِّمِ، ثُمَّ' : ''} نَمُوذَجُ الْإِجَابَاتِ وَسَلَالِمُ التَّقْدِيرِ اللَّفْظِيَّةِ (Rubric).
+6. فِي نِهَايَةِ الْمُخْرَجِ تَمَاماً: ضَعْ كُودَ QTI XML الْكَامِلَ لِجَمِيعِ أَسْئِلَةِ الِاخْتِيَارِ مِنْ مُتَعَدِّدٍ دَاخِلَ الْوَسْمِ التَّالِي لِتَمْكِينِ التَّصْدِيرِ الْمُبَاشِرِ إِلَى مِنْصَّاتِ LMS:${lmsXmlDirective}
+<div id="qti-xml-payload" style="display:none;"><![CDATA[
+<!-- كود QTI XML الصالح هنا -->
+]]></div>
+اسْتَخْدِمْ وُسُومَ HTML الْقِيَاسِيَّةَ فَقَطْ: <h1>, <h2>, <h3>, <p>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <ul>, <li>, <strong>, <ol>, <blockquote>, <div>.
+لَا تَسْتَخْدِمْ وُسُومَ <html> أَوْ <body> أَوْ <style>.`;
+  } else {
+    let frameworkDetails = '';
+    if (fw === 'diagnostic') {
+      frameworkDetails = `Framework: Diagnostic Assessment & Learning Gap Analysis. Prerequisite skills from prior grades to detect learning loss, Gap Matrix, Remediation Action Plan, and Answer Key.`;
+    } else if (fw === 'abt') {
+      frameworkDetails = `Framework: Arabic Benchmark Test (ABT) style / Language Benchmark. Reading passage, comprehension analysis, grammar & vocabulary, ${isAllMcq ? 'MCQs only' : 'writing task'}, standards grid, answer key & rubric.`;
+    } else if (fw === 'ib') {
+      frameworkDetails = `Framework: IB MYP / DP Assessment Criteria (Criteria A, B, C, D) with 1-8 rubrics.`;
+    } else if (fw === 'cefr') {
+      frameworkDetails = `Framework: CEFR (A1-C2) lexical, grammatical, and comprehension competencies.`;
+    } else if (fw === 'bloom') {
+      frameworkDetails = `Framework: Bloom's Taxonomy with specification table.`;
+    } else {
+      frameworkDetails = `Framework: Custom Teacher Standards:"""\n${settings.customStandards || 'Align with lesson outcomes'}\n"""`;
+    }
+
+    return `${ctx}${sourceDirective}${formatDirectiveEn}
+Task: Generate a comprehensive "Standardized / Diagnostic Assessment" in English formatted in clean HTML ready for display.
+Framework details:
+${frameworkDetails}
+Include complete QTI XML payload inside <div id="qti-xml-payload" style="display:none;"><![CDATA[...]]></div> at the very end.
+${lmsXmlDirective}
+Use only standard HTML tags: <h1>, <h2>, <h3>, <p>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <ul>, <li>, <strong>, <ol>, <blockquote>, <div>.`;
+  }
+}
+
+function buildBasePrompt(settings: any, outputType: string): string {
+  const isAr = settings.contentLanguage === 'ar';
+  const subjectGuidance = buildSubjectGuidance(settings);
+  const lmsTarget = settings.lmsTarget || 'sahlah_cypher';
+
+  let customStandardsText = '';
+  if (settings.customStandards?.trim()) {
+    customStandardsText = isAr
+      ? `\n- الْمَعَايِيرُ وَالْمُؤَشِّرَاتُ الْإِلْزَامِيَّةُ الْمُحَدَّدَةُ:\n"""\n${settings.customStandards.trim()}\n"""`
+      : `\n- Custom Standards/Outcomes to enforce:\n"""\n${settings.customStandards.trim()}\n"""`;
+  }
+
+  if (isAr) {
+    const ctx = `أَنْتَ مُعَلِّمٌ خَبِيرٌ وَمُسَاعِدٌ تَرْبَوِيٌّ مُتَقَدِّمٌ لِإِعْدَادِ الدُّرُوسِ وَالْمَنَاهِجِ التَّعْلِيمِيَّةِ التَّابِعَةِ لِأَكَادِيمِيَّةِ سَهْلَةَ الدَّوْلِيَّةِ وَمَدْرَسَةِ الْفُرْقَانِ الْعَالَمِيَّةِ، وَخَبِيرٌ مُتَمَرِّسٌ فِي التَّدْرِيسِ وَالتَّقْيِيمِ لِلُّغَةِ الْعَرَبِيَّةِ وَالْمَنَاهِجِ الدَّوْلِيَّةِ.
+
+قَاعِدَةٌ لُغَوِيَّةٌ إِلْزَامِيَّةٌ وَصَارِمَةٌ:
+يَجِبُ تَشْكِيلُ وَضَبْطُ جَمِيعِ النُّصُوصِ، الْعَنَاوِينِ، الْفِقْرَاتِ، الْأَسْئِلَةِ، وَالْخِيَارَاتِ الْمَكْتُوبَةِ بِاللُّغَةِ الْعَرَبِيَّةِ تَشْكِيلاً تَامّاً وَكَامِلاً (حَرَكَاتُ الْإِعْرَابِ وَالْبِنْيَةِ: الْفَتْحَةُ، الضَّمَّةُ، الْكَسْرَةُ، السُّكُونُ، التَّنْوِينُ، وَالشَّدَّةُ) ضَبْطاً نَحْوِيّاً وَصَرْفِيّاً دَقِيقاً بِنِسْبَةِ 100%. لَا تَتْرُكْ أَيَّ كَلِمَةٍ عَرَبِيَّةٍ دُونَ تَشْكِيلٍ تَامٍّ.
+
+مَعْلُومَاتُ الدَّرْسِ:
+- الْمَادَّةُ: ${settings.subject || 'غَيْرُ مُحَدَّدٍ'}
+- الصَّفُّ الدِّرَاسِيُّ: ${settings.grade || 'غَيْرُ مُحَدَّدٍ'}
+- مُدَّةُ الدَّرْسِ: ${settings.duration || 'غَيْرُ مُحَدَّدٍ'}
+- مُسْتَوَى الطُّلَّابِ: ${settings.studentLevel || 'غَيْرُ مُحَدَّدٍ'}
+- اسْمُ الْمُعَلِّمِ: ${settings.teacherName || 'غَيْرُ مُحَدَّدٍ'}
+- عُنْوَانُ الدَّرْسِ: ${settings.lessonTitle || 'سَيَتِمُّ اسْتِنْتَاجُهُ مِنَ الْمُحْتَوَى'}
+${subjectGuidance}
+${customStandardsText}`;
+
+    switch (outputType) {
+      case 'standardized-test':
+        return buildStandardizedPrompt(settings, true, ctx);
+
+      case 'lesson-plan':
+        return `${ctx}
+الْمَطْلُوبُ: تَوْلِيدُ "خُطَّةِ دَرْسٍ مُعْتَمَدَةٍ" كَامِلَةٍ بِاللُّغَةِ الْعَرَبِيَّةِ وَمَشْكُولَةٍ تَشْكِيلاً تَامّاً (100%) عَلَى شَكْلِ HTML مُنَسَّقٍ وَجَاهِزٍ لِلْعَرْضِ وَالطِّبَاعَةِ.
+
+يَجِبُ أَنْ يَحْتَوِيَ HTML عَلَى جَدَاوِلَ مُنَظَّمَةٍ تَمَاماً بِالشَّكْلِ التَّالِي:
+1. جَدْوَلُ التَّرْوِيسَةِ: اسْمُ الْمُعَلِّمِ (${settings.teacherName || '—'})، الْمَادَّةُ (${settings.subject || '—'})، الصَّفُّ (${settings.grade || '—'})، عُنْوَانُ الدَّرْسِ (${settings.lessonTitle || '—'})، التَّارِيخُ: —، مُدَّةُ الدَّرْسِ (${settings.duration || '—'}).
+2. جَدْوَلُ "الْأَسَاسِيَّاتِ": الْأَهْدَافُ الْعَامَّةُ وَالْخَاصَّةُ، الْمَعَايِيرُ التَّعْلِيمِيَّةُ، الْقِيَمُ الْإِسْلَامِيَّةُ، الْمَصَادِرُ وَتَطْبِيقُ التِّكْنُولُوجِيَا، وَالْمَهَارَاتُ الْحَيَاتِيَّةُ.
+3. جَدْوَلُ "خَطَوَاتِ الدَّرْسِ" بِـ 4 أَعْمِدَةٍ: (النَّشَاطُ | الْمُدَّةُ الزَّمَنِيَّةُ | الْوَصْفُ | أَسَالِيبُ التَّقْيِيمِ) وَيَحْتَوِي عَلَى 5 صُفُوفٍ: (النَّشَاطُ التَّحْفِيزِيُّ، الشَّرْحُ الْمُبَاشِرُ، التَّطْبِيقُ الْمُوَجَّهُ، الْعَمَلُ الْفَرْدِيُّ، تَذْكِرَةُ الْخُرُوجِ).
+4. جَدْوَلُ "التَّقْيِيمِ".
+5. جَدْوَلُ "التَّمَايُزِ وَمُرَاعَاةِ الْفُرُوقِ الْفَرْدِيَّةِ".
+6. جَدْوَلُ "مُلَاحَظَاتِ الْمُعَلِّمِ".
+
+اسْتَخْدِمْ وُسُومَ HTML فَقَطْ: <h1>, <h2>, <h3>, <p>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <ul>, <li>, <strong>.
+لَا تَسْتَخْدِمْ وُسُومَ <html> أَوْ <body> أَوْ <style>.`;
+
+      case 'worksheet': {
+        const ws = settings.worksheetSettings || {};
+        const pageCount = ws.pageCount || 2;
+        const teacherNotes = ws.teacherCustomPrompt?.trim() || '';
+        const standardsSel = ws.standardsSelection?.trim() || '';
+        const themeStyle = ws.themeStyle || 'classic';
+        const isAutoPilot = ws.aiAutoPilot !== false;
+
+        let themeDirective = '';
+        if (themeStyle === 'modern') {
+          themeDirective = 'التَّنْسِيقُ الْمَرْئِيُّ: نَمَطٌ عَصْرِيٌّ جَذَّابٌ مَعَ إِطَارَاتٍ نَاعِمَةٍ وَبِطَاقَاتٍ لِلْأَنْشِطَةِ وَأَيْقُونَاتٍ تَوْضِيحِيَّةٍ نَصِّيَّةٍ.';
+        } else if (themeStyle === 'minimal') {
+          themeDirective = 'التَّنْسِيقُ الْمَرْئِيُّ: نَمَطٌ أَحَادِيٌّ بَسِيطٌ وَعَالِي الْوُضُوحِ أَبْيَضُ وَأَسْوَدُ مُوَفِّرٌ لِلْحِبْرِ وَمِثَالِيٌّ لِلطِّبَاعَةِ.';
+        } else {
+          themeDirective = 'التَّنْسِيقُ الْمَرْئِيُّ: نَمَطٌ أَكَادِيمِيٌّ كَلَاسِيكِيٌّ مُحْكَمٌ يَتَضَمَّنُ جَدَاوِلَ وَإِطَارَاتٍ أَنِيقَةً.';
+        }
+
+        return `${ctx}
+الْمَطْلُوبُ: تَوْلِيدُ "وَرَقَةِ عَمَلٍ تَفَاعُلِيَّةٍ مَبْنِيَّةٍ عَلَى هَرَمِ بِلُومَ الْمَعْرِفِيِّ" جَاهِزَةٍ لِلطِّبَاعَةِ بِاللُّغَةِ الْعَرَبِيَّةِ وَمَشْكُولَةٍ بِالْكَامِلِ (100%) عَلَى شَكْلِ HTML.
+
+تَخْصِيصَاتُ الْمُعَلِّمِ لِوَرَقَةِ الْعَمَلِ:
+- عَدَدُ الصَّفَحَاتِ الْمَطْلُوبَةِ: ${pageCount} صَفَحَاتٍ.
+${themeDirective}
+${standardsSel ? `- الْمَعَايِيرُ الْمُسْتَهْدَفَةُ: ${standardsSel}` : ''}
+${teacherNotes ? `- تَوْجِيهَاتُ وَمُلَاحَظَاتُ الْمُعَلِّمِ الْإِلْزَامِيَّةُ: """\n${teacherNotes}\n"""` : ''}
+${isAutoPilot ? '- نِظَامُ الطَّيَّارِ الْآلِيِّ (AI AutoPilot): مُفَعَّلٌ - قُمْ بِتَوْزِيعِ الْأَسْئِلَةِ وَالْأَنْشِطَةِ بِشَكْلٍ مِثَالِيٍّ يَتَدَرَّجُ مِنْ مُسْتَوَيَاتِ التَّذَكُّرِ حَتَّى الِابْتِكَارِ.' : ''}
+
+هَيْكَلُ وَرَقَةِ الْعَمَلِ الْمُتَدَرِّجَةِ حَسَبَ هَرَمِ بِلُومَ:
+1. تَرْوِيسَةُ وَرَقَةِ الْعَمَلِ (اسْمُ الطَّالِبِ، الصَّفُّ، التَّارِيخُ، الْمَادَّةُ، الْعُنْوَانُ، الدَّرَجَةُ).
+2. الْقِسْمُ الْأَوَّلُ - مُسْتَوَى التَّذَكُّرِ وَالْفَهْمِ (Remembering & Understanding):
+   - أَنْشِطَةُ اسْتِرْجَاعِ الْمَفَاهِيمِ الْأَسَاسِيَّةِ، اخْتِيَارٌ مِنْ مُتَعَدِّدٍ، صَحٌّ أَوْ خَطَأٌ مَعَ التَّعْلِيلِ، إِكْمَالُ الْفَرَاغِ.
+3. الْقِسْمُ الثَّانِي - مُسْتَوَى التَّطْبِيقِ وَالتَّحْلِيلِ (Applying & Analyzing):
+   - مَسَائِلُ تَطْبِيقِيَّةٌ، تَحْلِيلُ فِقْرَةٍ أَوْ شَكْلٍ تَوْضِيحِيٍّ، مُقَارَنَةٌ فِي جَدْوَلٍ، اسْتِنْتَاجُ الْعَلَاقَاتِ.
+4. الْقِسْمُ الثَّالِثُ - مُسْتَوَى التَّقْوِيمِ وَالِابْتِكَارِ (Evaluating & Creating):
+   - سُؤَالُ تَفْكِيرٍ نَاقِدٍ وَحَلِّ مُشْكِلَاتٍ، إِبْدَاءُ رَأْيٍ مُعَلَّلٍ، تَصْمِيمُ نَشَاطٍ أَوْ إِعَادَةُ صِيَاغَةٍ إِبْدَاعِيَّةٍ.
+
+فَوَاصِلُ الصَّفَحَاتِ:
+لِتَوْزِيعِ الْمُحْتَوَى عَلَى ${pageCount} صَفَحَاتٍ، يَجِبُ وَضْعُ فَاصِلِ صَفْحَةٍ بَيْنَ الْأَقْسَامِ عِنْدَ اكْتِمَالِ كُلِّ صَفْحَةٍ بِالصِّيغَةِ التَّالِيَةِ:
+<div class="page-break" style="page-break-after: always; break-after: page; margin: 30px 0; border-top: 2px dashed #94a3b8; text-align: center; color: #64748b; font-size: 12px; padding-top: 8px;">--- فَاصِلُ صَفْحَةٍ (Page Break) ---</div>
+
+اسْتَخْدِمْ وُسُومَ HTML فَقَطْ: <h1>, <h2>, <h3>, <p>, <table>, <tr>, <th>, <td>, <ul>, <li>, <strong>, <ol>, <div>.`;
+      }
+
+      case 'slides': {
+        const ps = settings.presentationSettings || {};
+        const slideCount = ps.slideCount || 10;
+        const depthLevel = ps.depthLevel || 'detailed';
+        const visualTheme = ps.visualTheme || 'tech_blue';
+
+        let depthDirective = '';
+        if (depthLevel === 'concise') {
+          depthDirective = 'مُسْتَوَى التَّفْصِيلِ: مُوجَزٌ وَمُرَكَّزٌ عَلَى رُؤُوسِ الْأَقْلَامِ وَالْمَفَاهِيمِ الْجَوْهَرِيَّةِ.';
+        } else if (depthLevel === 'comprehensive_script') {
+          depthDirective = `مُسْتَوَى التَّفْصِيلِ: شَامِلٌ جِدّاً مَعَ سِينَارْيُو شَرْحِ الْمُعَلِّمِ!
+يَجِبُ أَنْ تَتَضَمَّنَ كُلُّ شَرِيحَةٍ صُنْدُوقاً خَاصّاً بِعُنْوَان: <div class="teacher-notes" style="background:#f8fafc; border-right:4px solid #3b82f6; padding:10px 14px; margin-top:14px; font-size:0.9em; border-radius:6px;"><strong>دَلِيلُ الْمُعَلِّمِ وَسِينَارْيُو الشَّرْحِ (Teacher Script):</strong> يَتَضَمَّنُ مَا يَقُولُهُ الْمُعَلِّمُ، سُؤَالاً لِإِثَارَةِ النِّقَاشِ الصَّفِّيِّ، وَنَشَاطاً صَفِّيّاً مُرَافِقاً لِلشَّرِيحَةِ.</div>`;
+        } else {
+          depthDirective = 'مُسْتَوَى التَّفْصِيلِ: تَفْصِيلِيٌّ احْتِرَافِيٌّ يَتَضَمَّنُ شَرْحاً لِلْمَفَاهِيمِ مَعَ أَمْثِلَةٍ تَطْبِيقِيَّةٍ وَنِقَاطٍ شَارِحَةٍ.';
+        }
+
+        return `${ctx}
+الْمَطْلُوبُ: تَوْلِيدُ "عَرْضِ شَرَائِحَ تَعْلِيمِيٍّ تَفْصِيلِيٍّ احْتِرَافِيٍّ" بِاللُّغَةِ الْعَرَبِيَّةِ وَمَشْكُولٍ بِالْكَامِلِ (100%) عَلَى شَكْلِ HTML مُهَيَّأٍ لِلْعَرْضِ وَالتَّصْدِيرِ لِـ PowerPoint.
+
+تَخْصِيصَاتُ الْعَرْضِ:
+- عَدَدُ الشَّرَائِحِ: ${slideCount} شَرَائِحَ.
+- ${depthDirective}
+- الطَّابَعُ الْمَرْئِيُّ: ${visualTheme}.
+
+هَيْكَلُ الشَّرَائِحِ:
+يَجِبُ أَنْ تَكُونَ كُلُّ شَرِيحَةٍ مَحْصُورَةً دَاخِلَ حَاوِيَةٍ بِالْهَيْكَلِ التَّالِي:
+<div class="slide" data-slide-index="1" style="border:1px solid #e2e8f0; border-radius:12px; padding:24px; margin-bottom:24px; background:#ffffff; box-shadow:0 2px 6px rgba(0,0,0,0.05);">
+  <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #e2e8f0; padding-bottom:8px; margin-bottom:14px;">
+    <h2 style="color:#1e3a8a; margin:0; font-size:1.3rem;">عُنْوَانُ الشَّرِيحَةِ الْمَشْكُولِ</h2>
+    <span style="background:#e0f2fe; color:#0369a1; padding:2px 10px; border-radius:12px; font-size:0.85em; font-weight:700;">الشَّرِيحَةُ 1 مِنْ ${slideCount}</span>
+  </div>
+  <div class="slide-content">
+    <!-- نِقَاطُ الْمُحْتَوَى، الْأَفْكَارُ، وَالْأَمْثِلَةُ التَّطْبِيقِيَّةُ -->
+    <ul style="line-height:1.8;">
+      <li>...</li>
+    </ul>
+  </div>
+  <!-- إِنْ كَانَ الْمُسْتَوَى شَامِلاً: أَضِفْ صُنْدُوقَ سِينَارْيُو الشَّرْحِ لِلْمُعَلِّمِ teacher-notes -->
+</div>
+
+اسْتَخْدِمْ وُسُومَ HTML فَقَطْ: <h1>, <h2>, <h3>, <p>, <ul>, <li>, <strong>, <div>.`;
+      }
+
+      case 'quiz': {
+        const lmsXmlDirective = getLmsXmlSchemaDirective(lmsTarget, true);
+        return `${ctx}
+الْمَطْلُوبُ: تَوْلِيدُ "اخْتِبَارٍ قَصِيرٍ شَامِلٍ (QTI)" بِاللُّغَةِ الْعَرَبِيَّةِ وَمَشْكُولٍ بِالْكَامِلِ (100%) عَلَى شَكْلِ HTML.
+
+قَوَاعِدُ الِاخْتِبَارِ:
+- عَدَدُ الْأَسْئِلَةِ: 10 أَسْئِلَةِ اخْتِيَارٍ مِنْ مُتَعَدِّدٍ فَقَطْ.
+- كُلُّ سُؤَالٍ يَتَضَمَّنُ 4 خِيَارَاتٍ مُحَدَّدَةً بِوُضُوحٍ (أ، ب، ج، د).
+- نَمُوذَجُ الْإِجَابَةِ الْمُعَلَّلِ (Answer Key & Rationale).
+- فِي نِهَايَةِ الْمُخْرَجِ تَمَاماً: كُودُ QTI XML الصَّالِحُ لِجَمِيعِ الْأَسْئِلَةِ الْعَشَرَةِ دَاخِلَ الْوَسْمِ:
+${lmsXmlDirective}
+<div id="qti-xml-payload" style="display:none;"><![CDATA[
+<!-- كُودُ QTI XML لِلْأَسْئِلَةِ مِنْ Q_01 إِلَى Q_10 -->
+]]></div>
+
+اسْتَخْدِمْ وُسُومَ HTML فَقَطْ: <h1>, <h2>, <h3>, <p>, <table>, <tr>, <th>, <td>, <ul>, <li>, <strong>, <ol>, <div>.`;
+      }
+
+      case 'qti-exam': {
+        const lmsXmlDirective = getLmsXmlSchemaDirective(lmsTarget, true);
+        return `${ctx}
+الْمَطْلُوبُ: تَوْلِيدُ "امْتِحَانِ اخْتِيَارٍ مِنْ مُتَعَدِّدٍ شَامِلٍ (50 سُؤَال QTI)" بِاللُّغَةِ الْعَرَبِيَّةِ وَمَشْكُولٍ بِالْكَامِلِ (100%) عَلَى شَكْلِ HTML.
+
+قَوَاعِدُ الِامْتِحَانِ الشَّامِلِ:
+- 50 سُؤَالَ اخْتِيَارٍ مِنْ مُتَعَدِّدٍ فَقَطْ (4 بَدَائِلَ لِكُلِّ سُؤَالٍ: أ، ب، ج، د).
+- التَّوْزِيعُ الْمَعْرِفِيُّ الْمُحْكَمُ حَسَبَ هَرَمِ بِلُومَ:
+  * 15 سُؤَالاً: التَّذَكُّرُ وَالْفَهْمُ (Q01 - Q15).
+  * 20 سُؤَالاً: التَّطْبِيقُ وَالتَّحْلِيلُ (Q16 - Q35).
+  * 15 سُؤَالاً: التَّقْوِيمُ وَالِابْتِكَارُ وَالتَّفْكِيرُ الْعُلْيَا (Q36 - Q50).
+- مَصْفُوفَةُ نَوَاتِجِ التَّعَلُّمِ وَجَدْوَلُ الْمُوَاصَفَاتِ.
+- نَمُوذَجُ الْإِجَابَةِ الْمُعْتَمَدُ لِجَمِيعِ الْأَسْئِلَةِ الْخَمْسِينَ.
+- فِي نِهَايَةِ الْمُخْرَجِ تَمَاماً: كُودُ QTI XML الْكَامِلُ لِلْـ 50 سُؤَالاً دَاخِلَ:
+${lmsXmlDirective}
+<div id="qti-xml-payload" style="display:none;"><![CDATA[
+<!-- كُودُ QTI XML الصَّالِحُ لِجَمِيعِ الْأَسْئِلَةِ مِنْ Q_01 إِلَى Q_50 -->
+]]></div>
+
+اسْتَخْدِمْ وُسُومَ HTML فَقَطْ: <h1>, <h2>, <h3>, <p>, <table>, <tr>, <th>, <td>, <ul>, <li>, <strong>, <ol>, <div>.`;
+      }
+
+      default:
+        return ctx;
+    }
+  } else {
+    // English context
+    const ctx = `You are an expert curriculum developer and master teacher assistant for Sahlah Academy and Al-Furqan International School.
+Lesson Information:
+- Subject: ${settings.subject || 'Not specified'}
+- Grade: ${settings.grade || 'Not specified'}
+- Duration: ${settings.duration || 'Not specified'}
+- Student Level: ${settings.studentLevel || 'Not specified'}
+- Teacher Name: ${settings.teacherName || 'Not specified'}
+- Lesson Title: ${settings.lessonTitle || 'To be inferred from content'}
+${subjectGuidance}
+${customStandardsText}`;
+
+    switch (outputType) {
+      case 'standardized-test':
+        return buildStandardizedPrompt(settings, false, ctx);
+
+      case 'lesson-plan':
+        return `${ctx}
+Task: Generate a complete "Approved Lesson Plan" in English formatted in clean semantic HTML tables.
+Include:
+1. Header Table (Teacher, Subject, Grade, Title, Duration, Date).
+2. Essentials Table (General & Specific Objectives, Standards, Islamic Values, Tech & Life Skills).
+3. Lesson Procedure Table (4 columns: Activity | Duration | Description | Assessment across 5 phases: Warmup, Direct Instruction, Guided Practice, Independent Work, Exit Ticket).
+4. Assessment Table.
+5. Differentiation Table.
+6. Teacher Notes Table.
+Use standard HTML tags only.`;
+
+      case 'worksheet': {
+        const ws = settings.worksheetSettings || {};
+        return `${ctx}
+Task: Generate an "Interactive Bloom-Aligned Worksheet" in English formatted in clean HTML ready for printing.
+- Page Count: ${ws.pageCount || 2} pages with <div class="page-break" style="page-break-after: always; break-after: page; margin: 30px 0; border-top: 2px dashed #94a3b8; text-align: center; color: #64748b; font-size: 12px; padding-top: 8px;">--- Page Break ---</div>.
+- Progressive Bloom Levels: Remembering & Understanding -> Applying & Analyzing -> Evaluating & Creating.
+${ws.teacherCustomPrompt ? `- Teacher Instructions: ${ws.teacherCustomPrompt}` : ''}
+Use clean HTML tags only.`;
+      }
+
+      case 'slides': {
+        const ps = settings.presentationSettings || {};
+        const slideCount = ps.slideCount || 10;
+        return `${ctx}
+Task: Generate a comprehensive "Slide Deck" in English as HTML for ${slideCount} slides.
+Enclose each slide inside <div class="slide" data-slide-index="N"> with title, content cards, and teacher notes.`;
+      }
+
+      case 'quiz':
+        return `${ctx}
+Task: Generate a "Short Quiz" with 10 multiple-choice questions in English as HTML with Answer Key and QTI XML payload inside <div id="qti-xml-payload" style="display:none;"><![CDATA[...]]></div>.`;
+
+      case 'qti-exam':
+        return `${ctx}
+Task: Generate a comprehensive "50-Question Bloom Exam (QTI)" in English with full QTI XML payload inside <div id="qti-xml-payload" style="display:none;"><![CDATA[...]]></div>.`;
+
+      default:
+        return ctx;
+    }
+  }
 }
 
 // Handler for Generate
@@ -207,9 +605,9 @@ export async function executeGenerate(req: any, res: any) {
     if (Array.isArray(files) && files.length > 0) {
       const textFiles = files.filter((f: any) => f.textContent);
       if (textFiles.length > 0) {
-        prompt += `\n\nنصوص ووثائق الدرس المرفقة:\n`;
+        prompt += `\n\nنُصُوصٌ وَوَثَائِقُ تَعْلِيمِيَّةٌ مُرْفَقَةٌ:\n`;
         textFiles.forEach((file: any, idx: number) => {
-          prompt += `\n--- ملف ${idx + 1}: ${file.name} ---\n${file.textContent}\n`;
+          prompt += `\n--- مَلَفٌّ ${idx + 1}: ${file.name} ---\n${file.textContent}\n`;
         });
       }
     }
@@ -248,11 +646,22 @@ export async function executeGenerate(req: any, res: any) {
 
     const fullHtml = `<div dir="${direction}" lang="${settings.contentLanguage || 'ar'}" style="direction: ${direction}; text-align: ${alignment}; font-family: inherit;">${institutionHeader}${htmlContent}</div>`;
 
-    const titlePrefix = settings.standardFramework === 'diagnostic'
-      ? (isAr ? 'اختبار تشخيصي ورصد فجوات' : 'Diagnostic Assessment')
-      : (isAr ? 'اختبار معياري' : 'Benchmark Assessment');
+    const titlePrefix =
+      outputType === 'worksheet'
+        ? (isAr ? 'وَرَقَةُ عَمَلٍ تَفَاعُلِيَّةٌ' : 'Interactive Worksheet')
+        : outputType === 'slides'
+        ? (isAr ? 'عَرْضُ شَرَائِحَ تَعْلِيمِيٌّ' : 'Slide Deck')
+        : outputType === 'quiz'
+        ? (isAr ? 'اخْتِبَارٌ قَصِيرٌ' : 'Short Quiz')
+        : outputType === 'qti-exam'
+        ? (isAr ? 'امْتِحَانُ بِلُومَ الشَّامِلُ' : 'Comprehensive Bloom Exam')
+        : outputType === 'standardized-test'
+        ? (isAr ? 'اخْتِبَارٌ مِعْيَارِيٌّ / تَشْخِيصِيٌّ' : 'Benchmark Assessment')
+        : (isAr ? 'خُطَّةُ دَرْسٍ مُعْتَمَدَةٌ' : 'Approved Lesson Plan');
 
-    const title = settings.lessonTitle || `${titlePrefix} - ${settings.subject || ''} - ${settings.grade || ''}`;
+    const title = settings.lessonTitle
+      ? `${titlePrefix} - ${settings.lessonTitle}`
+      : `${titlePrefix} - ${settings.subject || ''} - ${settings.grade || ''}`;
 
     return res.status(200).json({ contentHtml: fullHtml, title });
   } catch (error: any) {
@@ -262,16 +671,77 @@ export async function executeGenerate(req: any, res: any) {
   }
 }
 
-// Advisor Prompt constants
-const ADVISOR_PROMPT_AR = `أنت "المستشار التربوي الذكي" لأكاديمية سهلة ومدرسة الفرقان.
-دورك تقديم استشارات دقيقة وعملية للمعلمين في:
-- استراتيجيات التدريس الحديثة (التعلم النشط، الصف المقلوب، الاستقصاء، التمايز).
-- إدارة الصف والدافعية وتصميم الأنشطة والمشاريع.
-- صياغة الأسئلة وفق مستويات بلوم وبنوك الأسئلة.
-- تعليم اللغة العربية للناطقين بغيرها (AFL).
-كن داعماً، مهنياً، وقدم أمثلة عملية وقابلة للتطبيق الفوري. أجب باللغة العربية بأسلوب راقٍ وموجز.`;
+// Handler for Question-to-QTI Converter
+export async function executeConvertQti(req: any, res: any) {
+  try {
+    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    const { rawText = '', lmsTarget = 'sahlah_cypher', title = 'اختبار مستورد', subject = '', grade = '' } = body || {};
 
-const ADVISOR_PROMPT_EN = `You are the "Smart Educational Advisor" for Sahlah Academy and Al-Furqan School.
+    if (!rawText.trim()) {
+      return res.status(400).json({ error: 'يرجى لصق نص الأسئلة المراد تحويلها.' });
+    }
+
+    const lmsDirective = getLmsXmlSchemaDirective(lmsTarget, true);
+
+    const prompt = `أنت مهندس اختبارات وأنظمة تعليمية خبير في معايير IMS QTI لمنصات LMS (أكاديمية سهلة Cypher، ومدارس الفرقان Canvas).
+أمامك نص غير منظم لأسئلة كتبها أو نسخها المعلم:
+
+"""
+${rawText}
+"""
+
+المطلوب بدقة:
+1. تحليل واستخراج كل سؤال بدقة:
+   - نص السؤال كاملاً مع تشكيله تشكيلاً تاماً بنسبة 100%.
+   - الخيارات الأربعة (أ، ب، ج، د / A, B, C, D) مشكولة تماماً.
+   - تحديد الإجابة الصحيحة الصريحة بدقة.
+   - تحديد درجة السؤال (Default 1 mark).
+   - كتابة تعليل تربوي موجز لسبب صحة الخيار.
+
+2. إخراج المخرجين معاً:
+   المخرج الأول: جدول HTML منسق وأنيق لمعاينة الأسئلة ومراجعتها (نص السؤال، الخيارات مع تمييز الإجابة الصحيحة بلون أخضر، التعليل، والدرجة).
+   المخرج الثاني: كود QTI XML صالح تماماً ومطابق لمعايير منصة المستهدفة (${lmsTarget})، مشكول بنسبة 100% ومغلف داخل:
+   <div id="qti-xml-payload" style="display:none;"><![CDATA[
+   <!-- كود XML الصالح هنا -->
+   ]]></div>
+
+${lmsDirective}
+
+أخرج كود HTML فقط بدون أسوار markdown (\`\`\`html).`;
+
+    const response = await callGemini(prompt);
+    const text = response.text || '';
+    const cleanedHtml = extractHtml(text);
+
+    // Extract XML payload
+    let qtiXml = '';
+    const xmlMatch = cleanedHtml.match(/<div id="qti-xml-payload"[^>]*>([\s\S]*?)<\/div>/i);
+    if (xmlMatch && xmlMatch[1]) {
+      qtiXml = xmlMatch[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/, '$1').trim();
+    }
+
+    return res.status(200).json({
+      previewHtml: cleanedHtml,
+      qtiXml: qtiXml || '<!-- تم تضمين الأسئلة في المعاينة أعلاه -->',
+      title: title || `اختبار QTI - ${subject} ${grade}`.trim(),
+    });
+  } catch (error: any) {
+    console.error('executeConvertQti error:', error);
+    const { status, message } = formatApiError(error);
+    return res.status(status).json({ error: message, details: error?.message });
+  }
+}
+
+// Advisor Prompt constants
+const ADVISOR_PROMPT_AR = `أَنْتَ "الْمُسْتَشَارُ التَّرْبَوِيُّ الذَّكِيُّ" لِأَكَادِيمِيَّةِ سَهْلَةَ الدَّوْلِيَّةِ وَمَدْرَسَةِ الْفُرْقَانِ الْعَالَمِيَّةِ.
+دَوْرُكَ تَقْدِيمُ اسْتِشَارَاتٍ دَقِيقَةٍ وَعَمَلِيَّةٍ لِلْمُعَلِّمِينَ فِي:
+- اسْتِرَاتِيجِيَّاتِ التَّدْرِيسِ الْحَدِيثَةِ (التَّعَلُّمِ النَّشِطِ، الصَّفِّ الْمَقْلُوبِ، الِاسْتِقْصَاءِ، التَّمَايُزِ الحَقِيقِيِّ).
+- إِدَارَةِ الصَّفِّ وَضَبْطِ السُّلُوكِ وَالدَّافِعِيَّةِ وَتَصْمِيمِ الْأَنْشِطَةِ وَالْمَشَارِيعِ.
+- صِيَاغَةِ الْأَسْئِلَةِ وَفْقَ مُسْتَوَيَاتِ بِلُومَ وَبُنُوكِ الْأَسْئِلَةِ.
+- تَعْلِيمِ اللُّغَةِ الْعَرَبِيَّةِ لِلنَّاطِقِينَ بِغَيْرِهَا (AFL).
+كُنْ دَاعِماً، مِهْنِيّاً، وَقَدِّمْ أَمْثِلَةً عَمَلِيَّةً وَقَابِلَةً لِلتَّطْبِيقِ الْفَوْرِيِّ مَعَ ضَبْطِ الْإِجَابَاتِ بِالشَّكْلِ التَّامِّ.`;
+
+const ADVISOR_PROMPT_EN = `You are the "Smart Pedagogical Advisor" for Sahlah Academy and Al-Furqan School.
 Provide practical, pedagogical guidance on active learning, differentiation, assessment design, classroom management, and curriculum enrichment.
 Be supportive, professional, and practical.`;
 
@@ -281,8 +751,8 @@ export async function executeAdvisor(req: any, res: any) {
     const { history = [], newMessage, lang = 'ar' } = body || {};
     const isAr = lang === 'ar';
     const systemPrompt = isAr ? ADVISOR_PROMPT_AR : ADVISOR_PROMPT_EN;
-    const userTag = isAr ? 'المعلم' : 'Teacher';
-    const advisorTag = isAr ? 'المستشار' : 'Advisor';
+    const userTag = isAr ? 'الْمُعَلِّمُ' : 'Teacher';
+    const advisorTag = isAr ? 'الْمُسْتَشَارُ' : 'Advisor';
 
     const promptParts: string[] = [systemPrompt];
     (history || []).forEach((msg: any) => {
@@ -310,16 +780,16 @@ export async function executeRubric(req: any, res: any) {
     const total = maxScore || 20;
 
     const prompt = isAr
-      ? `أنت خبير قياس وتقويم تربوي وإعداد معايير تقييم ومناهج.
-قم بصياغة "سلم تقدير لفظي تحليلي (Analytic Rubric)" مفصل ومحكم لتقييم المهمة التالية:
-- المادة: ${subject || 'عام'}
-- الصف: ${grade || 'غير محدد'}
-- عنوان السؤال أو المهمة: ${assignmentTitle || 'تقييم كتابي / أدائي'}
-- الدرجة الإجمالية الكلية: ${total} درجة.
+      ? `أَنْتَ خَبِيرُ قِيَاسٍ وَتَقْوِيمٍ تَرْبَوِيٍّ وَإِعْدَادِ مَعَايِيرِ تَقْيِيمٍ وَمَنَاهِجَ.
+قُمْ بِصِيَاغَةِ "سُلَّمِ تَقْدِيرٍ لَفْظِيٍّ تَحْلِيلِيٍّ (Analytic Rubric)" مُفَصَّلٍ وَمُحْكَمٍ لِتَقْيِيمِ الْمَهَمَّةِ التَّالِيَةِ:
+- الْمَادَّةُ: ${subject || 'عَامٌّ'}
+- الصَّفُّ: ${grade || 'غَيْرُ مُحَدَّدٍ'}
+- عُنْوَانُ السُّؤَالِ أَوْ الْمَهَمَّةِ: ${assignmentTitle || 'تَقْيِيمٌ كِتَابِيٌّ / أَدَائِيٌّ'}
+- الدَّرَجَةُ الْإِجْمَالِيَّةُ الْكُلِّيَّةُ: ${total} دَرَجَةً.
 
-المطلوب:
-جدول تحليلي كامل بمعايير واضحة ومستويات أداء (ممتاز، جيد جداً، مقبول، يحتاج تحسين) وتوزيع دقيق للدرجات.
-أخرج كود HTML فقط بدون أسوار كود markdown.`
+الْمَطْلُوبُ:
+جَدْوَلٌ تَحْلِيلِيٌّ كَامِلٌ بِمَعَايِيرَ وَاضِحَةٍ وَمُسْتَوَيَاتِ أَدَاءٍ (مُمْتَازٌ، جَيِّدٌ جِدّاً، مَقْبُولٌ، يَحْتَاجُ تَحْسِيناً) مَعَ تَشْكِيلِ النُّصُوصِ كَامِلَةً (100%).
+أَخْرِجْ كُودَ HTML فَقَطْ بِدُونِ أَسْوَارِ كُودِ markdown.`
       : `You are an expert educational assessment specialist.
 Create an analytic grading rubric for:
 - Subject: ${subject || 'General'}
@@ -352,17 +822,17 @@ export async function executeGrade(req: any, res: any) {
     const cleanBase64 = imageFile.base64.replace(/^data:image\/[a-z]+;base64,/, '');
 
     const prompt = isAr
-      ? `أنت معلم خبير في التصحيح والتقويم التربوي الدقيق.
-أمامك صورة لإجابة طالب مكتوبة بخط اليد.
-معلومات التكليف:
-- المادة: ${subject}
-- الصف: ${grade}
-- عنوان التكليف / الاختبار: ${assignmentTitle}
-- الدرجة القصوى: ${maxScore}
-${rubricOrModelAnswer ? `- سلم التقدير / الإجابة النموذجية المرجعية:\n${rubricOrModelAnswer}` : ''}
+      ? `أَنْتَ مُعَلِّمٌ خَبِيرٌ فِي التَّصْحِيحِ وَالتَّقْوِيمِ التَّرْبَوِيِّ الدَّقِيقِ.
+أَمَامَكَ صُورَةٌ لِإِجَابَةِ طَالِبٍ مَكْتُوبَةٍ بِخَطِّ الْيَدِ.
+مَعْلُومَاتُ التَّكْلِيفِ:
+- الْمَادَّةُ: ${subject}
+- الصَّفُّ: ${grade}
+- عُنْوَانُ التَّكْلِيفِ / الِاخْتِبَارِ: ${assignmentTitle}
+- الدَّرَجَةُ الْقُصْوَى: ${maxScore}
+${rubricOrModelAnswer ? `- سُلَّمُ التَّقْدِيرِ / الْإِجَابَةُ النَّمُوذَجِيَّةُ الْمَرْجِعِيَّةُ:\n${rubricOrModelAnswer}` : ''}
 
-قم بقراءة خط اليد بدقة متناهية، وتصحيح كل جزء وتقديم التغذية الراجعة والدرجة المستحقة وتوصيات علاجية.
-أخرج النتيجة كود HTML نظيف فقط بدون وسوم markdown.`
+قُمْ بِقِرَاءَةِ خَطِّ الْيَدِ بِدِقَّةٍ مُتَنَاهِيَةٍ، وَتَصْحِيحِ كُلِّ جُزْءٍ وَتَقْدِيمِ التَّغْذِيَةِ الرَّاجِعَةِ وَالدَّرَجَةِ الْمُسْتَحَقَّةِ وَتَوْصِيَاتٍ عِلَاجِيَّةٍ مَشْكُولَةٍ تَشْكِيلاً تَامّاً (100%).
+أَخْرِجِ النَّتِيجَةَ كُودَ HTML نَظِيفٍ فَقَطْ بِدُونِ وُسُومِ markdown.`
       : `You are an expert teacher grading a student handwritten submission.
 Context:
 - Subject: ${subject}
@@ -392,4 +862,3 @@ Return clean HTML only without markdown fences.`;
     return res.status(status).json({ error: message, details: error?.message });
   }
 }
-

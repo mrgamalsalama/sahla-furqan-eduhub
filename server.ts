@@ -3,7 +3,7 @@ import cors from 'cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
-import { executeGenerate, executeAdvisor, executeRubric, executeGrade } from './api/_shared.js';
+import { executeGenerate, executeAdvisor, executeRubric, executeGrade, executeConvertQti } from './api/_shared.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,6 +16,7 @@ app.use(express.json({ limit: '50mb' }));
 
 // API Endpoints
 app.post('/api/generate', executeGenerate);
+app.post('/api/convert-qti', executeConvertQti);
 app.post('/api/advisor', executeAdvisor);
 app.post('/api/rubric', executeRubric);
 app.post('/api/grade', executeGrade);

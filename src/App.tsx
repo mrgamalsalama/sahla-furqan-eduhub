@@ -6,6 +6,7 @@ import LibraryPage from '@/components/LibraryPage';
 import AdvisorPage from '@/components/AdvisorPage';
 import BenchmarkPage from '@/components/BenchmarkPage';
 import GraderPage from '@/components/GraderPage';
+import QtiConverterPage from '@/components/QtiConverterPage';
 import type { View, OutputType, GenerationResult, SavedLesson } from '@/types';
 import { getUILang, saveUILang } from '@/lib/i18n';
 import type { UILang } from '@/lib/i18n';
@@ -23,7 +24,7 @@ export default function App() {
   const [view, setView] = useState<View>(() => {
     try {
       const saved = localStorage.getItem(VIEW_STORAGE_KEY);
-      if (saved && ['home', 'editor', 'library', 'advisor', 'benchmark', 'grader'].includes(saved)) {
+      if (saved && ['home', 'editor', 'library', 'advisor', 'benchmark', 'grader', 'qti-converter'].includes(saved)) {
         return saved as View;
       }
     } catch {
@@ -117,6 +118,9 @@ export default function App() {
             onOpenResult={handleOpenResult}
             uiLang={uiLang}
           />
+        )}
+        {view === 'qti-converter' && (
+          <QtiConverterPage uiLang={uiLang} />
         )}
         {view === 'editor' && editorState && (
           <EditorPage

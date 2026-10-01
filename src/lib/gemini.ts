@@ -91,3 +91,25 @@ export async function gradeHandwrittenSubmission(
   const data = await response.json();
   return data.html;
 }
+
+export async function convertRawTextToQti(payload: {
+  rawText: string;
+  lmsTarget: 'sahlah_cypher' | 'furqan_canvas';
+  title?: string;
+  subject?: string;
+  grade?: string;
+}): Promise<{ previewHtml: string; qtiXml: string; title: string }> {
+  const response = await fetch('/api/convert-qti', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'فشل تحويل الأسئلة إلى صيغة QTI.');
+  }
+
+  return response.json();
+}
+

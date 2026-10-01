@@ -1,4 +1,4 @@
-import { Home, Library, Languages, MessageSquareText, Award, FileCheck2 } from 'lucide-react';
+import { Home, Library, Languages, MessageSquareText, Award, FileCheck2, FileCode2 } from 'lucide-react';
 import type { View } from '@/types';
 import type { UILang } from '@/lib/i18n';
 import { t } from '@/lib/i18n';
@@ -20,6 +20,11 @@ export default function Header({ currentView, onNavigate, uiLang, onToggleLang }
       view: 'benchmark',
       label: isAr ? 'الاختبارات المعيارية' : 'Benchmark Tests',
       icon: Award,
+    },
+    {
+      view: 'qti-converter',
+      label: isAr ? 'محول QTI' : 'QTI Studio',
+      icon: FileCode2,
     },
     {
       view: 'grader',
