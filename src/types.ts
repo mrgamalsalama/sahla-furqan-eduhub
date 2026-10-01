@@ -20,7 +20,89 @@ export type OutputType =
   | 'qti-exam'
   | 'standardized-test';
 
-export type StandardFramework = 'abt' | 'ib' | 'cefr' | 'bloom' | 'diagnostic' | 'custom';
+export type StandardFramework =
+  | 'diagnostic_gap'
+  | 'map_growth'
+  | 'ib_criteria'
+  | 'cambridge_igcse'
+  | 'us_common_core'
+  | 'cefr_languages'
+  | 'pirls_pisa'
+  | 'abt'
+  | 'ib'
+  | 'cefr'
+  | 'bloom'
+  | 'diagnostic'
+  | 'custom';
+
+export interface InternationalFrameworkOption {
+  id: StandardFramework;
+  titleAr: string;
+  titleEn: string;
+  descAr: string;
+  descEn: string;
+  badge: string;
+}
+
+export const INTERNATIONAL_FRAMEWORKS: InternationalFrameworkOption[] = [
+  {
+    id: 'diagnostic_gap',
+    titleAr: 'تشخيص الفاقد التعليمي ومصفوفة الفجوات',
+    titleEn: 'Diagnostic & Learning Gap Analysis',
+    descAr: 'تحديد الفجوات السابقة ومستويات التمكن مع خطة علاجية وإثرائية فورية.',
+    descEn: 'Pinpoints prior learning loss and builds an automated remediation action matrix.',
+    badge: 'Diagnostic Gap',
+  },
+  {
+    id: 'map_growth',
+    titleAr: 'مقاييس التقدم الدولية (MAP Growth)',
+    titleEn: 'MAP Growth / RIT Benchmarks',
+    descAr: 'مستويات درجات RIT المتكيفة واختبار مقاييس التقدم NWEA MAP.',
+    descEn: 'Calibrated RIT score bands and adaptive proficiency bands.',
+    badge: 'NWEA MAP',
+  },
+  {
+    id: 'ib_criteria',
+    titleAr: 'البكالوريا الدولية (IB Assessment Criteria)',
+    titleEn: 'IB Criteria (A, B, C, D / Rubrics 1-8)',
+    descAr: 'معايير MYP/DP من A إلى D مع سلالم تقدير تحليلية من 1 إلى 8 درجات.',
+    descEn: 'MYP/DP criteria A to D with analytical 1-8 achievement rubrics.',
+    badge: 'IB Continuum',
+  },
+  {
+    id: 'cambridge_igcse',
+    titleAr: 'كامبريدج وإدكسل البريطانية (Cambridge / Edexcel)',
+    titleEn: 'Cambridge IGCSE & Checkpoint',
+    descAr: 'معايير تصحيح كامبريدج مع سلم الدرجات ومستويات الفهم AO1 و AO2 و AO3.',
+    descEn: 'Official Mark Scheme bands and Assessment Objectives AO1, AO2, AO3.',
+    badge: 'Cambridge',
+  },
+  {
+    id: 'us_common_core',
+    titleAr: 'المعايير الأمريكية المشتركة (US Common Core)',
+    titleEn: 'US Common Core (CCSS Standards)',
+    descAr: 'تصنيف الأسئلة حسب أكواد CCSS في القراءة والرياضيات والعلوم ومستويات DOK.',
+    descEn: 'Item alignment with specific CCSS strand codes and DOK levels.',
+    badge: 'Common Core',
+  },
+  {
+    id: 'cefr_languages',
+    titleAr: 'الإطار الأوروبي للغات (CEFR Framework)',
+    titleEn: 'CEFR Framework (A1 to C2)',
+    descAr: 'تصنيف المهارات اللغوية من المستوى المبتدئ A1 حتى الإتقان التام C2.',
+    descEn: 'Language proficiency scale from Basic A1/A2 to Mastery C1/C2.',
+    badge: 'CEFR A1-C2',
+  },
+  {
+    id: 'pirls_pisa',
+    titleAr: 'المعايير الدولية للقراءة والعلوم (PIRLS / PISA)',
+    titleEn: 'PIRLS / PISA Reading Literacy',
+    descAr: 'قياس الفهم القرائي العميق، التفسير، والاستدلال وحل المشكلات في سياقات واقعية.',
+    descEn: 'Higher-order reading literacy, scientific reasoning, and problem solving.',
+    badge: 'PISA / PIRLS',
+  },
+];
+
 export type AbtTrack = 'arabic-a' | 'arabic-b';
 export type QuestionFormat = 'all-mcq' | 'mixed';
 export type TermType = 'term-1' | 'term-2' | 'term-3';

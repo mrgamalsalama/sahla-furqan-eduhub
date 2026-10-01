@@ -6,7 +6,7 @@ import {
 import type {
   LessonSettings, OutputType, GenerationResult, LmsTarget, StandardFramework
 } from '@/types';
-import { SUBJECT_OPTIONS, GRADES_AR } from '@/types';
+import { SUBJECT_OPTIONS, GRADES_AR, GRADES_EN, INTERNATIONAL_FRAMEWORKS } from '@/types';
 import { getLessonSettings, saveLessonSettings } from '@/lib/storage';
 import { generateContent } from '@/lib/gemini';
 import { createAndDownloadQtiZip } from '@/lib/qtiPackager';
@@ -19,12 +19,14 @@ interface ExamBankStudioProps {
 
 export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioProps) {
   const isAr = uiLang === 'ar';
+  const grades = isAr ? GRADES_AR : GRADES_EN;
+
   const [settings, setSettings] = useState<LessonSettings>(() => {
     const saved = getLessonSettings();
     return {
       ...saved,
       lmsTarget: saved.lmsTarget || 'sahlah_cypher',
-      standardFramework: saved.standardFramework || 'abt',
+      standardFramework: saved.standardFramework || 'diagnostic_gap',
       questionFormat: 'all-mcq',
     };
   });
@@ -41,10 +43,14 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
     }
     setError(null);
     setLoading(true);
-    saveLessonSettings(settings);
+    const finalSettings: LessonSettings = {
+      ...settings,
+      contentLanguage: uiLang,
+    };
+    saveLessonSettings(finalSettings);
 
     try {
-      const result = await generateContent(settings, examType, []);
+      const result = await generateContent(finalSettings, examType, []);
       onOpenResult(result, examType);
     } catch (err: any) {
       setError(err?.message || (isAr ? 'حدث خطأ أثناء توليد الاختبار.' : 'Failed to generate assessment.'));
@@ -141,6 +147,51 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
           </div>
         </div>
 
+        {/* Dynamic International Assessment Frameworks Selection */}
+        {examType === 'standardized-test' && (
+          <div className="bg-gradient-to-br from-amber-50/70 to-orange-50/40 rounded-2xl p-5 border border-amber-200/80 space-y-3 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                <Award className="w-4 h-4 text-amber-600" />
+                <span>{isAr ? 'أطر القياس والتقييم الدولية المعتمدة:' : 'Accredited International Assessment Frameworks:'}</span>
+              </span>
+              <span className="text-[11px] font-semibold text-amber-800 bg-amber-100/80 px-2.5 py-0.5 rounded-full border border-amber-300">
+                {isAr ? '7 أطر قياس دولية' : '7 International Frameworks'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {INTERNATIONAL_FRAMEWORKS.map((fw) => {
+                const isSelected = (settings.standardFramework || 'diagnostic_gap') === fw.id;
+                return (
+                  <button
+                    key={fw.id}
+                    type="button"
+                    onClick={() => setSettings({ ...settings, standardFramework: fw.id })}
+                    className={`p-3 rounded-xl border text-start transition-all relative ${
+                      isSelected
+                        ? 'border-amber-600 bg-white text-amber-950 font-bold shadow-xs ring-1 ring-amber-500'
+                        : 'border-amber-200/70 bg-white/70 hover:bg-white text-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold truncate max-w-[190px]">
+                        {isAr ? fw.titleAr : fw.titleEn}
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 font-bold">
+                        {fw.badge}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 font-normal line-clamp-2">
+                      {isAr ? fw.descAr : fw.descEn}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* 2. LMS Target Platform Selector */}
         <div>
           <label className="block text-xs font-bold text-gray-700 mb-2">
@@ -205,7 +256,7 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
               className="w-full text-xs px-3 py-2.5 rounded-xl border border-gray-300 bg-white focus:ring-2 focus:ring-amber-500"
             >
               <option value="">{isAr ? '-- اختر الصف --' : 'Select Grade'}</option>
-              {GRADES_AR.map((g) => (
+              {grades.map((g) => (
                 <option key={g} value={g}>{g}</option>
               ))}
             </select>

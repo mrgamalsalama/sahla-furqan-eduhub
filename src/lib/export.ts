@@ -15,43 +15,51 @@ interface ExportOptions {
   };
 }
 
-export function buildOfficialHeaderBanner(settings?: {
-  teacherName?: string;
-  subject?: string;
-  grade?: string;
-  term?: string;
-}): string {
+export function buildOfficialHeaderBanner(
+  settings?: {
+    teacherName?: string;
+    subject?: string;
+    grade?: string;
+    term?: string;
+  },
+  isAr: boolean = true
+): string {
   const teacher = settings?.teacherName || '—';
   const subject = settings?.subject || '—';
   const grade = settings?.grade || '—';
-  const today = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+  const today = isAr
+    ? new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' })
+    : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  const dir = isAr ? 'rtl' : 'ltr';
+  const textAlign = isAr ? 'right' : 'left';
 
   return `
-  <div class="official-school-header" style="margin-bottom: 20px; border-bottom: 3px double #1e3a8a; padding-bottom: 12px; font-family: 'Cairo', sans-serif;">
+  <div class="official-school-header" dir="${dir}" style="margin-bottom: 20px; border-bottom: 3px double #1e3a8a; padding-bottom: 12px; font-family: 'Cairo', 'Tajawal', sans-serif;">
     <table style="width: 100%; border: none; border-collapse: collapse; margin-bottom: 10px;">
       <tr>
-        <td style="width: 25%; text-align: right; vertical-align: middle; border: none; padding: 0;">
-          <img src="${FURQAN_LOGO}" alt="مدرسة الفرقان العالمية" style="height: 60px; max-width: 120px; object-fit: contain;" />
+        <td style="width: 25%; text-align: ${isAr ? 'right' : 'left'}; vertical-align: middle; border: none; padding: 0;">
+          <img src="${FURQAN_LOGO}" alt="Al-Furqan School" style="height: 60px; max-width: 120px; object-fit: contain;" />
         </td>
         <td style="width: 50%; text-align: center; vertical-align: middle; border: none; padding: 0;">
-          <h2 style="font-size: 1.25rem; font-weight: 800; color: #1e3a8a; margin: 0 0 2px 0;">أَكَادِيمِيَّةُ سَهْلَةَ الدَّوْلِيَّةُ & مَدْرَسَةُ الْفُرْقَانِ الْعَالَمِيَّةُ</h2>
+          <h2 style="font-size: 1.25rem; font-weight: 800; color: #1e3a8a; margin: 0 0 2px 0;">أَكَادِيمِيَّةُ سَهْلَةَ الدَّوْلِيَّةُ &amp; مَدْرَسَةُ الْفُرْقَانِ الْعَالَمِيَّةُ</h2>
           <p style="font-size: 0.8rem; color: #475569; margin: 0 0 4px 0; font-weight: 600;">Sahlah Academy &amp; Al-Furqan International School</p>
           <div style="display: inline-block; background: #e0f2fe; color: #0369a1; padding: 2px 12px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">
-            المنصة التعليمية المعتمدة - إديوهب (EduHub)
+            ${isAr ? 'المنصة التعليمية المعتمدة - إديوهب (EduHub)' : 'Accredited Educational Platform - EduHub'}
           </div>
         </td>
-        <td style="width: 25%; text-align: left; vertical-align: middle; border: none; padding: 0;">
-          <img src="${SAHLAH_LOGO}" alt="أكاديمية سهلة الدولية" style="height: 38px; max-width: 150px; object-fit: contain;" />
+        <td style="width: 25%; text-align: ${isAr ? 'left' : 'right'}; vertical-align: middle; border: none; padding: 0;">
+          <img src="${SAHLAH_LOGO}" alt="Sahlah Academy" style="height: 38px; max-width: 150px; object-fit: contain;" />
         </td>
       </tr>
     </table>
 
-    <table style="width: 100%; border: 1px solid #cbd5e1; border-collapse: collapse; font-size: 0.85rem; text-align: right; background-color: #f8fafc;">
+    <table style="width: 100%; border: 1px solid #cbd5e1; border-collapse: collapse; font-size: 0.85rem; text-align: ${textAlign}; background-color: #f8fafc;">
       <tr>
-        <td style="border: 1px solid #cbd5e1; padding: 5px 8px; width: 25%;"><strong>المعلم:</strong> ${teacher}</td>
-        <td style="border: 1px solid #cbd5e1; padding: 5px 8px; width: 25%;"><strong>المادة:</strong> ${subject}</td>
-        <td style="border: 1px solid #cbd5e1; padding: 5px 8px; width: 25%;"><strong>الصف:</strong> ${grade}</td>
-        <td style="border: 1px solid #cbd5e1; padding: 5px 8px; width: 25%;"><strong>التاريخ:</strong> ${today}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 5px 8px; width: 25%;"><strong>${isAr ? 'المعلم:' : 'Teacher:'}</strong> ${teacher}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 5px 8px; width: 25%;"><strong>${isAr ? 'المادة:' : 'Subject:'}</strong> ${subject}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 5px 8px; width: 25%;"><strong>${isAr ? 'الصف:' : 'Grade:'}</strong> ${grade}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 5px 8px; width: 25%;"><strong>${isAr ? 'التاريخ:' : 'Date:'}</strong> ${today}</td>
       </tr>
     </table>
   </div>
@@ -175,7 +183,7 @@ export function printContent(
 
   // Ensure official header banner with dual logos is included
   const hasExistingHeader = htmlContent.includes('official-school-header') || htmlContent.includes('FURQAN_LOGO');
-  const banner = hasExistingHeader ? '' : buildOfficialHeaderBanner(settings);
+  const banner = hasExistingHeader ? '' : buildOfficialHeaderBanner(settings, isAr);
 
   win.document.write(`<!DOCTYPE html>
 <html dir="${dir}" lang="${lang}">
@@ -223,7 +231,7 @@ export function exportToWord(
     : 'border-left: 4px solid #1e3a8a;';
 
   const hasExistingHeader = htmlContent.includes('official-school-header') || htmlContent.includes('FURQAN_LOGO');
-  const banner = hasExistingHeader ? '' : buildOfficialHeaderBanner(settings);
+  const banner = hasExistingHeader ? '' : buildOfficialHeaderBanner(settings, isAr);
 
   const styles = `
     body { font-family: 'Cairo', 'Arial', sans-serif; direction: ${dir}; font-size: 13pt; line-height: 1.8; color: #000; }

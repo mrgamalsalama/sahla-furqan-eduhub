@@ -268,70 +268,79 @@ function buildStandardizedPrompt(settings: any, isAr: boolean, ctx: string): str
 
   if (isAr) {
     let frameworkDetails = '';
-    if (fw === 'diagnostic') {
-      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: الِاخْتِبَارُ التَّشْخِيصِيُّ وَرَصْدُ الْفَجَوَاتِ التَّعْلِيمِيَّةِ (Diagnostic Assessment & Learning Gap Analysis).
-الْهَدَفُ التَّرْبَوِيُّ: قِيَاسُ جَاهِزِيَّةِ الطَّالِبِ لِلصَّفِّ الْحَالِيِّ (${settings.grade || 'الحالي'}) عَبْرَ فَحْصِ الْمَهَارَاتِ الْقَبْلِيَّةِ التَّرَاكُمِيَّةِ (Prerequisite Skills) لِلسَّنَوَاتِ وَالصُّفُوفِ السَّابِقَةِ لِكَشْفِ الْفَاقِدِ التَّعْلِيمِيِّ بِدِقَّةٍ.
-أَقْسَامُ الِاخْتِبَارِ الْإِلْزَامِيَّةُ:
-1. نَصٌّ قِرَائِيٌّ أَوْ سِيَاقٌ تَقْوِيمِيٌّ تَأْسِيسِيٌّ مَشْكُولٌ بِالْكَامِلِ.
-2. أَسْئِلَةُ التَّشْخِيصِ: كُلُّ سُؤَالٍ يَقِيسُ مَهَارَةً أَسَاسِيَّةً قَبْلِيَّةً مُحَدَّدَةً. الْبَدَائِلُ غَيْرُ الصَّحِيحَةِ (الْمُشَتَّتَاتُ) مَبْنِيَّةٌ عَلَى أَخْطَاءٍ مَفَاهِيمِيَّةٍ شَائِعَةٍ لَدَى الطُّلَّابِ (Diagnostic Distractors).
-3. جَدْوَلُ مَصْفُوفَةِ تَشْخِيصِ الْفَجَوَاتِ (Diagnostic Gap Matrix) يَحْتَوِي عَلَى:
-   * رَقْمِ السُّؤَالِ.
-   * الْمَهَارَةِ الْقَبْلِيَّةِ الْمُسْتَهْدَفَةِ (مِنَ الصُّفُوفِ السَّابِقَةِ).
-   * نَوْعِ الْفَجْوَةِ أَوْ سَبَبِ الْخَطَأِ الْمُتَوَقَّعِ عِنْدَ اخْتِيَارِ إِجَابَةٍ خَاطِئَةٍ.
-   * مُسْتَوَى إِتْقَانِ الْمَهَارَةِ (مُتْقَنٌ / بِحَاجَةٍ لِدَعْمٍ / فَجْوَةٌ حَرِجَةٌ).
-4. الْخُطَّةُ الْإِجْرَائِيَّةُ وَالْعِلَاجِيَّةُ الْمُقْتَرَحَةُ لِلْمُعَلِّمِ (Targeted Remediation Plan): إِرْشَادَاتٌ وَتَدَخُّلَاتٌ تَدْرِيسِيَّةٌ مُبَاشِرَةٌ وَسَرِيعَةٌ لِعِلَاجِ الْفَجَوَاتِ الْمَرْصُودَةِ فِي الْحِصَصِ الْقَادِمَةِ.
-5. نَمُوذَجُ الْإِجَابَةِ وَسُلَّمُ التَّصْحِيحِ.`;
+    if (fw === 'diagnostic_gap' || fw === 'diagnostic') {
+      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: الِاخْتِبَارُ التَّشْخِيصِيُّ وَمَصْفُوفَةُ رَصْدِ الْفَجَوَاتِ (Diagnostic & Learning Gap Analysis).
+الْهَدَفُ التَّرْبَوِيُّ: قِيَاسُ جَاهِزِيَّةِ الطَّالِبِ لِلصَّفِّ الْحَالِيِّ عَبْرَ اخْتِبَارِ الْمَهَارَاتِ الْقَبْلِيَّةِ التَّرَاكُمِيَّةِ (Prerequisite Skills) لِكَشْفِ الْفَاقِدِ التَّعْلِيمِيِّ.
+عَنَاصِرُ الْإِطَارِ:
+- أَسْئِلَةٌ تَشْخِيصِيَّةٌ مُعَيَّرَةٌ مَعَ مُشَتَّتَاتٍ مَبْنِيَّةٍ عَلَى أَخْطَاءٍ مَفَاهِيمِيَّةٍ شَائِعَةٍ.
+- جَدْوَلُ مَصْفُوفَةِ تَشْخِيصِ الْفَجَوَاتِ (Diagnostic Gap Matrix): رَقْمُ السُّؤَالِ | الْمَهَارَةُ الْقَبْلِيَّةُ | سَبَبُ الْخَطَأِ الْمُتَوَقَّعِ | نَوْعُ الْفَجْوَةِ | مُسْتَوَى التَّمَكُّنِ (مُتْقَنٌ / حَرِجٌ).
+- الْخُطَّةُ الْعِلَاجِيَّةُ وَالتَّدَخُّلَاتُ التَّدْرِيسِيَّةُ الْمُبَاشِرَةُ لِلْمُعَلِّمِ (Targeted Remediation Plan).`;
+    } else if (fw === 'map_growth') {
+      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: مَقَايِيسُ التَّقَدُّمِ الدَّوْلِيَّةِ (MAP Growth / RIT Benchmarks).
+الْهَدَفُ التَّرْبَوِيُّ: اخْتِبَارٌ مُتَدَرِّجٌ صُعُوبِيّاً مُعَيَّرٌ وِفْقَ نِطَاقَاتِ RIT Score Bands (مِنَ الْمُسْتَوَى التَّأْسِيسِيِّ إِلَى الْمُتَقَدِّمِ).
+عَنَاصِرُ الْإِطَارِ:
+- تَصْنِيفُ كُلِّ سُؤَالٍ حَسَبَ نِطَاقِ RIT الْمُسْتَهْدَفِ وَمُؤَشِّرِ النُّمُوِّ.
+- مَصْفُوفَةُ نِطَاقَاتِ الرِّيت (RIT Proficiency Bands Matrix): دُونَ الْمُسْتَوَى | قَرِيبٌ مِنَ الْمُسْتَوَى | فِي الْمُسْتَوَى | مُتَفَوِّقٌ.
+- خُطَّةُ تَفْرِيدِ التَّعَلُّمِ وَالتَّمَايُزِ بِنَاءً عَلَى نَتَائِجِ MAP Growth.`;
+    } else if (fw === 'ib_criteria' || fw === 'ib') {
+      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: مَعَايِيرُ تَقْيِيمِ الْبَكَالُورْيَا الدَّوْلِيَّةِ (IB Assessment Criteria A, B, C, D).
+الْهَدَفُ التَّرْبَوِيُّ: قِيَاسُ كَفَايَاتِ الطَّالِبِ التَّحْلِيلِيَّةِ وَالتَّنْظِيمِيَّةِ وَاللُّغَوِيَّةِ وِفْقَ سَلَالِمِ IB (من 1 إلى 8 دَرَجَاتٍ):
+- الْمِعْيَارُ أ (Criterion A: Analysing / التَّحْلِيلُ).
+- الْمِعْيَارُ ب (Criterion B: Organising / التَّنْظِيمُ).
+- الْمِعْيَارُ ج (Criterion C: Producing Text / إِنْتَاجُ النَّصِّ وَالْمُحْتَوَى).
+- الْمِعْيَارُ د (Criterion D: Using Language / اسْتِخْدَامُ اللُّغَةِ).
+عَنَاصِرُ الْإِطَارِ:
+- أَسْئِلَةٌ مُصَنَّفَةٌ صَرَاحَةً تَحْتَ كُلِّ مِعْيَارٍ مَعَ سُلَّمِ تَقْدِيرٍ لَفْظِيٍّ شَامِلٍ (IB Analytical Rubric 1-8).`;
+    } else if (fw === 'cambridge_igcse') {
+      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: مَعَايِيرُ كَامْبِرِيدْج وَإِدِكْسِل الدَّوْلِيَّةُ (Cambridge IGCSE & Checkpoint Mark Scheme).
+الْهَدَفُ التَّرْبَوِيُّ: قِيَاسُ أَهْدَافِ التَّقْيِيمِ الثَّلَاثَةِ:
+- AO1: الْمَعْرِفَةُ وَالْفَهْمُ الصَّرِيحُ (Knowledge & Understanding).
+- AO2: التَّحْلِيلُ وَالتَّفْسِيرُ وَالتَّطْبِيقُ (Analysis & Interpretation).
+- AO3: التَّقْيِيمُ وَالِاسْتِنْتَاجُ وَإِبْدَاءُ الرَّأْيِ (Evaluation & Critical Judgement).
+عَنَاصِرُ الْإِطَارِ:
+- جَدْوَلُ مُوَاصَفَاتِ كَامْبِرِيدْج (Mark Scheme Grid) يُحَدِّدُ مُخَصَّصَاتِ الدَّرَجَاتِ لِكُلِّ سُؤَالٍ مَعَ مَعَايِيرِ قَبُولِ الْإِجَابَاتِ.`;
+    } else if (fw === 'us_common_core') {
+      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: الْمَعَايِيرُ الْأَمْرِيكِيَّةُ الْمُشْتَرَكَةُ (US Common Core / CCSS Standards).
+الْهَدَفُ التَّرْبَوِيُّ: قِيَاسُ مَعَايِيرِ الْقِرَاءَةِ وَالْكِتَابَةِ وَالرِّيَاضِيَّاتِ وِفْقَ مُسْتَوَيَاتِ عُمْقِ الْمَعْرِفَةِ (Webb's DOK Levels 1-4):
+- تَصْنِيفُ كُلِّ سُؤَالٍ وِفْقَ كُودِ الْمِعْيَارِ الدَّقِيقِ (CCSS Strand Code).
+- مَصْفُوفَةُ تَوَافُقِ الْمَعَايِيرِ (CCSS Standards Crosswalk Matrix).`;
+    } else if (fw === 'cefr_languages' || fw === 'cefr') {
+      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: الْإِطَارُ الْأُورُوبِّيُّ الْمَرْجِعِيُّ لِلُّغَاتِ (CEFR Framework A1 - C2).
+الْهَدَفُ التَّرْبَوِيُّ: قِيَاسُ الْكَفَايَاتِ اللُّغَوِيَّةِ التَّوَاصُلِيَّةِ:
+- الْمُسْتَوَى التَّأْسِيسِيُّ (A1 / A2) | الْمُسْتَوَى الْمُسْتَقِلُّ (B1 / B2) | مُسْتَوَى الْإِتْقَانِ وَالْكَمَالِ (C1 / C2).
+- جَدْوَلُ تَصْنِيفِ الْكَفَايَاتِ الْمُعْجَمِيَّةِ وَالنَّحْوِيَّةِ وَالِاسْتِيعَابِيَّةِ.`;
+    } else if (fw === 'pirls_pisa') {
+      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: الْمَعَايِيرُ الدَّوْلِيَّةُ لِلْقِرَاءَةِ وَالْعُلُومِ (PIRLS / PISA Aligned Literacy).
+الْهَدَفُ التَّرْبَوِيُّ: قِيَاسُ مَهَارَاتِ التَّفْكِيرِ الْعُلْيَا وَحَلِّ الْمُشْكِلَاتِ فِي سِيَاقَاتِ الْحَيَاةِ الْوَاقِعِيَّةِ:
+- الِاسْتِرْجَاعُ وَالْوُصُولُ إِلَى الْمَعْلُومَاتِ الصَّرِيحَةِ.
+- الِاسْتِدْلَالُ الْمُبَاشِرُ وَالِاسْتِنْبَاطُ.
+- تَفْسِيرُ وَدَمْجُ الْأَفْكَارِ وَالْمَعْلُومَاتِ.
+- فَحْصُ وَتَقْيِيمُ الْمُحْتَوَى وَاللُّغَةِ وَالْعَنَاصِرِ النَّصِّيَّةِ.
+- مَصْفُوفَةُ مُؤَشِّرَاتِ PISA/PIRLS الدَّوْلِيَّةِ.`;
     } else if (fw === 'abt') {
       const isArabicA = settings.abtTrack !== 'arabic-b';
       frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: اخْتِبَارُ الْقِيَاسِ الْمِعْيَارِيِّ لِلُّغَةِ الْعَرَبِيَّةِ (ABT - Arabic Benchmark Test) - مَسَارُ: ${
         isArabicA ? 'Arabic A (لِلنَّاطِقِينَ بِاللُّغَةِ الْعَرَبِيَّةِ)' : 'Arabic B (لِغَيْرِ النَّاطِقِينَ بِهَا)'
       }.
-أَقْسَامُ الِاخْتِبَارِ الْإِلْزَامِيَّةُ:
-1. نَصُّ الِانْطِلَاقِ (الْقِطْعَةُ الْقِرَائِيَّةُ): نَصٌّ أَدَبِيٌّ أَوْ مَعْلُومَاتِيٌّ مَشْكُولٌ بِالْكَامِلِ.
-2. مَهَارَةُ فَهْمِ الْمَقْرُوءِ وَالتَّحْلِيلِ (Reading Comprehension): أَسْئِلَةٌ تَقِيسُ الْفَهْمَ الصَّرِيحَ، الْفَهْمَ الضِّمْنِيَّ وَالِاسْتِنْتَاجَ، اسْتِخْرَاجَ الْفِكْرَةِ الرَّئِيسَةِ، وَدَلَالَاتِ الْأَلْفَاظِ وَتَوْظِيفَهَا السِّيَاقِيَّ.
-3. مَهَارَةُ قَوَاعِدِ اللُّغَةِ وَالتَّرَاكِيبِ (Language Mechanics & Grammar): أَسْئِلَةٌ نَحْوِيَّةٌ وَصَرْفِيَّةٌ وَإِمْلَائِيَّةٌ تَطْبِيقِيَّةٌ مُسْتَمَدَّةٌ مِنْ سِيَاقِ النَّصِّ.
-4. ${isAllMcq ? 'أَسْئِلَةُ التَّطْبِيقِ اللُّغَوِيِّ وَالْبَلَاغِيِّ الْمُتَقَدِّمِ بِنَمَطِ الِاخْتِيَارِ مِنْ مُتَعَدِّدٍ' : 'مَهَارَةُ الْكِتَابَةِ وَالْإِنْتَاجِ اللُّغَوِيِّ (Writing Task): مَهَمَّةٌ كِتَابِيَّةٌ تَعْبِيرِيَّةٌ مُحَدَّدَةُ الْعَنَاصِرِ مَعَ مَعَايِيرِ التَّقْيِيمِ'}.
-5. جَدْوَلُ مَصْفُوفَةِ نَوَاتِجِ التَّعَلُّمِ الْمُسْتَهْدَفَةِ (Learning Outcomes & Benchmark Grid): يُوَضِّحُ الْمَهَارَةَ، رَقْمَ السُّؤَالِ، وَنَاتِجَ التَّعَلُّمِ الْمِعْيَارِيَّ الْمَقَاسَ.
-6. نَمُوذَجُ الْإِجَابَةِ وَسُلَّمُ التَّقْدِيرِ اللَّفْظِيِّ (Answer Key & Rubric).`;
-    } else if (fw === 'ib') {
-      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: تَقْيِيمُ الْبَكَالُورْيَا الدَّوْلِيَّةِ (IB MYP / DP Assessment Criteria).
-يَجِبُ تَقْسِيمُ الْأَسْئِلَةِ وَتَصْنِيفُ كُلِّ سُؤَالٍ بِوُضُوحٍ تَحْتَ الْمَعَايِيرِ الْآتِيَةِ:
-- الْمِعْيَارُ أ (Criterion A: Analysing / التَّحْلِيلُ): تَحْلِيلُ النُّصُوصِ وَالْأَفْكَارِ وَالْأُسْلُوبِ الْأَدَبِيِّ.
-- الْمِعْيَارُ ب (Criterion B: Organising / التَّنْظِيمُ): هَيْكَلَةُ الْأَفْكَارِ وَاسْتِخْدَامُ أَدَوَاتِ الرَّبْطِ وَالتَّمَاسُكِ.
-- الْمِعْيَارُ ج (Criterion C: Producing Text / إِنْتَاجُ النَّصِّ): التَّعْبِيرُ وَالْإِبْدَاعُ الْكِتَابِيُّ وَتَطْوِيرُ الْأَفْكَارِ.
-- الْمِعْيَارُ د (Criterion D: Using Language / اسْتِخْدَامُ اللُّغَةِ): دِقَّةُ النَّحْوِ، الصَّرْفِ، الْإِمْلَاءِ، وَتَنَوُّعِ الْمُفْرَدَاتِ.
-يَجِبُ إِرْفَاقُ جَدْوَلِ مُوَاصَفَاتٍ وَسَلَالِمِ تَقْدِيرٍ (Rubrics مِنْ 1 إِلَى 8).`;
-    } else if (fw === 'cefr') {
-      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: الْإِطَارُ الْأُورُوبِّيُّ الْمَرْجِعِيُّ الْمُشْتَرَكُ لِلُّغَاتِ (CEFR Levels A1 - C2).
-يَجِبُ أَنْ تَتَدَرَّجَ الْأَسْئِلَةُ فِي قِيَاسِ الْكَفَايَاتِ اللُّغَوِيَّةِ:
-- الْكَفَايَةُ الْمُعْجَمِيَّةُ وَالدَّلَالِيَّةُ (Vocabulary & Lexical Competence).
-- الْكَفَايَةُ النَّحْوِيَّةُ وَالتَّرَاكِيبُ (Grammatical Accuracy).
-- كَفَايَةُ الِاسْتِيعَابِ الْمَقْرُوءِ (Reading Comprehension & Cohesion).
-- تَحْدِيدُ الْمُسْتَوَى الدَّقِيقِ الْمُتَوَقَّعِ لِلطَّالِبِ (Target Band: A1/A2/B1/B2/C1).`;
-    } else if (fw === 'bloom') {
-      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: مُسْتَوَيَاتُ هَرَمِ بِلُومَ الْمَعْرِفِيِّ (Bloom's Taxonomy).
-يَجِبُ تَصْنِيفُ كُلِّ سُؤَالٍ وَفْقَ مُسْتَوَاهُ الْمَعْرِفِيِّ:
-- الْمُسْتَوَيَاتُ التَّأْسِيسِيَّةُ: التَّذَكُّرُ (Remembering) وَالْفَهْمُ (Understanding).
-- الْمُسْتَوَيَاتُ الْمُتَوَسِّطَةُ: التَّطْبِيقُ (Applying) وَالتَّحْلِيلُ (Analyzing).
-- الْمُسْتَوَيَاتُ الْمُتَقَدِّمَةُ (HOTS): التَّقْوِيمُ (Evaluating) وَالِابْتِكَارُ (Creating).
-يَجِبُ إِرْفَاقُ جَدْوَلِ مُوَاصَفَاتٍ يُوَضِّحُ نِسَبَ تَوْزِيعِ الْأَسْئِلَةِ وَالدَّرَجَاتِ عَلَى كُلِّ مُسْتَوًى.`;
+أَقْسَامُ الِاخْتِبَارِ: فَهْمُ الْمَقْرُوءِ، قَوَاعِدُ اللُّغَةِ وَالتَّرَاكِيبُ، التَّطْبِيقُ الْبَلَاغِيُّ، مَصْفُوفَةُ نَوَاتِجِ التَّعَلُّمِ، وَسُلَّمُ التَّقْدِيرِ.`;
     } else {
-      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: مَعَايِيرُ وَمُؤَشِّرَاتٌ خَاصَّةٌ حَدَّدَهَا الْمُعَلِّمُ:
-"""\n${settings.customStandards || 'الِالْتِزَامُ بِنَوَاتِجِ التَّعَلُّمِ الْخَاصَّةِ بِالدَّرْسِ'}\n"""
-قُمْ بِصِيَاغَةِ أَسْئِلَةٍ تَقِيسُ هَذِهِ الْمُؤَشِّرَاتِ الْمُحَدَّدَةَ بِدِقَّةٍ وَاكْتُبِ اسْمَ الْمُؤَشِّرِ بِجَانِبِ كُلِّ سُؤَالٍ.`;
+      frameworkDetails = `الْإِطَارُ الْمُعْتَمَدُ: مَعَايِيرُ خَاصَّةٌ حَدَّدَهَا الْمُعَلِّمُ:
+"""\n${settings.customStandards || 'نَوَاتِجُ التَّعَلُّمِ الْمِعْيَارِيَّةُ لِلْمَنْهَجِ'}\n"""`;
     }
 
     return `${ctx}${sourceDirective}${formatDirectiveAr}
 الْمَطْلُوبُ: تَوْلِيدُ "اخْتِبَارٍ مِعْيَارِيٍّ / تَشْخِيصِيٍّ مُتَكَامِلٍ" بِاللُّغَةِ الْعَرَبِيَّةِ وَمَشْكُولٍ بِالْكَامِلِ تَشْكِيلاً تَامّاً (100%) عَلَى شَكْلِ HTML احْتِرَافِيٍّ جَاهِزٍ لِلْعَرْضِ وَالطِّبَاعَةِ وَالتَّصْدِيرِ.
-تَفَاصِيلُ الْمَعَايِيرِ الْمَطْلُوبَةِ:
+تَفَاصِيلُ الْإِطَارِ الْمِعْيَارِيِّ الْمُسْتَهْدَفِ:
 ${frameworkDetails}
-الْهَيْكَلُ الْإِلْزَامِيُّ لِلْـ HTML:
-1. تَرْوِيسَةُ الِاخْتِبَارِ: الْمَادَّةُ، الصَّفُّ، نَوْعُ التَّقْيِيمِ (مِعْيَارِيٌّ/تَشْخِيصِيٌّ)، التَّارِيخُ، الدَّرَجَةُ الْكُلِّيَّةُ، اسْمُ الطَّالِبِ.
-2. نَصُّ الِانْطِلَاقِ أَوْ الْمَادَّةُ الْعِلْمِيَّةُ (دَاخِلَ إِطَارٍ أَنِيقٍ blockquote أَوْ div مُمَيَّزٍ).
-3. الْأَسْئِلَةُ مُصَنَّفَةٌ بِدِقَّةٍ وَمَعَ كُلِّ سُؤَالٍ يُوَضَّحُ الْمِعْيَارُ أَوْ الْمَهَارَةُ الْمَقَاسَةُ.
-4. جَدْوَلُ مَصْفُوفَةِ قِيَاسِ الْمَعَايِيرِ وَنَوَاتِجِ التَّعَلُّمِ أَوْ مَصْفُوفَةِ الْفَجَوَاتِ.
-5. ${fw === 'diagnostic' ? 'التَّوْصِيَاتُ وَالْخُطَّةُ الْعِلَاجِيَّةُ الْمُبَاشِرَةُ لِلْمُعَلِّمِ، ثُمَّ' : ''} نَمُوذَجُ الْإِجَابَاتِ وَسَلَالِمُ التَّقْدِيرِ اللَّفْظِيَّةِ (Rubric).
-6. فِي نِهَايَةِ الْمُخْرَجِ تَمَاماً: ضَعْ كُودَ QTI XML الْكَامِلَ لِجَمِيعِ أَسْئِلَةِ الِاخْتِيَارِ مِنْ مُتَعَدِّدٍ دَاخِلَ الْوَسْمِ التَّالِي لِتَمْكِينِ التَّصْدِيرِ الْمُبَاشِرِ إِلَى مِنْصَّاتِ LMS:${lmsXmlDirective}
+
+الْهَيْكَلُ الْإِلْزَامِيُّ لِلْمُخْرَجِ (HTML Structure):
+1. تَرْوِيسَةُ الِاخْتِبَارِ الْمِعْيَارِيِّ (Assessment Header): بَيَانَاتُ الْمَادَّةِ، الصَّفِّ، نَوْعِ الْإِطَارِ الْمِعْيَارِيِّ، زَمَنِ الِاخْتِبَارِ، وَالدَّرَجَةِ الْكُلِّيَّةِ.
+2. نَصُّ الِانْطِلَاقِ / الْمَادَّةُ الْمَصْدَرِيَّةُ (Stimulus Text): فِي إِطَارٍ بَصَرِيٍّ مُمَيَّزٍ وَمَشْكُولٍ 100%.
+3. بَنْكُ الْأَسْئِلَةِ (Item Bank): كُلُّ سُؤَالٍ مُوَضَّحٌ بِجَانِبِهِ اسْمُ الْمِعْيَارِ الْمَقَاسِ وَمُسْتَوَاهُ.
+4. مَصْفُوفَةُ قِيَاسِ الْمَعَايِيرِ أَوْ مَصْفُوفَةُ رَصْدِ الْفَجَوَاتِ (Standards / Gap Matrix Table).
+5. الْخُطَّةُ الْعِلَاجِيَّةُ وَالتَّدَخُّلَاتُ التَّدْرِيسِيَّةُ الْمُبَاشِرَةُ (Remediation Action Plan).
+6. نَمُوذَجُ الْإِجَابَاتِ وَسُلَّمُ التَّقْدِيرِ اللَّفْظِيِّ (Answer Key & Rubrics).
+7. فِي نِهَايَةِ الْمُخْرَجِ تَمَاماً: كُودُ QTI XML الْكَامِلُ لِلْأَسْئِلَةِ دَاخِلَ:${lmsXmlDirective}
 <div id="qti-xml-payload" style="display:none;"><![CDATA[
 <!-- كود QTI XML الصالح هنا -->
 ]]></div>
@@ -339,26 +348,79 @@ ${frameworkDetails}
 لَا تَسْتَخْدِمْ وُسُومَ <html> أَوْ <body> أَوْ <style>.`;
   } else {
     let frameworkDetails = '';
-    if (fw === 'diagnostic') {
-      frameworkDetails = `Framework: Diagnostic Assessment & Learning Gap Analysis. Prerequisite skills from prior grades to detect learning loss, Gap Matrix, Remediation Action Plan, and Answer Key.`;
+    if (fw === 'diagnostic_gap' || fw === 'diagnostic') {
+      frameworkDetails = `Framework: Diagnostic Assessment & Learning Gap Analysis.
+Key Components:
+1. Stimulus / Context text.
+2. Diagnostic Item Bank (prerequisite skills testing with diagnostic distractors).
+3. Diagnostic Gap Matrix (Item # | Prerequisite Skill | Error Cause | Severity: Mastered / Needs Support / Critical Gap).
+4. Targeted Remediation Action Plan for the teacher.
+5. Answer Key & Scoring Guide.`;
+    } else if (fw === 'map_growth') {
+      frameworkDetails = `Framework: MAP Growth / RIT Benchmarks.
+Key Components:
+1. Calibrated items aligned with RIT score bands (from Below Basic to Advanced).
+2. Competency and Growth Indicator tagged per question.
+3. RIT Proficiency Bands Matrix (Low, Low Average, Average, High Average, High).
+4. Differentiated instructional strategy for each band.
+5. Answer Key & Rationale.`;
+    } else if (fw === 'ib_criteria' || fw === 'ib') {
+      frameworkDetails = `Framework: IB Assessment Criteria (MYP / DP Criteria A, B, C, D with 1-8 Rubrics).
+Key Components:
+1. Items grouped explicitly under Criteria:
+   - Criterion A: Analysing
+   - Criterion B: Organising
+   - Criterion C: Producing Text / Content
+   - Criterion D: Using Language
+2. Comprehensive 1-8 achievement level descriptors (Analytical Rubrics).
+3. Exemplars and benchmark descriptors.`;
+    } else if (fw === 'cambridge_igcse') {
+      frameworkDetails = `Framework: Cambridge IGCSE & Checkpoint Mark Scheme.
+Key Components:
+1. Assessment Objectives: AO1 (Knowledge & Understanding), AO2 (Analysis & Application), AO3 (Evaluation & Judgment).
+2. Official Cambridge-style Mark Scheme Table with grade boundaries and criteria for award of marks.`;
+    } else if (fw === 'us_common_core') {
+      frameworkDetails = `Framework: US Common Core (CCSS Standards) & Webb's Depth of Knowledge (DOK 1-4).
+Key Components:
+1. Tag each item with specific CCSS strand code and DOK level.
+2. CCSS Standards Alignment Crosswalk Table.
+3. Formative performance rubric.`;
+    } else if (fw === 'cefr_languages' || fw === 'cefr') {
+      frameworkDetails = `Framework: CEFR Framework (Levels A1 to C2).
+Key Components:
+1. Lexical, grammatical, and reading comprehension competency bands.
+2. CEFR Can-Do descriptors table and level classification (A1-C2).`;
+    } else if (fw === 'pirls_pisa') {
+      frameworkDetails = `Framework: PIRLS / PISA Aligned Reading Literacy & Higher-Order Problem Solving.
+Key Components:
+1. Authentic multi-paragraph stimulus text.
+2. Cognitive processes: Retrieve Explicit Information, Straightforward Inferences, Interpret & Integrate, Examine & Evaluate.
+3. PISA proficiency scale matrix and holistic rubric.`;
     } else if (fw === 'abt') {
-      frameworkDetails = `Framework: Arabic Benchmark Test (ABT) style / Language Benchmark. Reading passage, comprehension analysis, grammar & vocabulary, ${isAllMcq ? 'MCQs only' : 'writing task'}, standards grid, answer key & rubric.`;
-    } else if (fw === 'ib') {
-      frameworkDetails = `Framework: IB MYP / DP Assessment Criteria (Criteria A, B, C, D) with 1-8 rubrics.`;
-    } else if (fw === 'cefr') {
-      frameworkDetails = `Framework: CEFR (A1-C2) lexical, grammatical, and comprehension competencies.`;
-    } else if (fw === 'bloom') {
-      frameworkDetails = `Framework: Bloom's Taxonomy with specification table.`;
+      frameworkDetails = `Framework: Language Benchmark Test (ABT Style).
+Key Components: Reading Comprehension, Language Mechanics, Standards Grid, and Assessment Rubric.`;
     } else {
       frameworkDetails = `Framework: Custom Teacher Standards:"""\n${settings.customStandards || 'Align with lesson outcomes'}\n"""`;
     }
 
     return `${ctx}${sourceDirective}${formatDirectiveEn}
-Task: Generate a comprehensive "Standardized / Diagnostic Assessment" in English formatted in clean HTML ready for display.
+Task: Generate a comprehensive "Standardized / Diagnostic Assessment" strictly in professional academic English formatted in clean HTML ready for display.
+Bypass Arabic diacritics rules. Use standard international terminology.
 Framework details:
 ${frameworkDetails}
-Include complete QTI XML payload inside <div id="qti-xml-payload" style="display:none;"><![CDATA[...]]></div> at the very end.
+
+Required HTML Structure:
+1. Assessment Header (Subject, Grade, Framework Type, Duration, Total Marks).
+2. Stimulus Text / Context (in an elegant container).
+3. Item Bank (each item clearly tagged with target standard / competency).
+4. Standards Measurement or Learning Gap Matrix Table.
+5. Targeted Remediation Action Plan (Actionable classroom interventions).
+6. Official Answer Key & Analytical Rubric.
+7. Complete QTI XML payload at the very end inside:
 ${lmsXmlDirective}
+<div id="qti-xml-payload" style="display:none;"><![CDATA[
+<!-- Valid QTI XML here -->
+]]></div>
 Use only standard HTML tags: <h1>, <h2>, <h3>, <p>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <ul>, <li>, <strong>, <ol>, <blockquote>, <div>.`;
   }
 }
@@ -542,6 +604,10 @@ ${lmsXmlDirective}
   } else {
     // English context
     const ctx = `You are an expert curriculum developer and master teacher assistant for Sahlah Academy and Al-Furqan International School.
+
+LANGUAGE & TERMINOLOGY MANDATE:
+Generate the entire educational deliverable strictly in professional academic English. Bypass Arabic diacritics rules. Use standard international terminology (Lesson Objectives, Guided Practice, Formative Assessment, Rubric, Exit Ticket, Differentiation).
+
 Lesson Information:
 - Subject: ${settings.subject || 'Not specified'}
 - Grade: ${settings.grade || 'Not specified'}

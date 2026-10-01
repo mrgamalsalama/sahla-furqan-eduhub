@@ -3,7 +3,9 @@ import {
   FileText, Sparkles, Loader2, AlertCircle, Layers, Sliders, Palette, CheckCircle2
 } from 'lucide-react';
 import type { LessonSettings, OutputType, GenerationResult, WorksheetTheme } from '@/types';
-import { SUBJECT_OPTIONS, GRADES_AR, STUDENT_LEVELS_AR } from '@/types';
+import {
+  SUBJECT_OPTIONS, GRADES_AR, GRADES_EN, STUDENT_LEVELS_AR, STUDENT_LEVELS_EN
+} from '@/types';
 import { getLessonSettings, saveLessonSettings } from '@/lib/storage';
 import { generateContent } from '@/lib/gemini';
 import type { UILang } from '@/lib/i18n';
@@ -15,6 +17,9 @@ interface WorksheetStudioProps {
 
 export default function WorksheetStudio({ onOpenResult, uiLang }: WorksheetStudioProps) {
   const isAr = uiLang === 'ar';
+  const grades = isAr ? GRADES_AR : GRADES_EN;
+  const studentLevels = isAr ? STUDENT_LEVELS_AR : STUDENT_LEVELS_EN;
+
   const [settings, setSettings] = useState<LessonSettings>(() => {
     const saved = getLessonSettings();
     return {
@@ -40,10 +45,14 @@ export default function WorksheetStudio({ onOpenResult, uiLang }: WorksheetStudi
     }
     setError(null);
     setLoading(true);
-    saveLessonSettings(settings);
+    const finalSettings: LessonSettings = {
+      ...settings,
+      contentLanguage: uiLang,
+    };
+    saveLessonSettings(finalSettings);
 
     try {
-      const result = await generateContent(settings, 'worksheet', []);
+      const result = await generateContent(finalSettings, 'worksheet', []);
       onOpenResult(result, 'worksheet');
     } catch (err: any) {
       setError(err?.message || (isAr ? 'حدث خطأ أثناء توليد ورقة العمل.' : 'Failed to generate worksheet.'));
@@ -110,7 +119,7 @@ export default function WorksheetStudio({ onOpenResult, uiLang }: WorksheetStudi
               className="w-full text-xs px-3 py-2.5 rounded-xl border border-gray-300 bg-white focus:ring-2 focus:ring-secondary-500"
             >
               <option value="">{isAr ? '-- اختر الصف --' : 'Select Grade'}</option>
-              {GRADES_AR.map((g) => (
+              {grades.map((g) => (
                 <option key={g} value={g}>{g}</option>
               ))}
             </select>
@@ -138,7 +147,7 @@ export default function WorksheetStudio({ onOpenResult, uiLang }: WorksheetStudi
               onChange={(e) => setSettings({ ...settings, studentLevel: e.target.value })}
               className="w-full text-xs px-3 py-2.5 rounded-xl border border-gray-300 bg-white focus:ring-2 focus:ring-secondary-500"
             >
-              {STUDENT_LEVELS_AR.map((l) => (
+              {studentLevels.map((l) => (
                 <option key={l} value={l}>{l}</option>
               ))}
             </select>

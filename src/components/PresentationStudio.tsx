@@ -3,7 +3,7 @@ import {
   Presentation, Sparkles, Loader2, AlertCircle, Palette, Sliders, CheckCircle2, BookOpen
 } from 'lucide-react';
 import type { LessonSettings, OutputType, GenerationResult, PresentationDepth, PresentationTheme } from '@/types';
-import { SUBJECT_OPTIONS, GRADES_AR } from '@/types';
+import { SUBJECT_OPTIONS, GRADES_AR, GRADES_EN } from '@/types';
 import { getLessonSettings, saveLessonSettings } from '@/lib/storage';
 import { generateContent } from '@/lib/gemini';
 import type { UILang } from '@/lib/i18n';
@@ -15,6 +15,8 @@ interface PresentationStudioProps {
 
 export default function PresentationStudio({ onOpenResult, uiLang }: PresentationStudioProps) {
   const isAr = uiLang === 'ar';
+  const grades = isAr ? GRADES_AR : GRADES_EN;
+
   const [settings, setSettings] = useState<LessonSettings>(() => {
     const saved = getLessonSettings();
     return {
@@ -38,10 +40,14 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
     }
     setError(null);
     setLoading(true);
-    saveLessonSettings(settings);
+    const finalSettings: LessonSettings = {
+      ...settings,
+      contentLanguage: uiLang,
+    };
+    saveLessonSettings(finalSettings);
 
     try {
-      const result = await generateContent(settings, 'slides', []);
+      const result = await generateContent(finalSettings, 'slides', []);
       onOpenResult(result, 'slides');
     } catch (err: any) {
       setError(err?.message || (isAr ? 'حدث خطأ أثناء توليد العرض التقديمي.' : 'Failed to generate presentation.'));
@@ -108,7 +114,7 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
               className="w-full text-xs px-3 py-2.5 rounded-xl border border-gray-300 bg-white focus:ring-2 focus:ring-blue-500"
             >
               <option value="">{isAr ? '-- اختر الصف --' : 'Select Grade'}</option>
-              {GRADES_AR.map((g) => (
+              {grades.map((g) => (
                 <option key={g} value={g}>{g}</option>
               ))}
             </select>

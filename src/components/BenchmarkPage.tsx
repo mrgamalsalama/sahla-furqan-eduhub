@@ -127,9 +127,13 @@ export default function BenchmarkPage({ onBack, onOpenResult, uiLang }: Benchmar
   function handleGenerate() {
     setGenerating(true);
     setError(null);
-    saveLessonSettings(settings);
+    const finalSettings: LessonSettings = {
+      ...settings,
+      contentLanguage: uiLang,
+    };
+    saveLessonSettings(finalSettings);
 
-    generateContent(settings, 'standardized-test', files)
+    generateContent(finalSettings, 'standardized-test', files)
       .then((result) => {
         onOpenResult(result, 'standardized-test');
       })

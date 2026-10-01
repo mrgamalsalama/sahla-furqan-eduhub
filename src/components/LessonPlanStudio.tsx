@@ -4,7 +4,10 @@ import {
   FileText, School, Clock, User, BookOpen, Layers
 } from 'lucide-react';
 import type { LessonSettings, OutputType, UploadedFile, GenerationResult, InstitutionId } from '@/types';
-import { SUBJECT_OPTIONS, GRADES_AR, DURATIONS_AR, STUDENT_LEVELS_AR, INSTITUTIONS } from '@/types';
+import {
+  SUBJECT_OPTIONS, GRADES_AR, GRADES_EN, DURATIONS_AR, DURATIONS_EN,
+  STUDENT_LEVELS_AR, STUDENT_LEVELS_EN, INSTITUTIONS
+} from '@/types';
 import { getLessonSettings, saveLessonSettings, uid } from '@/lib/storage';
 import { generateContent } from '@/lib/gemini';
 import type { UILang } from '@/lib/i18n';
@@ -20,6 +23,10 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<UploadedFile[]>([]);
+
+  const grades = isAr ? GRADES_AR : GRADES_EN;
+  const durations = isAr ? DURATIONS_AR : DURATIONS_EN;
+  const studentLevels = isAr ? STUDENT_LEVELS_AR : STUDENT_LEVELS_EN;
 
   async function handleFiles(fileList: FileList | null) {
     if (!fileList) return;
@@ -52,10 +59,14 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
     }
     setError(null);
     setLoading(true);
-    saveLessonSettings(settings);
+    const finalSettings: LessonSettings = {
+      ...settings,
+      contentLanguage: uiLang,
+    };
+    saveLessonSettings(finalSettings);
 
     try {
-      const result = await generateContent(settings, 'lesson-plan', files);
+      const result = await generateContent(finalSettings, 'lesson-plan', files);
       onOpenResult(result, 'lesson-plan');
     } catch (err: any) {
       setError(err?.message || (isAr ? 'حدث خطأ أثناء توليد خطة الدرس.' : 'Failed to generate lesson plan.'));
@@ -192,7 +203,7 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
               className="w-full text-xs px-3 py-2.5 rounded-xl border border-gray-300 bg-white focus:ring-2 focus:ring-primary-500"
             >
               <option value="">{isAr ? '-- اختر الصف --' : 'Select Grade'}</option>
-              {GRADES_AR.map((g) => (
+              {grades.map((g) => (
                 <option key={g} value={g}>{g}</option>
               ))}
             </select>
@@ -207,7 +218,7 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
               onChange={(e) => setSettings({ ...settings, duration: e.target.value })}
               className="w-full text-xs px-3 py-2.5 rounded-xl border border-gray-300 bg-white focus:ring-2 focus:ring-primary-500"
             >
-              {DURATIONS_AR.map((d) => (
+              {durations.map((d) => (
                 <option key={d} value={d}>{d}</option>
               ))}
             </select>
@@ -222,7 +233,7 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
               onChange={(e) => setSettings({ ...settings, studentLevel: e.target.value })}
               className="w-full text-xs px-3 py-2.5 rounded-xl border border-gray-300 bg-white focus:ring-2 focus:ring-primary-500"
             >
-              {STUDENT_LEVELS_AR.map((l) => (
+              {studentLevels.map((l) => (
                 <option key={l} value={l}>{l}</option>
               ))}
             </select>
