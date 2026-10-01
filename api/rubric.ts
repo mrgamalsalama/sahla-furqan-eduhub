@@ -1,4 +1,4 @@
-import { executeRubric } from './_shared';
+import { executeRubric } from './_shared.js';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
