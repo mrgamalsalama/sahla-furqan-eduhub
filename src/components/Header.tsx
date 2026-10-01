@@ -1,4 +1,7 @@
-import { Home, Library, Languages, MessageSquareText, Award, FileCheck2, FileCode2 } from 'lucide-react';
+import {
+  Home, ClipboardList, Layers, Presentation, FileQuestion, FileCode2,
+  FileCheck2, Library, Languages, Award
+} from 'lucide-react';
 import type { View } from '@/types';
 import type { UILang } from '@/lib/i18n';
 import { t } from '@/lib/i18n';
@@ -15,28 +18,14 @@ export default function Header({ currentView, onNavigate, uiLang, onToggleLang }
   const isAr = uiLang === 'ar';
 
   const navItems: { view: View; label: string; icon: typeof Home }[] = [
-    { view: 'home', label: s.navHome, icon: Home },
-    {
-      view: 'benchmark',
-      label: isAr ? 'الاختبارات المعيارية' : 'Benchmark Tests',
-      icon: Award,
-    },
-    {
-      view: 'qti-converter',
-      label: isAr ? 'محول QTI' : 'QTI Studio',
-      icon: FileCode2,
-    },
-    {
-      view: 'grader',
-      label: isAr ? 'المُصحح الذكي' : 'Smart Grader',
-      icon: FileCheck2,
-    },
+    { view: 'home', label: isAr ? 'الرئيسية' : 'Dashboard', icon: Home },
+    { view: 'lesson-plan', label: isAr ? 'خطط الدروس' : 'Lesson Plans', icon: ClipboardList },
+    { view: 'worksheet', label: isAr ? 'أوراق العمل' : 'Worksheets', icon: Layers },
+    { view: 'slides', label: isAr ? 'العروض التقديمية' : 'Slides Deck', icon: Presentation },
+    { view: 'quiz-exam', label: isAr ? 'بنك الاختبارات' : 'Exam Bank', icon: FileQuestion },
+    { view: 'qti-converter', label: isAr ? 'محول QTI' : 'QTI Converter', icon: FileCode2 },
+    { view: 'grader-advisor', label: isAr ? 'الفاحص & المستشار' : 'Grader & Advisor', icon: FileCheck2 },
     { view: 'library', label: s.navLibrary, icon: Library },
-    {
-      view: 'advisor',
-      label: isAr ? 'المستشار التربوي' : 'Pedagogical Advisor',
-      icon: MessageSquareText,
-    },
   ];
 
   return (

@@ -3,10 +3,13 @@ import Header from '@/components/Header';
 import HomePage from '@/components/HomePage';
 import EditorPage from '@/components/EditorPage';
 import LibraryPage from '@/components/LibraryPage';
-import AdvisorPage from '@/components/AdvisorPage';
-import BenchmarkPage from '@/components/BenchmarkPage';
-import GraderPage from '@/components/GraderPage';
+import LessonPlanStudio from '@/components/LessonPlanStudio';
+import WorksheetStudio from '@/components/WorksheetStudio';
+import PresentationStudio from '@/components/PresentationStudio';
+import ExamBankStudio from '@/components/ExamBankStudio';
 import QtiConverterPage from '@/components/QtiConverterPage';
+import GraderAdvisorStudio from '@/components/GraderAdvisorStudio';
+import BenchmarkPage from '@/components/BenchmarkPage';
 import type { View, OutputType, GenerationResult, SavedLesson } from '@/types';
 import { getUILang, saveUILang } from '@/lib/i18n';
 import type { UILang } from '@/lib/i18n';
@@ -24,7 +27,21 @@ export default function App() {
   const [view, setView] = useState<View>(() => {
     try {
       const saved = localStorage.getItem(VIEW_STORAGE_KEY);
-      if (saved && ['home', 'editor', 'library', 'advisor', 'benchmark', 'grader', 'qti-converter'].includes(saved)) {
+      if (
+        saved &&
+        [
+          'home',
+          'lesson-plan',
+          'worksheet',
+          'slides',
+          'quiz-exam',
+          'qti-converter',
+          'grader-advisor',
+          'editor',
+          'library',
+          'benchmark',
+        ].includes(saved)
+      ) {
         return saved as View;
       }
     } catch {
@@ -43,7 +60,6 @@ export default function App() {
     document.documentElement.lang = uiLang;
   }, [direction, uiLang]);
 
-  // حفظ التبويب الحالي في localStorage عند كل تغير
   useEffect(() => {
     try {
       localStorage.setItem(VIEW_STORAGE_KEY, view);
@@ -105,6 +121,47 @@ export default function App() {
             onNavigate={setView}
           />
         )}
+
+        {view === 'lesson-plan' && (
+          <LessonPlanStudio
+            onOpenResult={handleOpenResult}
+            uiLang={uiLang}
+          />
+        )}
+
+        {view === 'worksheet' && (
+          <WorksheetStudio
+            onOpenResult={handleOpenResult}
+            uiLang={uiLang}
+          />
+        )}
+
+        {view === 'slides' && (
+          <PresentationStudio
+            onOpenResult={handleOpenResult}
+            uiLang={uiLang}
+          />
+        )}
+
+        {view === 'quiz-exam' && (
+          <ExamBankStudio
+            onOpenResult={handleOpenResult}
+            uiLang={uiLang}
+          />
+        )}
+
+        {view === 'qti-converter' && (
+          <QtiConverterPage uiLang={uiLang} />
+        )}
+
+        {view === 'grader-advisor' && (
+          <GraderAdvisorStudio
+            onBack={handleBack}
+            onOpenResult={handleOpenResult}
+            uiLang={uiLang}
+          />
+        )}
+
         {view === 'benchmark' && (
           <BenchmarkPage
             onBack={handleBack}
@@ -112,16 +169,7 @@ export default function App() {
             uiLang={uiLang}
           />
         )}
-        {view === 'grader' && (
-          <GraderPage
-            onBack={handleBack}
-            onOpenResult={handleOpenResult}
-            uiLang={uiLang}
-          />
-        )}
-        {view === 'qti-converter' && (
-          <QtiConverterPage uiLang={uiLang} />
-        )}
+
         {view === 'editor' && editorState && (
           <EditorPage
             initialHtml={editorState.html}
@@ -132,11 +180,9 @@ export default function App() {
             uiLang={uiLang}
           />
         )}
+
         {view === 'library' && (
           <LibraryPage onOpenLesson={handleOpenLesson} uiLang={uiLang} />
-        )}
-        {view === 'advisor' && (
-          <AdvisorPage onBack={handleBack} uiLang={uiLang} />
         )}
       </main>
 
@@ -146,7 +192,7 @@ export default function App() {
             تم إعداد وإهداء هذه المنصة من أ/ جمال سلامة إلى الزملاء الأعزاء معلمي أكاديمية سهلة الدولية ومدرسة الفرقان العالمية
           </p>
           <p className="text-xs text-gray-400">
-            جميع الحقوق محفوظة © 2026
+            المنصة الرسمية المعتمدة - جميع الحقوق محفوظة © 2026
           </p>
         </div>
       </footer>

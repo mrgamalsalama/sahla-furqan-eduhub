@@ -1,6 +1,16 @@
 import { SAHLAH_LOGO, FURQAN_LOGO } from './lib/logos';
 
-export type View = 'home' | 'editor' | 'library' | 'advisor' | 'benchmark' | 'grader' | 'qti-converter';
+export type View =
+  | 'home'
+  | 'lesson-plan'
+  | 'worksheet'
+  | 'slides'
+  | 'quiz-exam'
+  | 'qti-converter'
+  | 'grader-advisor'
+  | 'editor'
+  | 'library'
+  | 'benchmark';
 
 export type OutputType =
   | 'lesson-plan'
@@ -51,10 +61,10 @@ export interface LessonSettings {
   standardFramework?: StandardFramework;
   abtTrack?: AbtTrack;
   customStandards?: string;
-  sourceText?: string; // المادة العلمية أو النص المرجعي لبناء الاختبار
-  questionFormat?: QuestionFormat; // نمط الأسئلة: اختيار من متعدد فقط أو متنوع
-  term?: TermType; // الفصل الدراسي: الأول، الثاني، الثالث
-  questionCount?: number; // عدد الأسئلة المطلوب
+  sourceText?: string;
+  questionFormat?: QuestionFormat;
+  term?: TermType;
+  questionCount?: number;
   worksheetSettings?: WorksheetSettings;
   presentationSettings?: PresentationSettings;
   lmsTarget?: LmsTarget;

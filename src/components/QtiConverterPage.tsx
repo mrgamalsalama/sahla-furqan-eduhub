@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import {
   FileCode2, Sparkles, Copy, Check, Download, AlertCircle, Loader2,
-  RefreshCw, School, Eye, Code, BookOpen
+  RefreshCw, School, Eye, Code, BookOpen, Package
 } from 'lucide-react';
 import type { UILang } from '@/lib/i18n';
 import type { LmsTarget } from '@/types';
 import { convertRawTextToQti } from '@/lib/gemini';
+import { createAndDownloadQtiZip } from '@/lib/qtiPackager';
 
 interface QtiConverterPageProps {
   uiLang: UILang;
@@ -71,6 +72,15 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
     navigator.clipboard.writeText(result.qtiXml);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleDownloadZip() {
+    if (!result?.qtiXml) return;
+    await createAndDownloadQtiZip({
+      title: title || 'Assessment_QTI',
+      xmlPayload: result.qtiXml,
+      target: lmsTarget,
+    });
   }
 
   function handleDownloadXml() {
@@ -258,11 +268,22 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
 
                   <button
                     type="button"
-                    onClick={handleDownloadXml}
+                    onClick={handleDownloadZip}
                     className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs"
+                    title={isAr ? 'تصدير حزمة مضغوطة متوافقة مع نظام إدارة التعلم' : 'Download complete QTI ZIP package'}
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>{isAr ? 'تحميل ملف XML' : 'Download .xml'}</span>
+                    <Package className="w-3.5 h-3.5" />
+                    <span>{isAr ? '📦 تحميل حزمة الاختبار للمنصة (QTI ZIP)' : 'Download QTI ZIP'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadXml}
+                    className="px-2 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-600 text-xs font-medium flex items-center gap-1"
+                    title="تحميل كود XML فقط"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>XML</span>
                   </button>
                 </div>
               )}

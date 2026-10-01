@@ -1,14 +1,61 @@
 import { saveAs } from 'file-saver';
 import type { UILang } from '@/lib/i18n';
+import { SAHLAH_LOGO, FURQAN_LOGO } from './logos';
 
 interface ExportOptions {
   title: string;
   htmlContent: string;
   fileName: string;
+  settings?: {
+    teacherName?: string;
+    subject?: string;
+    grade?: string;
+    duration?: string;
+    term?: string;
+  };
 }
 
-function absolutizeLogos(html: string): string {
-  return html.replace(/src="\/assets\//g, `src="${window.location.origin}/assets/`);
+export function buildOfficialHeaderBanner(settings?: {
+  teacherName?: string;
+  subject?: string;
+  grade?: string;
+  term?: string;
+}): string {
+  const teacher = settings?.teacherName || '—';
+  const subject = settings?.subject || '—';
+  const grade = settings?.grade || '—';
+  const today = new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  return `
+  <div class="official-school-header" style="margin-bottom: 20px; border-bottom: 3px double #1e3a8a; padding-bottom: 12px; font-family: 'Cairo', sans-serif;">
+    <table style="width: 100%; border: none; border-collapse: collapse; margin-bottom: 10px;">
+      <tr>
+        <td style="width: 25%; text-align: right; vertical-align: middle; border: none; padding: 0;">
+          <img src="${FURQAN_LOGO}" alt="مدرسة الفرقان العالمية" style="height: 60px; max-width: 120px; object-fit: contain;" />
+        </td>
+        <td style="width: 50%; text-align: center; vertical-align: middle; border: none; padding: 0;">
+          <h2 style="font-size: 1.25rem; font-weight: 800; color: #1e3a8a; margin: 0 0 2px 0;">أَكَادِيمِيَّةُ سَهْلَةَ الدَّوْلِيَّةُ & مَدْرَسَةُ الْفُرْقَانِ الْعَالَمِيَّةُ</h2>
+          <p style="font-size: 0.8rem; color: #475569; margin: 0 0 4px 0; font-weight: 600;">Sahlah Academy &amp; Al-Furqan International School</p>
+          <div style="display: inline-block; background: #e0f2fe; color: #0369a1; padding: 2px 12px; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">
+            المنصة التعليمية المعتمدة - إديوهب (EduHub)
+          </div>
+        </td>
+        <td style="width: 25%; text-align: left; vertical-align: middle; border: none; padding: 0;">
+          <img src="${SAHLAH_LOGO}" alt="أكاديمية سهلة الدولية" style="height: 38px; max-width: 150px; object-fit: contain;" />
+        </td>
+      </tr>
+    </table>
+
+    <table style="width: 100%; border: 1px solid #cbd5e1; border-collapse: collapse; font-size: 0.85rem; text-align: right; background-color: #f8fafc;">
+      <tr>
+        <td style="border: 1px solid #cbd5e1; padding: 5px 8px; width: 25%;"><strong>المعلم:</strong> ${teacher}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 5px 8px; width: 25%;"><strong>المادة:</strong> ${subject}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 5px 8px; width: 25%;"><strong>الصف:</strong> ${grade}</td>
+        <td style="border: 1px solid #cbd5e1; padding: 5px 8px; width: 25%;"><strong>التاريخ:</strong> ${today}</td>
+      </tr>
+    </table>
+  </div>
+  `;
 }
 
 function buildPrintCSS(isAr: boolean): string {
@@ -16,59 +63,76 @@ function buildPrintCSS(isAr: boolean): string {
   const textAlign = isAr ? 'right' : 'left';
   const listPadding = isAr ? 'padding-right: 1.5rem;' : 'padding-left: 1.5rem;';
   const blockquoteBorder = isAr
-    ? 'border-right: 4px solid #3385fc;'
-    : 'border-left: 4px solid #3385fc;';
+    ? 'border-right: 4px solid #1e3a8a;'
+    : 'border-left: 4px solid #1e3a8a;';
 
   return `
-    @page { size: A4 portrait; margin: 15mm; }
-    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @page { 
+      size: A4 portrait; 
+      margin: 0.5in; 
+    }
+    * { 
+      -webkit-print-color-adjust: exact !important; 
+      print-color-adjust: exact !important; 
+      color-adjust: exact !important;
+    }
     body {
-      font-family: 'Cairo', 'Tajawal', 'Segoe UI', sans-serif;
+      font-family: 'Cairo', 'Tajawal', 'Segoe UI', Tahoma, sans-serif;
       direction: ${dir};
       margin: 0;
       padding: 0;
-      color: #1a1a1a;
+      color: #0f172a;
       line-height: 1.8;
+      font-size: 11pt;
+    }
+    .no-print, .btn, button, nav, header, footer {
+      display: none !important;
     }
     h1 {
-      font-size: 1.75rem;
+      font-size: 1.6rem;
       font-weight: 800;
       text-align: center;
       margin: 0 0 1rem;
-      color: #1a3c8f;
+      color: #1e3a8a;
     }
     h2 {
-      font-size: 1.4rem;
+      font-size: 1.3rem;
       font-weight: 700;
-      margin: 0.875rem 0 0.5rem;
-      color: #1551e1;
+      margin: 1rem 0 0.5rem;
+      color: #1e40af;
     }
     h3 {
-      font-size: 1.15rem;
+      font-size: 1.1rem;
       font-weight: 700;
-      margin: 0.75rem 0 0.5rem;
-      color: #1843b6;
+      margin: 0.8rem 0 0.4rem;
+      color: #1d4ed8;
     }
-    p { margin: 0.5rem 0; }
+    p { margin: 0.4rem 0; }
     ul { list-style: disc; ${listPadding} margin: 0.5rem 0; }
     ol { list-style: decimal; ${listPadding} margin: 0.5rem 0; }
     li { margin: 0.25rem 0; }
     table {
       width: 100%;
-      border: 1px solid #000;
+      border: 1px solid #475569;
       border-collapse: collapse;
       margin: 1rem 0;
+      page-break-inside: auto;
+    }
+    tr {
+      page-break-inside: avoid;
+      page-break-after: auto;
     }
     th, td {
-      border: 1px solid #000;
+      border: 1px solid #475569;
       border-collapse: collapse;
-      padding: 0.5rem 0.75rem;
+      padding: 6px 10px;
       text-align: ${textAlign};
-      font-size: 0.95rem;
+      font-size: 10pt;
     }
     th {
-      background: #e2e8f0;
+      background: #e2e8f0 !important;
       font-weight: 700;
+      color: #0f172a;
     }
     tr:nth-child(even) { background: #f8fafc; }
     strong { font-weight: 700; }
@@ -76,27 +140,42 @@ function buildPrintCSS(isAr: boolean): string {
       ${blockquoteBorder}
       padding: 0.5rem 1rem;
       margin: 0.75rem 0;
-      background: #eef7ff;
-      border-radius: 0.5rem;
+      background: #f0f9ff !important;
+      border-radius: 0.35rem;
+    }
+    .page-break {
+      page-break-after: always !important;
+      break-after: page !important;
+      height: 0;
+      border: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      visibility: hidden;
     }
   `;
 }
 
-// ── Print / PDF (via new window) ──
-
-export function printContent(title: string, htmlContent: string, uiLang: UILang): void {
+// ── Print / PDF ──
+export function printContent(
+  title: string,
+  htmlContent: string,
+  uiLang: UILang,
+  settings?: { teacherName?: string; subject?: string; grade?: string; term?: string }
+): void {
   const isAr = uiLang === 'ar';
   const dir = isAr ? 'rtl' : 'ltr';
   const lang = isAr ? 'ar' : 'en';
   const css = buildPrintCSS(isAr);
 
-  const win = window.open('', '_blank', 'width=800,height=600');
+  const win = window.open('', '_blank', 'width=900,height=750');
   if (!win) {
-    alert(isAr ? 'يرجى السماح بالنوافذ المنبثقة لتمكين الطباعة.' : 'Please allow pop-up windows to enable printing.');
+    alert(isAr ? 'يرجى السماح بالنوافذ المنبثقة لتمكين الطباعة وحفظ PDF.' : 'Please allow pop-up windows to enable printing.');
     return;
   }
 
-  const absHtml = absolutizeLogos(htmlContent);
+  // Ensure official header banner with dual logos is included
+  const hasExistingHeader = htmlContent.includes('official-school-header') || htmlContent.includes('FURQAN_LOGO');
+  const banner = hasExistingHeader ? '' : buildOfficialHeaderBanner(settings);
 
   win.document.write(`<!DOCTYPE html>
 <html dir="${dir}" lang="${lang}">
@@ -104,12 +183,13 @@ export function printContent(title: string, htmlContent: string, uiLang: UILang)
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(title)}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
   <style>${css}</style>
 </head>
 <body>
+  ${banner}
   <h1>${escapeHtml(title)}</h1>
-  ${absHtml}
+  ${htmlContent}
 </body>
 </html>`);
   win.document.close();
@@ -124,38 +204,42 @@ export function printContent(title: string, htmlContent: string, uiLang: UILang)
       win.focus();
       win.print();
     } catch {
-      /* window may have been closed */
+      // closed
     }
   }, 1000);
 }
 
-// ── Word Export (HTML-based .doc) ──
-
-export function exportToWord({ title, htmlContent, fileName }: ExportOptions, uiLang: UILang): void {
+// ── Word Export (HTML-based .doc with official school dual logos) ──
+export function exportToWord(
+  { title, htmlContent, fileName, settings }: ExportOptions,
+  uiLang: UILang
+): void {
   const isAr = uiLang === 'ar';
   const dir = isAr ? 'rtl' : 'ltr';
   const textAlign = isAr ? 'right' : 'left';
   const listPadding = isAr ? 'padding-right: 24pt;' : 'padding-left: 24pt;';
   const blockquoteBorder = isAr
-    ? 'border-right: 4px solid #3385fc;'
-    : 'border-left: 4px solid #3385fc;';
-  const absHtml = absolutizeLogos(htmlContent);
+    ? 'border-right: 4px solid #1e3a8a;'
+    : 'border-left: 4px solid #1e3a8a;';
+
+  const hasExistingHeader = htmlContent.includes('official-school-header') || htmlContent.includes('FURQAN_LOGO');
+  const banner = hasExistingHeader ? '' : buildOfficialHeaderBanner(settings);
 
   const styles = `
-    body { font-family: 'Cairo', 'Tajawal', 'Arial', sans-serif; direction: ${dir}; font-size: 14pt; line-height: 1.8; }
-    h1 { font-size: 22pt; font-weight: bold; text-align: center; color: #1a3c8f; margin: 0 0 12pt; }
-    h2 { font-size: 18pt; font-weight: bold; color: #1551e1; margin: 10pt 0 6pt; }
-    h3 { font-size: 16pt; font-weight: bold; color: #1843b6; margin: 8pt 0 6pt; }
+    body { font-family: 'Cairo', 'Arial', sans-serif; direction: ${dir}; font-size: 13pt; line-height: 1.8; color: #000; }
+    h1 { font-size: 20pt; font-weight: bold; text-align: center; color: #1e3a8a; margin: 0 0 12pt; }
+    h2 { font-size: 16pt; font-weight: bold; color: #1e40af; margin: 12pt 0 6pt; }
+    h3 { font-size: 14pt; font-weight: bold; color: #1d4ed8; margin: 10pt 0 6pt; }
     p { margin: 6pt 0; }
     ul { list-style: disc; ${listPadding} margin: 6pt 0; }
     ol { list-style: decimal; ${listPadding} margin: 6pt 0; }
     li { margin: 3pt 0; }
-    table { width: 100%; border: 1px solid #000; border-collapse: collapse; margin: 12pt 0; }
-    th { border: 1px solid #000; border-collapse: collapse; padding: 6pt 9pt; text-align: ${textAlign}; background: #e2e8f0; font-weight: bold; font-size: 12pt; }
-    td { border: 1px solid #000; border-collapse: collapse; padding: 6pt 9pt; text-align: ${textAlign}; font-size: 12pt; }
+    table { width: 100%; border: 1px solid #334155; border-collapse: collapse; margin: 12pt 0; }
+    th { border: 1px solid #334155; border-collapse: collapse; padding: 6pt 8pt; text-align: ${textAlign}; background: #e2e8f0; font-weight: bold; font-size: 11pt; }
+    td { border: 1px solid #334155; border-collapse: collapse; padding: 6pt 8pt; text-align: ${textAlign}; font-size: 11pt; }
     tr:nth-child(even) { background: #f8fafc; }
     strong { font-weight: bold; }
-    blockquote { ${blockquoteBorder} padding: 6pt 12pt; margin: 9pt 0; background: #eef7ff; }
+    blockquote { ${blockquoteBorder} padding: 6pt 12pt; margin: 9pt 0; background: #f0f9ff; }
   `;
 
   const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
@@ -172,21 +256,20 @@ export function exportToWord({ title, htmlContent, fileName }: ExportOptions, ui
   </xml>
   <![endif]-->
   <style>
-    @page { size: A4 portrait; margin: 2cm; }
+    @page { size: A4 portrait; margin: 0.5in; }
     ${styles}
   </style>
 </head>
 <body dir="${dir}">
+  ${banner}
   <h1>${escapeHtml(title)}</h1>
-  ${absHtml}
+  ${htmlContent}
 </body>
 </html>`;
 
-  const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+  const blob = new Blob(['\ufeff', html], { type: 'application/msword;charset=utf-8' });
   saveAs(blob, `${fileName}.doc`);
 }
-
-// ── Copy to clipboard ──
 
 export async function copyToClipboard(text: string): Promise<boolean> {
   try {

@@ -3,12 +3,13 @@ import {
   Bold, Italic, Underline, List, ListOrdered, Table as TableIcon,
   Printer, Copy, FileText, FileType2, Save, ArrowRight, ArrowLeft, Check,
   Type, Heading1, Heading2, Heading3, Quote, Undo, Redo, Presentation,
-  AlignRight, AlignCenter, AlignLeft, AlignJustify,
+  AlignRight, AlignCenter, AlignLeft, AlignJustify, Package
 } from 'lucide-react';
 import type { OutputType, LessonSettings, SavedLesson } from '@/types';
 import { OUTPUT_LABELS_AR, OUTPUT_LABELS_EN } from '@/types';
 import { exportToWord, printContent, copyToClipboard } from '@/lib/export';
 import { saveLesson, getLessonSettings, uid } from '@/lib/storage';
+import { createAndDownloadQtiZip } from '@/lib/qtiPackager';
 import type { UILang } from '@/lib/i18n';
 import { t } from '@/lib/i18n';
 
@@ -138,11 +139,13 @@ export default function EditorPage({
     setExporting('word');
     try {
       const html = editorRef.current?.innerHTML || '';
+      const currentSettings = editingLesson?.settings || getLessonSettings();
       await exportToWord(
         {
           title: currentTitle,
           htmlContent: html,
           fileName: currentTitle || outputLabels[outputType],
+          settings: currentSettings,
         },
         isContentArabic ? 'ar' : 'en'
       );
@@ -153,7 +156,28 @@ export default function EditorPage({
 
   function handleExportPDF() {
     const html = editorRef.current?.innerHTML || '';
-    printContent(currentTitle || outputLabels[outputType], html, isContentArabic ? 'ar' : 'en');
+    const currentSettings = editingLesson?.settings || getLessonSettings();
+    printContent(
+      currentTitle || outputLabels[outputType],
+      html,
+      isContentArabic ? 'ar' : 'en',
+      currentSettings
+    );
+  }
+
+  async function handleDownloadQtiZip(target: 'sahlah_cypher' | 'furqan_canvas') {
+    const rawHtml = editorRef.current?.innerHTML || '';
+    const xmlMatch = rawHtml.match(/<div id="qti-xml-payload"[^>]*>([\s\S]*?)<\/div>/i);
+    let xml = xmlMatch ? xmlMatch[1] : '';
+    if (!xml) {
+      const itemsMatch = rawHtml.match(/<assessmentItem[\s\S]*?<\/assessmentItem>/gi);
+      xml = itemsMatch ? itemsMatch.join('\n') : '';
+    }
+    await createAndDownloadQtiZip({
+      title: currentTitle || 'Assessment_QTI',
+      xmlPayload: xml || rawHtml,
+      target,
+    });
   }
 
   function cleanXmlText(str: string = ''): string {
@@ -992,22 +1016,26 @@ ${itemsXml}    </section>
           outputType === 'standardized-test' ||
           title?.includes('اختبار') ||
           currentTitle?.includes('اختبار')) && (
-          <>
+          <div className="inline-flex items-center gap-1.5 p-1 bg-emerald-50/80 rounded-xl border border-emerald-200">
+            <span className="text-xs font-bold text-emerald-900 px-2 flex items-center gap-1">
+              <Package className="w-3.5 h-3.5 text-emerald-600" />
+              <span>{isAr ? '📦 حزمة الاختبار (QTI ZIP):' : 'QTI Packages:'}</span>
+            </span>
             <button
-              onClick={handleExportQTIZip}
-              className="btn-secondary text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-300"
+              onClick={() => handleDownloadQtiZip('sahlah_cypher')}
+              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition flex items-center gap-1"
+              title="أكاديمية سهلة الدولية - Cypher / NEO LMS"
             >
-              <FileText className="w-4 h-4" />
-              {isAr ? 'QTI الفرقان' : 'Furqan QTI'}
+              <span>{isAr ? 'تحميل حزمة سهلة (Cypher)' : 'Sahlah (Cypher)'}</span>
             </button>
             <button
-              onClick={handleExportSahlahZip}
-              className="btn-secondary text-orange-700 bg-orange-50 hover:bg-orange-100 border-orange-300"
+              onClick={() => handleDownloadQtiZip('furqan_canvas')}
+              className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-xs transition flex items-center gap-1"
+              title="مدارس الفرقان العالمية - Canvas / Classera"
             >
-              <FileText className="w-4 h-4" />
-              {isAr ? 'QTI سهلة' : 'Sahlah QTI'}
+              <span>{isAr ? 'تحميل حزمة الفرقان (Canvas)' : 'Furqan (Canvas)'}</span>
             </button>
-          </>
+          </div>
         )}
       </div>
 
