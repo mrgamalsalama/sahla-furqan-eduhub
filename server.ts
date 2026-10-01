@@ -747,7 +747,7 @@ Format output as clean HTML without <html>, <body>, or <style> tags.`;
 });
 
 // Serve frontend
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
   app.use(express.static(path.resolve(__dirname, 'dist')));
   app.use((req, res) => {
     res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
