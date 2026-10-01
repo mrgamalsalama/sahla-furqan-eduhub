@@ -3,7 +3,7 @@ import cors from 'cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
-import { handleGenerate, handleAdvisor, handleRubric, handleGrade } from './src/api-core';
+import { executeGenerate, executeAdvisor, executeRubric, executeGrade } from './api/_shared';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,10 +15,10 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
 // API Endpoints
-app.post('/api/generate', handleGenerate);
-app.post('/api/advisor', handleAdvisor);
-app.post('/api/rubric', handleRubric);
-app.post('/api/grade', handleGrade);
+app.post('/api/generate', executeGenerate);
+app.post('/api/advisor', executeAdvisor);
+app.post('/api/rubric', executeRubric);
+app.post('/api/grade', executeGrade);
 
 // Dev / Local Server with Vite
 async function startServer() {

@@ -1,4 +1,4 @@
-import { handleGenerate } from '../src/api-core';
+import { executeGenerate } from './_shared';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -13,5 +13,13 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  return handleGenerate(req, res);
+  try {
+    return await executeGenerate(req, res);
+  } catch (err: any) {
+    console.error('Fatal handler error in /api/generate:', err);
+    return res.status(500).json({
+      error: err?.message || 'Server error',
+      details: String(err),
+    });
+  }
 }
