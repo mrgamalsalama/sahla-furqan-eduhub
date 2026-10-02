@@ -521,41 +521,41 @@ ${isAutoPilot ? '- نِظَامُ الطَّيَّارِ الْآلِيِّ (AI 
         const depthLevel = ps.depthLevel || 'detailed';
         const visualTheme = ps.visualTheme || 'tech_blue';
 
-        let depthDirective = '';
-        if (depthLevel === 'concise') {
-          depthDirective = 'مُسْتَوَى التَّفْصِيلِ: مُوجَزٌ وَمُرَكَّزٌ عَلَى رُؤُوسِ الْأَقْلَامِ وَالْمَفَاهِيمِ الْجَوْهَرِيَّةِ.';
-        } else if (depthLevel === 'comprehensive_script') {
-          depthDirective = `مُسْتَوَى التَّفْصِيلِ: شَامِلٌ جِدّاً مَعَ سِينَارْيُو شَرْحِ الْمُعَلِّمِ!
-يَجِبُ أَنْ تَتَضَمَّنَ كُلُّ شَرِيحَةٍ صُنْدُوقاً خَاصّاً بِعُنْوَان: <div class="teacher-notes" style="background:#f8fafc; border-right:4px solid #3b82f6; padding:10px 14px; margin-top:14px; font-size:0.9em; border-radius:6px;"><strong>دَلِيلُ الْمُعَلِّمِ وَسِينَارْيُو الشَّرْحِ (Teacher Script):</strong> يَتَضَمَّنُ مَا يَقُولُهُ الْمُعَلِّمُ، سُؤَالاً لِإِثَارَةِ النِّقَاشِ الصَّفِّيِّ، وَنَشَاطاً صَفِّيّاً مُرَافِقاً لِلشَّرِيحَةِ.</div>`;
-        } else {
-          depthDirective = 'مُسْتَوَى التَّفْصِيلِ: تَفْصِيلِيٌّ احْتِرَافِيٌّ يَتَضَمَّنُ شَرْحاً لِلْمَفَاهِيمِ مَعَ أَمْثِلَةٍ تَطْبِيقِيَّةٍ وَنِقَاطٍ شَارِحَةٍ.';
-        }
-
         return `${ctx}
-الْمَطْلُوبُ: تَوْلِيدُ "عَرْضِ شَرَائِحَ تَعْلِيمِيٍّ تَفْصِيلِيٍّ احْتِرَافِيٍّ" بِاللُّغَةِ الْعَرَبِيَّةِ وَمَشْكُولٍ بِالْكَامِلِ (100%) عَلَى شَكْلِ HTML مُهَيَّأٍ لِلْعَرْضِ وَالتَّصْدِيرِ لِـ PowerPoint.
+الْمَطْلُوبُ: تَوْلِيدُ "عَرْضِ شَرَائِحَ تَقْدِيمِيٍّ حَدِيثٍ عَلَى طَرِيقَةِ GAMMA AI (Gamma-Style Fluid Presentation Deck)" بِاللُّغَةِ الْعَرَبِيَّةِ وَمَشْكُولٍ بِالْكَامِلِ (100%)، مُوَزَّعٍ عَلَى ${slideCount} شَرَائِحَ / بِطَاقَاتٍ عَرِيضَةٍ (16:9) جَذَّابَةٍ بَصَرِيّاً وَتَفَاعُلِيّاً.
 
-تَخْصِيصَاتُ الْعَرْضِ:
-- عَدَدُ الشَّرَائِحِ: ${slideCount} شَرَائِحَ.
-- ${depthDirective}
-- الطَّابَعُ الْمَرْئِيُّ: ${visualTheme}.
+مَبَادِئُ تَصْمِيمِ شَرَائِحِ GAMMA AI:
+1. تَنَوُّعُ أَنْمَاطِ الْبِطَاقَاتِ بَيْنَ الشَّرَائِحِ (Card Layout Variety):
+   - الشَّرِيحَةُ الْأُولَى (Hero Cover): عُنْوَانٌ رَئِيسٌ كَبِيرٌ وَمُلْهِمٌ، عُنْوَانٌ فَرْعِيٌّ شَارِحٌ، نَوَاتِجُ التَّعَلُّمِ الْجَوْهَرِيَّةُ، وَبَيَانَاتُ الْمُعَلِّمِ وَالْمَدْرَسَةِ.
+   - شَرَائِحُ الْمَفَاهِيمِ وَالْمُقَارَنَاتِ (Split / Columns): عَمُودَانِ (مَفْهُومٌ مُقَابِلَ أَمْثِلَةٍ تَطْبِيقِيَّةٍ، قَاعِدَةٌ مُقَابِلَ نَمُوذَجٍ، أَوْ جَدْوَلٌ بَصَرِيٌّ مُقَارِنٌ).
+   - شَرَائِحُ الْأَرْكَانِ وَالْمَحَاوِرِ (3-Column Grid): 3 كُرُوتٍ صَغِيرَةٍ مُتَجَاوِرَةٍ بِأَيْقُونَاتٍ تَعْبِيرِيَّةٍ وَخُلَاصَاتٍ مُرَكَّزَةٍ.
+   - شَرَائِحُ التَّسَلْسُلِ وَالْمَرَاحِلِ (Timeline / Step Flow): خُطُوَاتٌ مُرَقَّمَةٌ مُتَتَابِعَةٌ (الْخُطْوَةُ 1 ➔ الْخُطْوَةُ 2 ➔ الْخُطْوَةُ 3).
+   - شَرَائِحُ التَّحَدِّي وَالنِّقَاشِ (Interactive Check & Quiz): سُؤَالُ تَفْكِيرٍ نَاقِدٍ أَوْ اخْتِبَارٌ قَصِيرٌ مَعَ إِجَابَةٍ نَمُوذَجِيَّةٍ مُعَلَّلَةٍ.
+   - الشَّرِيحَةُ الْخِتَامِيَّةُ (Summary & Takeaways): أَهَمُّ 4 خُلَاصَاتٍ جَوْهَرِيَّةٍ وَتَكْلِيفٌ إِبْدَاعِيٌّ مُرَافِقٌ.
 
-هَيْكَلُ الشَّرَائِحِ:
-يَجِبُ أَنْ تَكُونَ كُلُّ شَرِيحَةٍ مَحْصُورَةً دَاخِلَ حَاوِيَةٍ بِالْهَيْكَلِ التَّالِي:
-<div class="slide" data-slide-index="1" style="border:1px solid #e2e8f0; border-radius:12px; padding:24px; margin-bottom:24px; background:#ffffff; box-shadow:0 2px 6px rgba(0,0,0,0.05);">
-  <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #e2e8f0; padding-bottom:8px; margin-bottom:14px;">
-    <h2 style="color:#1e3a8a; margin:0; font-size:1.3rem;">عُنْوَانُ الشَّرِيحَةِ الْمَشْكُولِ</h2>
-    <span style="background:#e0f2fe; color:#0369a1; padding:2px 10px; border-radius:12px; font-size:0.85em; font-weight:700;">الشَّرِيحَةُ 1 مِنْ ${slideCount}</span>
+2. دَلِيلُ الْمُعَلِّمِ وَسِينَارْيُو الشَّرْحِ (Teacher Speaker Notes):
+   فِي كُلِّ شَرِيحَةٍ دُونَ اسْتِثْنَاءٍ، يَجِبُ تَضْمِينُ صُنْدُوقٍ خَاصٍّ بـ:
+   <div class="teacher-notes" style="background:#f8fafc; border-right:4px solid #0284c7; padding:12px 16px; margin-top:16px; border-radius:10px; font-size:0.9em;">
+     <strong style="color:#0369a1;">🎙️ دَلِيلُ وَسِينَارْيُو الْمُعَلِّمِ (Speaker Script):</strong>
+     <p style="margin:6px 0 8px 0; color:#334155;">نَصُّ مَا يَقُولُهُ الْمُعَلِّمُ لِلطُّلَّابِ لِشَرْحِ هَذِهِ الشَّرِيحَةِ بِأُسْلُوبٍ شَيِّقٍ.</p>
+     <strong style="color:#b45309;">❓ سُؤَالُ تَحْفِيزِ النِّقَاشِ:</strong> <span style="color:#475569;">سُؤَالٌ تَفَاعُلِيٌّ مُوَجَّهٌ لِلْفَصْلِ لِإِشْرَاكِ الطُّلَّابِ.</span>
+   </div>
+
+3. الْهَيْكَلُ الصَّارِمُ لِكُلِّ شَرِيحَةٍ (Strict Slide Container):
+<div class="slide" data-slide-index="N" data-layout="hero|split|grid|timeline|quiz|summary" style="border:1px solid #e2e8f0; border-radius:16px; padding:28px; margin-bottom:28px; background:#ffffff; box-shadow:0 4px 12px rgba(0,0,0,0.05);">
+  <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #e2e8f0; padding-bottom:10px; margin-bottom:16px;">
+    <h2 style="color:#0f172a; margin:0; font-size:1.4rem;">عُنْوَانُ الشَّرِيحَةِ الْمَشْكُولُ</h2>
+    <span style="background:#f0fdf4; color:#166534; padding:3px 12px; border-radius:12px; font-size:0.85em; font-weight:700;">الشَّرِيحَةُ N مِنْ ${slideCount}</span>
   </div>
   <div class="slide-content">
-    <!-- نِقَاطُ الْمُحْتَوَى، الْأَفْكَارُ، وَالْأَمْثِلَةُ التَّطْبِيقِيَّةُ -->
-    <ul style="line-height:1.8;">
-      <li>...</li>
-    </ul>
+    <!-- نِقَاطُ الْمُحْتَوَى، أَعْمِدَةُ الْمُقَارَنَةِ، أَوْ شَبَكَةُ الْبِطَاقَاتِ الْمُصَنَّفَةِ -->
   </div>
-  <!-- إِنْ كَانَ الْمُسْتَوَى شَامِلاً: أَضِفْ صُنْدُوقَ سِينَارْيُو الشَّرْحِ لِلْمُعَلِّمِ teacher-notes -->
+  <div class="teacher-notes">
+    <!-- دَلِيلُ الشَّرْحِ الصَّفِّيِّ لِلْمُعَلِّمِ -->
+  </div>
 </div>
 
-اسْتَخْدِمْ وُسُومَ HTML فَقَطْ: <h1>, <h2>, <h3>, <p>, <ul>, <li>, <strong>, <div>.`;
+اسْتَخْدِمْ وُسُومَ HTML فَقَطْ: <h1>, <h2>, <h3>, <p>, <table>, <tr>, <th>, <td>, <ul>, <li>, <strong>, <div>.`;
       }
 
       case 'quiz': {
