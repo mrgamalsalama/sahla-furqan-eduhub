@@ -314,16 +314,9 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
         <div className="absolute top-0 left-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-teal-300 text-xs font-bold mb-3 shadow-inner">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>استوديو عروض البوربوينت التفاعلية (Gamma AI + PowerPoint Studio)</span>
-            </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              إنشاء عروض بوربوينت متكاملة مع صور تعليمية من الإنترنت
+              إنشاء عروض بوربوينت متكاملة
             </h1>
-            <p className="mt-2 text-xs sm:text-sm text-slate-300 max-w-2xl font-medium leading-relaxed">
-              صور منتقاة من الإنترنت مطابقة للشريعة الإسلامية بدون استهلاك رصيد الذكاء الاصطناعي، مع شريط أدوات مايكروسوفت بوربوينت الكامل للتعديل الشامل قبل التنزيل (.pptx).
-            </p>
           </div>
 
           {/* Quick Actions if deck ready */}
