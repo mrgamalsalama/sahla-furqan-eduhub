@@ -14,7 +14,7 @@ import {
   addResourceComment,
   saveCloudResource,
 } from '@/lib/supabase';
-import { saveLesson } from '@/lib/storage';
+import { saveLesson, getSavedLessons } from '@/lib/storage';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface CommunityPageProps {
@@ -78,15 +78,52 @@ export default function CommunityPage({
   async function loadResources() {
     setLoading(true);
     try {
-      const data = await getPublicCommunityResources({
-        subject: selectedSubject,
-        grade: selectedGrade,
-        outputType: selectedType,
-        search: search.trim() || undefined,
-      });
-      setResources(data);
+      let cloudData: SavedLesson[] = [];
+      try {
+        cloudData = await getPublicCommunityResources({
+          subject: selectedSubject,
+          grade: selectedGrade,
+          outputType: selectedType,
+          search: search.trim() || undefined,
+        });
+      } catch (err) {
+        console.warn('Failed to fetch from cloud:', err);
+      }
+
+      // Also get any public lessons from local storage to ensure instant visibility
+      const localPublic = getSavedLessons().filter((l) => Boolean(l.isPublic));
+
+      // Merge: local + cloud, deduplicating by ID
+      const mergedMap = new Map<string, SavedLesson>();
+      localPublic.forEach((l) => mergedMap.set(l.id, l));
+      cloudData.forEach((l) => mergedMap.set(l.id, l));
+
+      let allResources = Array.from(mergedMap.values());
+
+      // Apply client-side filters on merged results
+      if (selectedSubject && selectedSubject !== 'all') {
+        allResources = allResources.filter((r) => r.settings?.subject === selectedSubject);
+      }
+      if (selectedGrade && selectedGrade !== 'all') {
+        allResources = allResources.filter((r) => r.settings?.grade === selectedGrade);
+      }
+      if (selectedType && selectedType !== 'all') {
+        allResources = allResources.filter((r) => r.outputType === selectedType);
+      }
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        allResources = allResources.filter(
+          (r) =>
+            r.title.toLowerCase().includes(q) ||
+            r.settings?.subject?.toLowerCase().includes(q) ||
+            r.settings?.grade?.toLowerCase().includes(q)
+        );
+      }
+
+      setResources(allResources);
     } catch {
-      setResources([]);
+      const localPublic = getSavedLessons().filter((l) => Boolean(l.isPublic));
+      setResources(localPublic);
     } finally {
       setLoading(false);
     }
