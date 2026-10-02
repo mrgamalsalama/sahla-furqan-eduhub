@@ -10,20 +10,27 @@ export interface QtiPackageOptions {
   grade?: string;
 }
 
-// تنظيف وتجريد أي شوائب أو علامات CDATA أو Markdown مكسورة
+// تنظيف وتجريد أي شوائب أو علامات CDATA أو Markdown أو تعليقات مكسورة
 function sanitizeRawXml(raw: string): string {
   let cleaned = raw.trim();
-  // إزالة وسوم كتل الماركداون
+
+  // 1. إزالة وسوم كتل الماركداون
   cleaned = cleaned.replace(/^```(?:xml)?\s*/i, '').replace(/```$/i, '').trim();
-  // إزالة وسوم الحاويات النصية إن وجدت
+
+  // 2. إزالة وسوم الحاويات النصية إن وجدت
   cleaned = cleaned.replace(/<div id="qti-xml-payload"[^>]*>/gi, '').replace(/<\/div>/gi, '');
-  // تنظيف علامات CDATA التالفة أو المسبوقة بتعليقات مهملة
+
+  // 3. تنظيف أي صياغات تالفة لـ CDATA أو بقاياها النصية المشوهة
   cleaned = cleaned.replace(/<!--\[CDATA\[/gi, '');
   cleaned = cleaned.replace(/<!\[CDATA\[/gi, '');   cleaned = cleaned.replace(/\]\]>/gi, '');
+  cleaned = cleaned.replace(/--&gt;/gi, '');
+  cleaned = cleaned.replace(/-->/gi, '');
+
+  // 4. حذف التعليقات العشوائية المشوهة مع الاحتفاظ بفواصل الأسئلة الإيضاحية
   cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, (match) => {
-    // الحفاظ على تعليقات أرقام الأسئلة مثل <!-- السؤال 1 --> وإزالة التعليقات المشبوهة
-    return match.includes('<questestinterop') ? '' : match;
+    return match.includes('السؤال') || match.includes('Question') ? match : '';
   });
+
   return cleaned.trim();
 }
 
@@ -37,9 +44,10 @@ function convertQti21To12(qti21Xml: string): string {
   const items12 = itemMatches.map((item, index) => {
     const identMatch = item.match(/identifier="([^"]+)"/i);
     const qIdent = identMatch ? identMatch[1] : `Q_${String(index + 1).padStart(2, '0')}`;
-    
+
     const promptMatch = item.match(/<prompt>([\s\S]*?)<\/prompt>/i);
-    const prompt = promptMatch ? promptMatch[1].trim() : 'سؤال';
+    let prompt = promptMatch ? promptMatch[1].trim() : 'سؤال';
+    prompt = prompt.replace(/<!\[CDATA\[/gi, '').replace(/\]\]>/gi, '').trim();
 
     const correctMatch = item.match(/<correctResponse>\s*<value>([^<]+)<\/value>\s*<\/correctResponse>/i);
     const correctVal = correctMatch ? correctMatch[1].trim() : 'A';
@@ -106,7 +114,7 @@ function convertQti12To21(qti12Xml: string): string {
 
     const promptMatch = item.match(/<mattext[^>]*>([\s\S]*?)<\/mattext>/i);
     let prompt = promptMatch ? promptMatch[1].trim() : 'سؤال';
-    prompt = prompt.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1');
+    prompt = prompt.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim();
 
     const correctMatch = item.match(/<varequal[^>]*>([^<]+)<\/varequal>/i);
     const correctVal = correctMatch ? correctMatch[1].trim() : 'A';
@@ -122,9 +130,9 @@ function convertQti12To21(qti12Xml: string): string {
       `      <simpleChoice identifier="${c.id}">${c.text}</simpleChoice>`
     ).join('\n');
 
-    return `<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqtiasi_v2p1" 
+    return `<assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1" 
                 identifier="${qIdent}" 
-                title="Question ${index + 1}" 
+                title="السؤال ${index + 1}" 
                 adaptive="false" 
                 timeDependent="false">
   <responseDeclaration identifier="RESPONSE" cardinality="single" baseType="identifier">
@@ -160,21 +168,18 @@ export async function createAndDownloadQtiZip(options: QtiPackageOptions): Promi
     // ==========================================
     let itemsBlock = cleanXml;
 
-    // استخلاص محتوى عناصر <item> إذا كان النص يحتوي بالفعل على وسم القسم أو المستند
     const sectionMatch = cleanXml.match(/<section[^>]*>([\s\S]*?)<\/section>/i);
     if (sectionMatch) {
       itemsBlock = sectionMatch[1].trim();
     } else if (cleanXml.includes('<assessmentItem')) {
       itemsBlock = convertQti21To12(cleanXml);
     } else {
-      // إزالة أي وسوم questestinterop أو assessment قديمة مشوهة للحصول على الأسئلة فقط
       itemsBlock = itemsBlock
         .replace(/<\/?questestinterop[^>]*>/gi, '')
         .replace(/<\/?assessment[^>]*>/gi, '')
         .trim();
     }
 
-    // بناء الهيكل القياسي النظيف المتطابق 100% مع نموذج سهلة الشغال
     const fullQti12Xml = `<?xml version="1.0" encoding="UTF-8"?>
 <questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.imsglobal.org/xsd/ims_qtiasiv1p2 http://www.imsglobal.org/xsd/ims_qtiasiv1p2.xsd">
   <assessment ident="SAHLAH_ASSESSMENT_${id}" title="${safeTitle}">
@@ -184,6 +189,7 @@ ${itemsBlock}
   </assessment>
 </questestinterop>`;
 
+    // حصر المورد بملف assessment_qti12.xml فقط لمنع الاستيراد المزدوج (20 سؤالاً بدلاً من 10)
     const manifestXml = `<?xml version="1.0" encoding="UTF-8"?>
 <manifest identifier="MANIFEST_SAHLAH_QTI12_${id}" xmlns="http://www.imsglobal.org/xsd/imscp_v1p1">
   <metadata>
@@ -204,20 +210,18 @@ ${itemsBlock}
   <resources>
     <resource identifier="RES_SAHLAH_QTI12" type="imsqti_xmlv1p2" href="assessment_qti12.xml">
       <file href="assessment_qti12.xml"/>
-      <file href="Folder1/QuestionBank1.xml"/>
     </resource>
   </resources>
 </manifest>`;
 
     zip.file('imsmanifest.xml', manifestXml);
     zip.file('assessment_qti12.xml', fullQti12Xml);
-    zip.folder('Folder1')?.file('QuestionBank1.xml', fullQti12Xml);
 
     const content = await zip.generateAsync({ type: 'blob' });
     saveAs(content, `${safeTitle}_أكاديمية_سهلة_QTI_v1.2.zip`);
   } else {
     // ==========================================
-    // 2. مدرسة الفرقان العالمية — QTI v2.1 ZIP
+    // 2. مدرسة الفرقان العالمية — QTI v2.1 ZIP (Canvas LMS)
     // ==========================================
     const hasQti21Items = cleanXml.includes('<assessmentItem');
     let qti21ItemsXml = cleanXml;
@@ -225,27 +229,43 @@ ${itemsBlock}
       qti21ItemsXml = convertQti12To21(cleanXml);
     }
 
-    let fullTestXml = qti21ItemsXml;
-    if (!cleanXml.includes('<assessmentTest')) {
-      fullTestXml = `<?xml version="1.0" encoding="UTF-8"?>
+    const itemMatches = qti21ItemsXml.match(/<assessmentItem[\s\S]*?<\/assessmentItem>/gi) || [];
+
+    if (itemMatches.length > 0) {
+      const itemFolder = zip.folder('items');
+      const itemRefs: string[] = [];
+      const resourceEntries: string[] = [];
+
+      itemMatches.forEach((itemXml, idx) => {
+        const qNum = String(idx + 1).padStart(2, '0');
+        const fileHref = `items/question_${qNum}.xml`;
+        const resId = `RES_ITEM_${qNum}`;
+
+        itemFolder?.file(`question_${qNum}.xml`, `<?xml version="1.0" encoding="UTF-8"?>\n${itemXml.trim()}`);
+        itemRefs.push(`        <assessmentItemRef identifier="ref_${qNum}" href="${fileHref}"/>`);
+        resourceEntries.push(`    <resource identifier="${resId}" type="imsqti_item_xmlv2p1" href="${fileHref}">
+      <file href="${fileHref}"/>
+    </resource>`);
+      });
+
+      const testXml = `<?xml version="1.0" encoding="UTF-8"?>
 <assessmentTest xmlns="http://www.imsglobal.org/xsd/imsqti_v2p1" 
                 identifier="FURQAN_TEST_${id}" 
                 title="${safeTitle}">
   <testPart identifier="part_01" navigationMode="nonlinear" submissionMode="individual">
-    <assessmentSection identifier="section_01" title="General Assessment" visible="true">
-${qti21ItemsXml}
+    <assessmentSection identifier="section_01" title="${safeTitle}" visible="true">
+${itemRefs.join('\n')}
     </assessmentSection>
   </testPart>
 </assessmentTest>`;
-    }
 
-    const manifestXml = `<?xml version="1.0" encoding="UTF-8"?>
-<manifest xmlns="http://www.imsglobal.org/xsd/imscp_v1p1" 
+      const manifestXml = `<?xml version="1.0" encoding="UTF-8"?>
+<manifest identifier="MANIFEST_FURQAN_QTI21_${id}"
+          xmlns="http://www.imsglobal.org/xsd/imscp_v1p1" 
           xmlns:imsmd="http://www.imsglobal.org/xsd/imsmd_v1p2" 
-          xmlns:imsqti="http://www.imsglobal.org/xsd/imsqti_v2p1" 
-          identifier="MANIFEST_FURQAN_QTI21_${id}">
+          xmlns:imsqti="http://www.imsglobal.org/xsd/imsqti_v2p1">
   <metadata>
-    <schema>QTIv2.1</schema>
+    <schema>IMS QTI</schema>
     <schemaversion>2.1</schemaversion>
     <imsmd:lom>
       <imsmd:general>
@@ -260,14 +280,28 @@ ${qti21ItemsXml}
   </metadata>
   <organizations/>
   <resources>
-    <resource identifier="RES_FURQAN_QTI21" type="imsqti_test_xmlv2p1" href="assessment_qti21.xml">
+    <resource identifier="RES_FURQAN_TEST_${id}" type="imsqti_test_xmlv2p1" href="assessment_test.xml">
+      <file href="assessment_test.xml"/>
+    </resource>
+${resourceEntries.join('\n')}
+  </resources>
+</manifest>`;
+
+      zip.file('imsmanifest.xml', manifestXml);
+      zip.file('assessment_test.xml', testXml);
+    } else {
+      const fallbackXml = `<?xml version="1.0" encoding="UTF-8"?>\n${cleanXml}`;
+      const manifestXml = `<?xml version="1.0" encoding="UTF-8"?>
+<manifest identifier="MANIFEST_FURQAN_QTI21_${id}" xmlns="http://www.imsglobal.org/xsd/imscp_v1p1">
+  <resources>
+    <resource identifier="RES_FURQAN_QTI21" type="imsqti_xmlv2p1" href="assessment_qti21.xml">
       <file href="assessment_qti21.xml"/>
     </resource>
   </resources>
 </manifest>`;
-
-    zip.file('imsmanifest.xml', manifestXml);
-    zip.file('assessment_qti21.xml', fullTestXml);
+      zip.file('imsmanifest.xml', manifestXml);
+      zip.file('assessment_qti21.xml', fallbackXml);
+    }
 
     const content = await zip.generateAsync({ type: 'blob' });
     saveAs(content, `${safeTitle}_الفرقان_العالمية_QTI_v2.1.zip`);
