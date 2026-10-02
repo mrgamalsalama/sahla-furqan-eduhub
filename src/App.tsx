@@ -3,6 +3,7 @@ import Header from '@/components/Header';
 import HomePage from '@/components/HomePage';
 import EditorPage from '@/components/EditorPage';
 import LibraryPage from '@/components/LibraryPage';
+import CommunityPage from '@/components/CommunityPage';
 import LessonPlanStudio from '@/components/LessonPlanStudio';
 import WorksheetStudio from '@/components/WorksheetStudio';
 import PresentationStudio from '@/components/PresentationStudio';
@@ -13,6 +14,8 @@ import BenchmarkPage from '@/components/BenchmarkPage';
 import type { View, OutputType, GenerationResult, SavedLesson } from '@/types';
 import { getUILang, saveUILang } from '@/lib/i18n';
 import type { UILang } from '@/lib/i18n';
+import { getCurrentUser, signInWithGoogle, signOut, supabase } from '@/lib/supabase';
+import type { User } from '@supabase/supabase-js';
 
 interface EditorState {
   html: string;
@@ -24,6 +27,29 @@ interface EditorState {
 const VIEW_STORAGE_KEY = 'sahlah_furqan_current_view';
 
 export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    getCurrentUser().then((u) => setUser(u));
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user || null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleSignIn = async () => {
+    await signInWithGoogle();
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    setUser(null);
+  };
+
   const [view, setView] = useState<View>(() => {
     try {
       const saved = localStorage.getItem(VIEW_STORAGE_KEY);
@@ -39,6 +65,7 @@ export default function App() {
           'grader-advisor',
           'editor',
           'library',
+          'community',
           'benchmark',
         ].includes(saved)
       ) {
@@ -111,6 +138,9 @@ export default function App() {
         }}
         uiLang={uiLang}
         onToggleLang={handleToggleLang}
+        user={user}
+        onSignIn={handleSignIn}
+        onSignOut={handleSignOut}
       />
 
       <main className="flex-1">
@@ -178,11 +208,27 @@ export default function App() {
             onBack={handleBack}
             editingLesson={editorState.editingLesson}
             uiLang={uiLang}
+            user={user}
+            onSignIn={handleSignIn}
           />
         )}
 
         {view === 'library' && (
-          <LibraryPage onOpenLesson={handleOpenLesson} uiLang={uiLang} />
+          <LibraryPage
+            onOpenLesson={handleOpenLesson}
+            uiLang={uiLang}
+            user={user}
+            onSignIn={handleSignIn}
+          />
+        )}
+
+        {view === 'community' && (
+          <CommunityPage
+            onOpenLesson={handleOpenLesson}
+            uiLang={uiLang}
+            user={user}
+            onSignIn={handleSignIn}
+          />
         )}
       </main>
 

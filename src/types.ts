@@ -10,6 +10,7 @@ export type View =
   | 'grader-advisor'
   | 'editor'
   | 'library'
+  | 'community'
   | 'benchmark';
 
 export type OutputType =
@@ -170,6 +171,32 @@ export interface SavedLesson {
   contentHtml: string;
   createdAt: number;
   updatedAt: number;
+  // Cloud & Community extensions
+  isPublic?: boolean;
+  userId?: string;
+  userName?: string;
+  userEmail?: string;
+  userAvatar?: string;
+  institution?: InstitutionId;
+  likesCount?: number;
+  commentsCount?: number;
+}
+
+export interface ResourceComment {
+  id: string;
+  resourceId: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  school?: string;
+  comment: string;
+  createdAt: number | string;
+}
+
+export interface CommunityResource extends SavedLesson {
+  isPublic: boolean;
+  likesCount: number;
+  commentsCount: number;
 }
 
 export interface GenerationResult {

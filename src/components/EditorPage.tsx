@@ -3,13 +3,15 @@ import {
   Bold, Italic, Underline, List, ListOrdered, Table as TableIcon,
   Printer, Copy, FileText, FileType2, Save, ArrowRight, ArrowLeft, Check,
   Type, Heading1, Heading2, Heading3, Quote, Undo, Redo, Presentation,
-  AlignRight, AlignCenter, AlignLeft, AlignJustify, Package
+  AlignRight, AlignCenter, AlignLeft, AlignJustify, Package, Cloud
 } from 'lucide-react';
 import type { OutputType, LessonSettings, SavedLesson } from '@/types';
 import { OUTPUT_LABELS_AR, OUTPUT_LABELS_EN } from '@/types';
 import { exportToWord, printContent, copyToClipboard } from '@/lib/export';
 import { saveLesson, getLessonSettings, uid } from '@/lib/storage';
 import { createAndDownloadQtiZip } from '@/lib/qtiPackager';
+import { saveCloudResource } from '@/lib/supabase';
+import type { User } from '@supabase/supabase-js';
 import type { UILang } from '@/lib/i18n';
 import { t } from '@/lib/i18n';
 
@@ -20,6 +22,8 @@ interface EditorPageProps {
   onBack: () => void;
   editingLesson?: SavedLesson | null;
   uiLang: UILang;
+  user?: User | null;
+  onSignIn?: () => void;
 }
 
 const FONT_OPTIONS = [
@@ -64,6 +68,8 @@ export default function EditorPage({
   onBack,
   editingLesson,
   uiLang,
+  user,
+  onSignIn,
 }: EditorPageProps) {
   const s = t(uiLang);
   const isAr = uiLang === 'ar';
@@ -72,6 +78,8 @@ export default function EditorPage({
   const editorRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [cloudSaving, setCloudSaving] = useState(false);
+  const [cloudSyncMsg, setCloudSyncMsg] = useState<string | null>(null);
   const [exporting, setExporting] = useState<'word' | null>(null);
   const [currentTitle, setCurrentTitle] = useState(title);
   const [lessonId] = useState(editingLesson?.id || uid());
@@ -723,7 +731,7 @@ ${itemsXml}    </section>
     }
   }
 
-  function handleSave() {
+  async function handleSave() {
     const html = editorRef.current?.innerHTML || '';
     const settings: LessonSettings = getLessonSettings();
     const lesson: SavedLesson = {
@@ -734,10 +742,24 @@ ${itemsXml}    </section>
       contentHtml: html,
       createdAt: editingLesson?.createdAt || Date.now(),
       updatedAt: Date.now(),
+      isPublic: editingLesson?.isPublic || false,
     };
     saveLesson(lesson);
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+
+    if (user) {
+      setCloudSaving(true);
+      const res = await saveCloudResource(lesson, user, lesson.isPublic);
+      setCloudSaving(false);
+      if (res.success) {
+        setCloudSyncMsg(isAr ? 'تم الحفظ سحابياً بنجاح! ☁️' : 'Saved to Cloud! ☁️');
+      }
+    }
+
+    setTimeout(() => {
+      setSaved(false);
+      setCloudSyncMsg(null);
+    }, 2500);
   }
 
   const BackIcon = isAr ? ArrowRight : ArrowLeft;
@@ -978,9 +1000,24 @@ ${itemsXml}    </section>
 
       {/* أزرار الإجراءات والتصدير */}
       <div className="flex flex-wrap items-center gap-2 mb-4 no-print">
-        <button onClick={handleSave} className="btn-secondary">
-          {saved ? <Check className="w-4 h-4 text-success-500" /> : <Save className="w-4 h-4" />}
-          {saved ? s.saved : s.saveLibrary}
+        <button
+          onClick={handleSave}
+          disabled={cloudSaving}
+          className="btn-primary flex items-center gap-1.5"
+          title={user ? (isAr ? 'حفظ في مكتبتي السحابية' : 'Save to Cloud Library') : s.saveLibrary}
+        >
+          {cloudSaving ? (
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : saved ? (
+            <Check className="w-4 h-4 text-emerald-300" />
+          ) : user ? (
+            <Cloud className="w-4 h-4 text-teal-300" />
+          ) : (
+            <Save className="w-4 h-4" />
+          )}
+          <span>
+            {cloudSyncMsg || (saved ? s.saved : user ? (isAr ? '💾 حفظ في مكتبتي السحابية' : '💾 Save to Cloud Library') : (isAr ? '💾 حفظ في مكتبتي' : '💾 Save to Library'))}
+          </span>
         </button>
         <button onClick={handleCopy} className="btn-secondary">
           {copied ? <Check className="w-4 h-4 text-success-500" /> : <Copy className="w-4 h-4" />}

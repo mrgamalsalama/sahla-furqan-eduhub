@@ -1,6 +1,6 @@
 import {
   ClipboardList, Layers, Presentation, FileQuestion, FileCode2,
-  FileCheck2, Sparkles, ArrowLeft, ArrowRight
+  FileCheck2, Sparkles, ArrowLeft, ArrowRight, Globe
 } from 'lucide-react';
 import type { View } from '@/types';
 import { INSTITUTIONS } from '@/types';
@@ -87,6 +87,17 @@ export default function HomePage({ uiLang, onNavigate }: HomePageProps) {
         : 'AI OCR grading for handwritten student work, rubric creation, and classroom advice.',
       icon: FileCheck2,
       color: 'from-purple-600 to-violet-800',
+    },
+    {
+      id: 'community',
+      title: isAr ? 'المكتبة العامة ومجتمع المعلمين' : 'Public Community Hub',
+      subtitle: isAr ? 'مشاركة وتداول الدروس والاختبارات' : 'Shared Hub & Discussions',
+      description: isAr
+        ? 'استكشف الدروس وأوراق العمل وبنوك الاختبارات المنشورة من قبل الزملاء، مع إمكانية نسخها والتعديل عليها والتفاعل معها.'
+        : 'Explore quality resources shared by accredited teachers, clone them into your private workspace, and exchange feedback.',
+      icon: Globe,
+      color: 'from-blue-700 to-teal-800',
+      badge: isAr ? 'سحابي 🌐' : 'Cloud 🌐',
     },
   ];
 
