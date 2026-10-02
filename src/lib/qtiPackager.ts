@@ -10,7 +10,28 @@ export interface QtiPackageOptions {
   grade?: string;
 }
 
-// تنظيف وتجريد أي شوائب أو علامات CDATA أو Markdown أو تعليقات مكسورة
+/**
+ * تنظيف نصوص الأسئلة بدقة دون المساس بالأقواس الأصلية داخل السؤال
+ * يزيل فقط الأقواس المربعة التغليفية في بداية ونهاية الجملة وبقايا التعليقات
+ */
+function cleanPromptText(text: string): string {
+  let cleaned = text.trim();
+
+  // 1. إزالة بقايا وسم CDATA التالف
+  cleaned = cleaned.replace(/<!\[CDATA\[/gi, '').replace(/<!--\[CDATA\[/gi, '');   cleaned = cleaned.replace(/\]\]>/gi, '').replace(/\]\]/g, '');
+
+  // 2. إزالة بقايا علامات التعليق والأسهم الشاردة من أطراف السؤال
+  cleaned = cleaned.replace(/--&gt;/gi, '').replace(/-->/gi, '').replace(/--</gi, '');
+
+  // 3. إزالة الأقواس المربعة التي تحيط بالسؤال من بدايته ونهايته فقط إن وجدت
+  cleaned = cleaned.replace(/^\[+/, '').replace(/\]+$/, '');
+
+  return cleaned.trim();
+}
+
+/**
+ * تنظيف وتجريد أي شوائب أو علامات CDATA أو Markdown من كتلة الـ XML بالكامل
+ */
 function sanitizeRawXml(raw: string): string {
   let cleaned = raw.trim();
 
@@ -20,13 +41,23 @@ function sanitizeRawXml(raw: string): string {
   // 2. إزالة وسوم الحاويات النصية إن وجدت
   cleaned = cleaned.replace(/<div id="qti-xml-payload"[^>]*>/gi, '').replace(/<\/div>/gi, '');
 
-  // 3. تنظيف أي صياغات تالفة لـ CDATA أو بقاياها النصية المشوهة
+  // 3. تنظيف علامات CDATA وبقاياها النصية التالفة
   cleaned = cleaned.replace(/<!--\[CDATA\[/gi, '');
   cleaned = cleaned.replace(/<!\[CDATA\[/gi, '');   cleaned = cleaned.replace(/\]\]>/gi, '');
   cleaned = cleaned.replace(/--&gt;/gi, '');
   cleaned = cleaned.replace(/-->/gi, '');
+  cleaned = cleaned.replace(/--</gi, '');
 
-  // 4. حذف التعليقات العشوائية المشوهة مع الاحتفاظ بفواصل الأسئلة الإيضاحية
+  // 4. تنظيف نصوص <mattext> و <prompt> من الأقواس التغليفية الزائدة في الأطراف
+  cleaned = cleaned.replace(/<mattext([^>]*)>([\s\S]*?)<\/mattext>/gi, (_, attrs, innerText) => {
+    return `<mattext${attrs}>${cleanPromptText(innerText)}</mattext>`;
+  });
+
+  cleaned = cleaned.replace(/<prompt>([\s\S]*?)<\/prompt>/gi, (_, innerText) => {
+    return `<prompt>${cleanPromptText(innerText)}</prompt>`;
+  });
+
+  // 5. حذف التعليقات العشوائية المشوهة مع الاحتفاظ بفواصل الأسئلة الإيضاحية
   cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, (match) => {
     return match.includes('السؤال') || match.includes('Question') ? match : '';
   });
@@ -46,8 +77,7 @@ function convertQti21To12(qti21Xml: string): string {
     const qIdent = identMatch ? identMatch[1] : `Q_${String(index + 1).padStart(2, '0')}`;
 
     const promptMatch = item.match(/<prompt>([\s\S]*?)<\/prompt>/i);
-    let prompt = promptMatch ? promptMatch[1].trim() : 'سؤال';
-    prompt = prompt.replace(/<!\[CDATA\[/gi, '').replace(/\]\]>/gi, '').trim();
+    const prompt = cleanPromptText(promptMatch ? promptMatch[1] : 'سؤال');
 
     const correctMatch = item.match(/<correctResponse>\s*<value>([^<]+)<\/value>\s*<\/correctResponse>/i);
     const correctVal = correctMatch ? correctMatch[1].trim() : 'A';
@@ -56,7 +86,7 @@ function convertQti21To12(qti21Xml: string): string {
     let choiceMatch;
     const choices: { id: string; text: string }[] = [];
     while ((choiceMatch = choiceRegex.exec(item)) !== null) {
-      choices.push({ id: choiceMatch[1], text: choiceMatch[2].trim() });
+      choices.push({ id: choiceMatch[1], text: cleanPromptText(choiceMatch[2]) });
     }
 
     const renderChoices = choices.map(c => 
@@ -113,8 +143,7 @@ function convertQti12To21(qti12Xml: string): string {
     const qIdent = identMatch ? identMatch[1] : `Q_${String(index + 1).padStart(2, '0')}`;
 
     const promptMatch = item.match(/<mattext[^>]*>([\s\S]*?)<\/mattext>/i);
-    let prompt = promptMatch ? promptMatch[1].trim() : 'سؤال';
-    prompt = prompt.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim();
+    const prompt = cleanPromptText(promptMatch ? promptMatch[1] : 'سؤال');
 
     const correctMatch = item.match(/<varequal[^>]*>([^<]+)<\/varequal>/i);
     const correctVal = correctMatch ? correctMatch[1].trim() : 'A';
@@ -123,7 +152,7 @@ function convertQti12To21(qti12Xml: string): string {
     let labelMatch;
     const choices: { id: string; text: string }[] = [];
     while ((labelMatch = labelRegex.exec(item)) !== null) {
-      choices.push({ id: labelMatch[1], text: labelMatch[2].trim() });
+      choices.push({ id: labelMatch[1], text: cleanPromptText(labelMatch[2]) });
     }
 
     const simpleChoices = choices.map(c => 
@@ -189,7 +218,7 @@ ${itemsBlock}
   </assessment>
 </questestinterop>`;
 
-    // حصر المورد بملف assessment_qti12.xml فقط لمنع الاستيراد المزدوج (20 سؤالاً بدلاً من 10)
+    // حصر المورد بملف assessment_qti12.xml فقط لمنع الاستيراد المزدوج (10 أسئلة بالضبط)
     const manifestXml = `<?xml version="1.0" encoding="UTF-8"?>
 <manifest identifier="MANIFEST_SAHLAH_QTI12_${id}" xmlns="http://www.imsglobal.org/xsd/imscp_v1p1">
   <metadata>
