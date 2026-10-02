@@ -35,33 +35,48 @@ export interface TeacherProfile {
   schoolName?: string;
 }
 
+export function normalizeAuthIdentifier(input: string): string {
+  const trimmed = (input || '').trim().toLowerCase();
+  if (!trimmed) return '';
+  // If user entered a username without @ (e.g. 'gamal' or 'teacher10'), format as valid email
+  if (!trimmed.includes('@')) {
+    return `${trimmed}@sahla-furqan.local`;
+  }
+  return trimmed;
+}
+
 export function translateAuthError(msg: string): string {
-  const lower = msg.toLowerCase();
-  if (lower.includes('invalid login credentials') || lower.includes('invalid credentials')) {
-    return 'بيانات الدخول غير صحيحة. يرجى التحقق من البريد الإلكتروني وكلمة المرور.';
+  const lower = (msg || '').toLowerCase();
+  if (lower.includes('invalid login credentials') || lower.includes('invalid credentials') || lower.includes('invalid_grant')) {
+    return 'بيانات الدخول غير صحيحة أو أن الحساب غير مسجل بعد في المنصة.';
   }
   if (lower.includes('already registered') || lower.includes('user already exists')) {
-    return 'هذا البريد الإلكتروني مسجل بالفعل. يرجى تسجيل الدخول مباشرة.';
+    return 'هذا البريد الإلكتروني مسجل بالفعل. يمكنك تسجيل الدخول مباشرة.';
   }
   if (lower.includes('password should be at least')) {
-    return 'يجب أن تتكون كلمة المرور من 6 أحرف على الأقل.';
+    return 'يجب أن تتكون كلمة المرور من 6 أحرف أو أرقام على الأقل.';
   }
   if (lower.includes('email not confirmed')) {
-    return 'البريد الإلكتروني بحاجة لتأكيد أو تفعيل. يرجى مراجعة بريدك الإلكتروني.';
+    return 'الحساب مسجل ولكن بانتظار تأكيد البريد الإلكتروني. يرجى تفقد صندوق الوارد أو البريد غير الهام (Spam).';
   }
   if (lower.includes('rate limit') || lower.includes('too many requests')) {
-    return 'تم إجراء محاولات متكررة. يرجى الانتظار قليلاً ثم المحاولة مرة أخرى.';
+    return 'تم إجراء عدة محاولات متتالية. يرجى الانتظار دقيقة واحدة ثم المحاولة مجدداً.';
   }
   if (lower.includes('valid email')) {
-    return 'يرجى إدخال عنوان بريد إلكتروني صحيح.';
+    return 'يرجى إدخال اسم مستخدم أو بريد إلكتروني صحيح.';
   }
   return msg;
 }
 
 export async function signInWithEmail(
-  email: string,
+  emailOrUsername: string,
   password: string
-): Promise<{ user: User | null; error: Error | null }> {
+): Promise<{
+  user: User | null;
+  error: Error | null;
+  isCredentialsError?: boolean;
+  isNotConfirmed?: boolean;
+}> {
   try {
     if (!isSupabaseConfigured()) {
       return {
@@ -69,12 +84,24 @@ export async function signInWithEmail(
         error: new Error('خدمة المزامنة السحابية غير مهيأة بعد. تأكد من تفعيل VITE_SUPABASE_ANON_KEY.'),
       };
     }
+    const cleanEmail = normalizeAuthIdentifier(emailOrUsername);
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
+      email: cleanEmail,
       password,
     });
     if (error) {
-      return { user: null, error: new Error(translateAuthError(error.message)) };
+      const msg = error.message.toLowerCase();
+      const isCredentialsError =
+        msg.includes('invalid login credentials') ||
+        msg.includes('invalid credentials') ||
+        msg.includes('invalid_grant');
+      const isNotConfirmed = msg.includes('email not confirmed');
+      return {
+        user: null,
+        error: new Error(translateAuthError(error.message)),
+        isCredentialsError,
+        isNotConfirmed,
+      };
     }
     return { user: data.user, error: null };
   } catch (err: unknown) {
@@ -84,35 +111,51 @@ export async function signInWithEmail(
 }
 
 export async function signUpWithEmail(
-  email: string,
+  emailOrUsername: string,
   password: string,
   fullName: string,
   school: string
-): Promise<{ user: User | null; error: Error | null }> {
+): Promise<{
+  user: User | null;
+  session: unknown | null;
+  error: Error | null;
+  isAlreadyRegistered?: boolean;
+}> {
   try {
     if (!isSupabaseConfigured()) {
       return {
         user: null,
+        session: null,
         error: new Error('خدمة المزامنة السحابية غير مهيأة بعد. تأكد من تفعيل VITE_SUPABASE_ANON_KEY.'),
       };
     }
+    const cleanEmail = normalizeAuthIdentifier(emailOrUsername);
     const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
+      email: cleanEmail,
       password,
       options: {
         data: {
           full_name: fullName.trim(),
           school: school,
+          username: emailOrUsername.trim(),
         },
       },
     });
     if (error) {
-      return { user: null, error: new Error(translateAuthError(error.message)) };
+      const isAlreadyRegistered =
+        error.message.toLowerCase().includes('already registered') ||
+        error.message.toLowerCase().includes('already exists');
+      return {
+        user: null,
+        session: null,
+        error: new Error(translateAuthError(error.message)),
+        isAlreadyRegistered,
+      };
     }
-    return { user: data.user, error: null };
+    return { user: data.user, session: data.session, error: null };
   } catch (err: unknown) {
     const error = err instanceof Error ? err : new Error(String(err));
-    return { user: null, error };
+    return { user: null, session: null, error };
   }
 }
 
