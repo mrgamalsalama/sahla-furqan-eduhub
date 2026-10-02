@@ -151,7 +151,61 @@ export interface LessonSettings {
   worksheetSettings?: WorksheetSettings;
   presentationSettings?: PresentationSettings;
   lmsTarget?: LmsTarget;
+  selectedSubCriteria?: string[];
 }
+
+export interface FrameworkSubCriterion {
+  id: string;
+  code: string;
+  titleAr: string;
+  titleEn: string;
+  descAr: string;
+}
+
+export const FRAMEWORK_SUB_CRITERIA: Record<string, FrameworkSubCriterion[]> = {
+  diagnostic_gap: [
+    { id: 'diag_concepts', code: 'GAP-CON', titleAr: 'فجوات المفاهيم التأسيسية القبلية', titleEn: 'Prior Prerequisite Concepts', descAr: 'كشف المفاهيم المفقودة من السنوات السابقة لضمان التأسيس السليم' },
+    { id: 'diag_reading', code: 'GAP-READ', titleAr: 'الاستيعاب القرائي والتحليل الصامت', titleEn: 'Reading Comprehension', descAr: 'قياس الفهم المباشر والضمني للنصوص واستخلاص المعاني' },
+    { id: 'diag_procedural', code: 'GAP-PRC', titleAr: 'التطبيق الإجرائي وحل المشكلات', titleEn: 'Procedural Problem Solving', descAr: 'التطبيق المنهجي للقواعد والخطوات الحسابية أو اللغوية' },
+    { id: 'diag_reasoning', code: 'GAP-RSN', titleAr: 'الاستدلال والتفكير المنطقي والعلمي', titleEn: 'Reasoning & Inquiry', descAr: 'الربط والاستنتاج والتعليل وتفسير النتائج في سياقات جديدة' },
+  ],
+  map_growth: [
+    { id: 'map_rit_bands', code: 'MAP-RIT', titleAr: 'نطاق درجات RIT المتدرجة (180-240+)', titleEn: 'Graduated RIT Bands', descAr: 'تدرج مستويات الصعوبة المعايرة وفق مقياس NWEA التكيفي' },
+    { id: 'map_vocab', code: 'MAP-VOC', titleAr: 'اكتساب المفردات ودلالة السياق', titleEn: 'Vocabulary Acquisition & Use', descAr: 'فهم معاني الكلمات الدقيقة والمجازية والتراكيب في السياق' },
+    { id: 'map_informational', code: 'MAP-INFO', titleAr: 'تحليل النصوص المعلوماتية والتطبيقية', titleEn: 'Informational & Scientific Texts', descAr: 'استخلاص الأدلة، الفكرة المركزية، والبنية المنطقية للنص' },
+    { id: 'map_operations', code: 'MAP-OPS', titleAr: 'العمليات والتفكير الجبري والعددي', titleEn: 'Operations & Quantitative Reasoning', descAr: 'النمذجة الرياضية والحلول العددية وتطبيق العلاقات' },
+  ],
+  ib_criteria: [
+    { id: 'ib_crit_a', code: 'CRIT-A', titleAr: 'المعيار أ: المعرفة والفهم المفاهيمي (1-8)', titleEn: 'Criterion A: Knowing & Understanding', descAr: 'شرح المفاهيم الجوهرية وتطبيقها في سياقات مألوفة وغير مألوفة' },
+    { id: 'ib_crit_b', code: 'CRIT-B', titleAr: 'المعيار ب: الاستقصاء والبحث وتصميم الأنشطة (1-8)', titleEn: 'Criterion B: Inquiring & Designing', descAr: 'صياغة التساؤلات والتخطيط المنهجي للاستكشاف والتحري' },
+    { id: 'ib_crit_c', code: 'CRIT-C', titleAr: 'المعيار ج: معالجة البيانات وتقييم النتائج (1-8)', titleEn: 'Criterion C: Processing & Evaluating', descAr: 'تنظيم وتحليل البيانات والرسوم واستخلاص الاستنتاجات العلمية' },
+    { id: 'ib_crit_d', code: 'CRIT-D', titleAr: 'المعيار د: التفكير الناقد والتأثيرات الواقعية (1-8)', titleEn: 'Criterion D: Reflecting & Real-World Impacts', descAr: 'ربط المعرفة بالحياة والمجتمع والقضايا الأخلاقية والبيئية' },
+  ],
+  cambridge_igcse: [
+    { id: 'cam_ao1', code: 'AO1', titleAr: 'AO1: المعرفة والفهم الصريح واسترجاع القواعد', titleEn: 'AO1: Knowledge with Understanding', descAr: 'استدعاء الحقائق والمصطلحات الدقيقة وتطبيق القواعد' },
+    { id: 'cam_ao2', code: 'AO2', titleAr: 'AO2: معالجة المعلومات والتطبيق في سياقات جديدة', titleEn: 'AO2: Handling Information & Problem Solving', descAr: 'تفسير النصوص والمعطيات وحل المشكلات غير النمطية' },
+    { id: 'cam_ao3', code: 'AO3', titleAr: 'AO3: التحليل والاستقصاء والتقويم الناقد', titleEn: 'AO3: Analysis, Inquiry & Critical Evaluation', descAr: 'فحص الحجج والبراهين وإصدار الأحكام المبررة' },
+    { id: 'cam_markscheme', code: 'CAM-MS', titleAr: 'سلم تصحيح كامبريدج المعتمد (Official Mark Scheme)', titleEn: 'Cambridge Official Mark Scheme', descAr: 'توزيع الدرجات التفصيلي ومؤشرات التميز الأكاديمي' },
+  ],
+  us_common_core: [
+    { id: 'ccss_dok12', code: 'DOK 1-2', titleAr: 'عمق المعرفة DOK 1 & 2: التذكر والمهارات الأساسية', titleEn: 'Recall & Basic Skills', descAr: 'استرجاع الحقائق والتعريفات والخطوات المباشرة والمفاهيم الأولية' },
+    { id: 'ccss_dok3', code: 'DOK 3', titleAr: 'عمق المعرفة DOK 3: التفكير الاستراتيجي والتعليل', titleEn: 'Strategic Thinking & Reasoning', descAr: 'الاستدلال والتخطيط وتفسير الأدلة المتعددة وربط الأسباب' },
+    { id: 'ccss_dok4', code: 'DOK 4', titleAr: 'عمق المعرفة DOK 4: التفكير الممتد والبحث المركب', titleEn: 'Extended Thinking & Synthesis', descAr: 'التحليل المتعمق والتركيب وحل المسائل الواقعية المعقدة عبر سياقات متعددة' },
+    { id: 'ccss_strands', code: 'CCSS-STR', titleAr: 'محاور المعايير الأمريكية (Reading/Math Strands)', titleEn: 'CCSS Grade-Level Strands', descAr: 'مطابقة الأكواد الدقيقة للمعايير الأمريكية المشتركة للصف المحدد' },
+  ],
+  cefr_languages: [
+    { id: 'cefr_a', code: 'CEFR A1-A2', titleAr: 'المستوى التأسيسي A1 - A2 (Basic User)', titleEn: 'Basic User: A1 - A2', descAr: 'فهم التراكيب المألوفة والمفردات اليومية المباشرة والتعليمات البسيطة' },
+    { id: 'cefr_b', code: 'CEFR B1-B2', titleAr: 'المستوى المستقل B1 - B2 (Independent User)', titleEn: 'Independent User: B1 - B2', descAr: 'استيعاب الأفكار الرئيسية في النصوص المعقدة والتعبير السلس والربط المنطقي' },
+    { id: 'cefr_c', code: 'CEFR C1-C2', titleAr: 'المستوى المتقدم C1 - C2 (Proficient User)', titleEn: 'Proficient User: C1 - C2', descAr: 'الإتقان التام والتحليل البلاغي والنقدي وتذوق الأساليب اللغوية العميقة' },
+    { id: 'cefr_skills', code: 'CEFR-SKL', titleAr: 'الكفايات اللغوية التواصلية الأربع', titleEn: 'Communicative Competencies', descAr: 'القراءة والتحليل والتراكيب الوظيفية والتعبير في سياقات لغوية أصيلة' },
+  ],
+  pirls_pisa: [
+    { id: 'pirls_retrieval', code: 'PIRLS-RET', titleAr: 'الوصول إلى المعلومات الصريحة واسترجاعها', titleEn: 'Explicit Retrieval of Information', descAr: 'تحديد حقائق ومعلومات مذكورة بوضوح في النص واستخراجها بدقة' },
+    { id: 'pirls_inference', code: 'PIRLS-INF', titleAr: 'الاستنتاج المباشر والربط بين المعطيات', titleEn: 'Straightforward Inferences', descAr: 'استنباط الدلالات غير المباشرة والعلاقات السببية بين الأفكار' },
+    { id: 'pirls_evaluate', code: 'PIRLS-EVAL', titleAr: 'تفسير وتكامل الأفكار وفحص وتقويم المحتوى', titleEn: 'Integrate, Interpret & Evaluate Content', descAr: 'نقد أسلوب الكاتب وتقييم ملاءمة الحجج والأفكار والأدلة' },
+    { id: 'pisa_realworld', code: 'PISA-LIT', titleAr: 'PISA: حل المشكلات في سياقات الحياة الواقعية', titleEn: 'PISA Real-World Problem Solving', descAr: 'تطبيق التفكير العلمي والرياضي على مواقف حياتية معاصرة ومحاكاة المشكلات' },
+  ],
+};
 
 export interface UploadedFile {
   id: string;

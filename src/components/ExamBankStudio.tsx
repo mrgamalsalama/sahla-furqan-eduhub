@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import {
-  FileQuestion, Sparkles, Loader2, AlertCircle, Award, CheckCircle2
+  FileQuestion, Sparkles, Loader2, AlertCircle, Award, CheckCircle2,
+  Layers, Edit3, HelpCircle
 } from 'lucide-react';
 import type {
-  LessonSettings, OutputType, GenerationResult
+  LessonSettings, OutputType, GenerationResult, StandardFramework
 } from '@/types';
-import { SUBJECT_OPTIONS, GRADES_AR, GRADES_EN, INTERNATIONAL_FRAMEWORKS } from '@/types';
+import {
+  SUBJECT_OPTIONS, GRADES_AR, GRADES_EN, INTERNATIONAL_FRAMEWORKS,
+  FRAMEWORK_SUB_CRITERIA
+} from '@/types';
 import { getLessonSettings, saveLessonSettings } from '@/lib/storage';
 import { generateContent } from '@/lib/gemini';
 import type { UILang } from '@/lib/i18n';
@@ -25,13 +29,38 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
       ...saved,
       lmsTarget: saved.lmsTarget || 'sahlah_cypher',
       standardFramework: saved.standardFramework || 'diagnostic_gap',
-      questionFormat: 'all-mcq',
+      questionFormat: saved.questionFormat || 'all-mcq',
+      selectedSubCriteria: saved.selectedSubCriteria || [],
+      customStandards: saved.customStandards || '',
     };
   });
 
   const [examType, setExamType] = useState<OutputType>('quiz');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Active framework
+  const activeFrameworkId = (settings.standardFramework || 'diagnostic_gap') as StandardFramework;
+  const activeFrameworkObj = INTERNATIONAL_FRAMEWORKS.find((fw) => fw.id === activeFrameworkId) || INTERNATIONAL_FRAMEWORKS[0];
+  const activeSubCriteria = FRAMEWORK_SUB_CRITERIA[activeFrameworkId] || [];
+
+  function handleToggleSubCriterion(criterionTitle: string) {
+    const current = settings.selectedSubCriteria || [];
+    const exists = current.includes(criterionTitle);
+    const updated = exists
+      ? current.filter((c) => c !== criterionTitle)
+      : [...current, criterionTitle];
+    setSettings({ ...settings, selectedSubCriteria: updated });
+  }
+
+  function handleSelectAllSubCriteria() {
+    const allTitles = activeSubCriteria.map((c) => `${c.titleAr} (${c.code})`);
+    setSettings({ ...settings, selectedSubCriteria: allTitles });
+  }
+
+  function handleClearSubCriteria() {
+    setSettings({ ...settings, selectedSubCriteria: [] });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,6 +70,7 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
     }
     setError(null);
     setLoading(true);
+
     const finalSettings: LessonSettings = {
       ...settings,
       contentLanguage: uiLang,
@@ -50,15 +80,16 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
     try {
       const result = await generateContent(finalSettings, examType, []);
       onOpenResult(result, examType);
-    } catch (err: any) {
-      setError(err?.message || (isAr ? 'حدث خطأ أثناء توليد الاختبار.' : 'Failed to generate assessment.'));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg || (isAr ? 'حدث خطأ أثناء توليد الاختبار.' : 'Failed to generate assessment.'));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-8 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-8 animate-fade-in" dir="rtl">
       {/* Header */}
       <div className="text-center mb-8">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 text-blue-900 text-xs font-bold border border-blue-200 mb-3 shadow-xs">
@@ -75,9 +106,9 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
+      <form onSubmit={handleSubmit} className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-7">
         {error && (
-          <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
+          <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-xs flex items-center gap-2.5 animate-shake">
             <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
             <span>{error}</span>
           </div>
@@ -92,7 +123,7 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
             <button
               type="button"
               onClick={() => setExamType('quiz')}
-              className={`p-4 rounded-xl border text-start transition-all ${
+              className={`p-4 rounded-2xl border text-start transition-all relative ${
                 examType === 'quiz'
                   ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/50 text-blue-950 font-bold shadow-sm'
                   : 'border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50/30 text-slate-700 shadow-sm hover:shadow-md'
@@ -110,7 +141,7 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
             <button
               type="button"
               onClick={() => setExamType('qti-exam')}
-              className={`p-4 rounded-xl border text-start transition-all ${
+              className={`p-4 rounded-2xl border text-start transition-all relative ${
                 examType === 'qti-exam'
                   ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/50 text-blue-950 font-bold shadow-sm'
                   : 'border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50/30 text-slate-700 shadow-sm hover:shadow-md'
@@ -128,7 +159,7 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
             <button
               type="button"
               onClick={() => setExamType('standardized-test')}
-              className={`p-4 rounded-xl border text-start transition-all ${
+              className={`p-4 rounded-2xl border text-start transition-all relative ${
                 examType === 'standardized-test'
                   ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/50 text-blue-950 font-bold shadow-sm'
                   : 'border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50/30 text-slate-700 shadow-sm hover:shadow-md'
@@ -147,50 +178,218 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
 
         {/* Dynamic International Assessment Frameworks Selection */}
         {examType === 'standardized-test' && (
-          <div className="bg-slate-50/80 rounded-2xl p-5 sm:p-6 border border-slate-200 space-y-4 animate-fade-in">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                <Award className="w-4 h-4 text-blue-700" />
+          <div className="bg-slate-50/90 rounded-3xl p-5 sm:p-7 border border-slate-200 space-y-6 animate-fade-in">
+            {/* Header info */}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/70 pb-3">
+              <span className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Award className="w-4 h-4 text-blue-700 shrink-0" />
                 <span>{isAr ? 'أطر القياس والتقييم الدولية المعتمدة:' : 'Accredited International Assessment Frameworks:'}</span>
               </span>
-              <span className="text-[11px] font-semibold text-teal-800 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-200">
-                {isAr ? '7 أطر قياس دولية' : '7 International Frameworks'}
+              <span className="text-[11px] font-bold text-teal-800 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
+                {isAr ? '7 أطر قياس دولية معتمدة' : '7 International Frameworks'}
               </span>
             </div>
 
+            {/* 7 Frameworks Grid with Text-Truncation Fixed & Clear Active Highlight */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {INTERNATIONAL_FRAMEWORKS.map((fw) => {
-                const isSelected = (settings.standardFramework || 'diagnostic_gap') === fw.id;
+                const isSelected = activeFrameworkId === fw.id;
                 return (
                   <button
                     key={fw.id}
                     type="button"
-                    onClick={() => setSettings({ ...settings, standardFramework: fw.id })}
-                    className={`p-4 rounded-xl border text-start transition-all relative ${
+                    onClick={() => {
+                      setSettings({
+                        ...settings,
+                        standardFramework: fw.id,
+                        selectedSubCriteria: [], // Reset sub-criteria when framework changes
+                      });
+                    }}
+                    className={`p-4 rounded-2xl border text-start transition-all relative flex flex-col justify-between ${
                       isSelected
-                        ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/50 text-blue-950 font-bold shadow-sm'
-                        : 'border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50/30 text-slate-700 shadow-sm hover:shadow-md'
+                        ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/80 text-blue-950 font-bold shadow-md'
+                        : 'border-slate-200 bg-white hover:border-blue-400 hover:bg-blue-50/30 text-slate-700 shadow-2xs hover:shadow-sm'
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-bold truncate max-w-[190px]">
-                        {isAr ? fw.titleAr : fw.titleEn}
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-md bg-teal-50 text-teal-800 border border-teal-200 font-bold shrink-0">
-                        {fw.badge}
-                      </span>
+                    <div>
+                      {/* Top Bar with Title, Full Non-Truncated Badge, and Active Checkmark */}
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <span className="text-xs font-bold leading-snug text-slate-900">
+                          {isAr ? fw.titleAr : fw.titleEn}
+                        </span>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200 font-bold whitespace-nowrap">
+                            {fw.badge}
+                          </span>
+                          {isSelected && (
+                            <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+                          )}
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] text-slate-600 font-normal leading-relaxed mb-3">
+                        {isAr ? fw.descAr : fw.descEn}
+                      </p>
                     </div>
-                    <p className="text-[11px] text-slate-600 font-normal line-clamp-2 leading-relaxed">
-                      {isAr ? fw.descAr : fw.descEn}
-                    </p>
+
+                    {/* Active Footer Ribbon */}
+                    {isSelected && (
+                      <div className="pt-2 border-t border-blue-200/80 flex items-center justify-between text-[10px] font-bold text-blue-700">
+                        <span>الإطار المعتمد حالياً</span>
+                        <span>نشط ✓</span>
+                      </div>
+                    )}
                   </button>
                 );
               })}
             </div>
+
+            {/* Sub-Criteria Drilldown Panel */}
+            {activeSubCriteria.length > 0 && (
+              <div className="p-5 rounded-2xl bg-white border border-blue-200 shadow-2xs space-y-4 animate-scale-in">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-blue-600" />
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-extrabold text-blue-950">
+                        {isAr
+                          ? `تخصيص المعايير والمؤشرات الفرعية لـ (${activeFrameworkObj.titleAr})`
+                          : `Specialized Sub-criteria for (${activeFrameworkObj.titleEn})`}
+                      </h4>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        حدد المؤشرات الدقيقة التي ترغب في توجيه أسئلة الاختبار نحوها (يمكنك اختيار معيار أو أكثر):
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={handleSelectAllSubCriteria}
+                      className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-bold hover:bg-blue-100 transition text-[11px]"
+                    >
+                      تحديد الكل
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClearSubCriteria}
+                      className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-bold hover:bg-slate-200 transition text-[11px]"
+                    >
+                      إلغاء التحديد
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {activeSubCriteria.map((sub) => {
+                    const labelWithCode = `${sub.titleAr} (${sub.code})`;
+                    const isChecked = (settings.selectedSubCriteria || []).includes(labelWithCode);
+                    return (
+                      <label
+                        key={sub.id}
+                        className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition ${
+                          isChecked
+                            ? 'bg-blue-50/70 border-blue-500 shadow-2xs'
+                            : 'bg-slate-50/60 border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => handleToggleSubCriterion(labelWithCode)}
+                          className="mt-1 w-4 h-4 text-blue-600 rounded-md border-slate-300 focus:ring-blue-500 shrink-0"
+                        />
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-900">{sub.titleAr}</span>
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-800 font-bold">
+                              {sub.code}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                            {sub.descAr}
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Custom Teacher Standards Card */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                  <Edit3 className="w-4 h-4 text-indigo-600" />
+                  <span>وضع معايير أو نواتج تعلم مخصصة من المعلم (اختياري):</span>
+                </label>
+                <span className="text-[10px] text-slate-500 font-semibold bg-slate-100 px-2 py-0.5 rounded-md">
+                  تضمين خاص
+                </span>
+              </div>
+              <textarea
+                rows={2}
+                value={settings.customStandards || ''}
+                onChange={(e) => setSettings({ ...settings, customStandards: e.target.value })}
+                placeholder="أدخل هنا أي معايير إضافية أو كفايات مدرسية خاصة ترغب في إلزام النموذج ببناء أسئلة ومصفوفة عليها..."
+                className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 bg-slate-50/50 focus:bg-white"
+              />
+            </div>
           </div>
         )}
 
-        {/* 2. LMS Target Platform Selector */}
+        {/* 2. Question Format Selector: All MCQ vs Mixed */}
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5">
+            <HelpCircle className="w-3.5 h-3.5 text-blue-600" />
+            <span>{isAr ? 'صيغة ونوعية الأسئلة في الاختبار:' : 'Question Format Type:'}</span>
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button
+              type="button"
+              onClick={() => setSettings({ ...settings, questionFormat: 'all-mcq' })}
+              className={`p-4 rounded-2xl border text-start transition-all ${
+                (settings.questionFormat || 'all-mcq') === 'all-mcq'
+                  ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/60 text-blue-950 font-bold shadow-xs'
+                  : 'border-slate-200 bg-white hover:border-blue-400 text-slate-700'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs sm:text-sm font-bold">اختيار من متعدد فقط (All MCQ)</span>
+                {(settings.questionFormat || 'all-mcq') === 'all-mcq' && (
+                  <CheckCircle2 className="w-4 h-4 text-blue-600" />
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 font-normal leading-relaxed">
+                جميع أسئلة الاختبار اختيار من متعدد (4 خيارات مع تحديد وتبرير الإجابة الصحيحة)، مثالية للتصحيح الإلكتروني الفوري في LMS.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSettings({ ...settings, questionFormat: 'mixed' })}
+              className={`p-4 rounded-2xl border text-start transition-all ${
+                settings.questionFormat === 'mixed'
+                  ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/60 text-blue-950 font-bold shadow-xs'
+                  : 'border-slate-200 bg-white hover:border-blue-400 text-slate-700'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs sm:text-sm font-bold">اختبار شامل للأنواع المختلفة (Comprehensive Mixed)</span>
+                {settings.questionFormat === 'mixed' && (
+                  <CheckCircle2 className="w-4 h-4 text-blue-600" />
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 font-normal leading-relaxed">
+                تنوع متكامل: اختيار من متعدد، صواب وخطأ، أسئلة مقالية استيعابية قصيرة، ومهام كتابية/تحليلية مع سلالم التقدير اللفظي (Rubrics).
+              </p>
+            </button>
+          </div>
+        </div>
+
+        {/* 3. LMS Target Platform Selector */}
         <div>
           <label className="block text-xs font-bold text-slate-700 mb-2">
             {isAr ? 'منصة إدارة التعلم المستهدفة لحزمة QTI ZIP:' : 'Target LMS Engine:'}
@@ -199,10 +398,10 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
             <button
               type="button"
               onClick={() => setSettings({ ...settings, lmsTarget: 'sahlah_cypher' })}
-              className={`p-4 rounded-xl border text-start transition-all ${
+              className={`p-4 rounded-2xl border text-start transition-all ${
                 (settings.lmsTarget || 'sahlah_cypher') === 'sahlah_cypher'
-                  ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/50 text-blue-950 font-bold shadow-sm'
-                  : 'border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50/30 text-slate-700 shadow-sm'
+                  ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/50 text-blue-950 font-bold shadow-xs'
+                  : 'border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50/30 text-slate-700 shadow-2xs'
               }`}
             >
               <div className="font-bold text-xs mb-0.5 text-blue-950">أكاديمية سهلة الدولية (QTI v1.2 ZIP)</div>
@@ -212,10 +411,10 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
             <button
               type="button"
               onClick={() => setSettings({ ...settings, lmsTarget: 'furqan_canvas' })}
-              className={`p-4 rounded-xl border text-start transition-all ${
+              className={`p-4 rounded-2xl border text-start transition-all ${
                 settings.lmsTarget === 'furqan_canvas'
-                  ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/50 text-blue-950 font-bold shadow-sm'
-                  : 'border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50/30 text-slate-700 shadow-sm'
+                  ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/50 text-blue-950 font-bold shadow-xs'
+                  : 'border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50/30 text-slate-700 shadow-2xs'
               }`}
             >
               <div className="font-bold text-xs mb-0.5 text-blue-950">مدرسة الفرقان العالمية (QTI v2.1 ZIP)</div>
@@ -224,16 +423,16 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
           </div>
         </div>
 
-        {/* Basic fields */}
+        {/* 4. Subject, Grade & Title fields */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
               {isAr ? 'المادة الدراسية:' : 'Subject:'}
             </label>
             <select
               value={settings.subject}
               onChange={(e) => setSettings({ ...settings, subject: e.target.value })}
-              className="w-full text-xs px-3 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500"
+              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 font-medium text-slate-800"
             >
               <option value="">{isAr ? '-- اختر المادة --' : 'Select Subject'}</option>
               {SUBJECT_OPTIONS.map((sub) => (
@@ -245,13 +444,13 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
               {isAr ? 'الصف الدراسي:' : 'Grade Level:'}
             </label>
             <select
               value={settings.grade}
               onChange={(e) => setSettings({ ...settings, grade: e.target.value })}
-              className="w-full text-xs px-3 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500"
+              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 font-medium text-slate-800"
             >
               <option value="">{isAr ? '-- اختر الصف --' : 'Select Grade'}</option>
               {grades.map((g) => (
@@ -261,7 +460,7 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
           </div>
 
           <div className="sm:col-span-2">
-            <label className="block text-xs font-bold text-slate-700 mb-1">
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
               {isAr ? 'عنوان الاختبار أو موضوع التقييم:' : 'Exam Title / Topics Covered:'}
             </label>
             <input
@@ -269,14 +468,14 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
               value={settings.lessonTitle}
               onChange={(e) => setSettings({ ...settings, lessonTitle: e.target.value })}
               placeholder={isAr ? 'مثال: الاختبار الفصلي الشامل - النحو والبلاغة' : 'e.g. Midterm Examination'}
-              className="w-full text-xs px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500"
+              className="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 font-medium text-slate-800"
             />
           </div>
         </div>
 
-        {/* Source Text for reading comprehension or passage-based items */}
+        {/* 5. Source Text for reading comprehension or passage-based items */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">
+          <label className="block text-xs font-bold text-slate-700 mb-1.5">
             {isAr ? 'النص القرائي أو المادة العلمية المرجعية لبناء الأسئلة عليها (اختياري):' : 'Source Passage or Reading Text (Optional):'}
           </label>
           <textarea
@@ -284,7 +483,7 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
             value={settings.sourceText || ''}
             onChange={(e) => setSettings({ ...settings, sourceText: e.target.value })}
             placeholder={isAr ? 'الصق هنا نص القراءة أو المقال أو المسألة العلمية إذا كنت تريد بناء أسئلة الاختبار عليها حصراً...' : 'Paste passage text if questions should be derived from it...'}
-            className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500"
+            className="w-full text-xs p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
@@ -292,17 +491,17 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3.5 px-6 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-sm shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+          className="w-full py-4 px-6 rounded-2xl bg-blue-900 hover:bg-blue-800 text-white font-extrabold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2.5 disabled:opacity-50"
         >
           {loading ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
-              <span>{isAr ? 'جاري بناء بنك الأسئلة وتوليد حزمة QTI مع التشكيل التام...' : 'Generating assessment & QTI package...'}</span>
+              <span>{isAr ? 'جاري بناء بنك الأسئلة ومصفوفة مؤشرات الأداء وتوليد حزمة QTI...' : 'Generating assessment & QTI package...'}</span>
             </>
           ) : (
             <>
-              <Sparkles className="w-5 h-5 text-teal-400" />
-              <span>{isAr ? 'توليد الاختبار وحزمة QTI الآن' : 'Generate Assessment & QTI Now'}</span>
+              <Sparkles className="w-5 h-5 text-teal-300" />
+              <span>{isAr ? 'توليد الاختبار ومصفوفة مؤشرات الأداء وحزمة QTI الآن' : 'Generate Assessment & QTI Now'}</span>
             </>
           )}
         </button>
