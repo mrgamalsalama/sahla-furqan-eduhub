@@ -82,6 +82,7 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
   // Presenter Modal & Exports
   const [isPresenting, setIsPresenting] = useState(false);
   const [exportingPptx, setExportingPptx] = useState(false);
+  const [exportSuccess, setExportSuccess] = useState(false);
   const [savedFeedback, setSavedFeedback] = useState(false);
 
   const themeConfig = GAMMA_THEMES[selectedTheme] || GAMMA_THEMES.navy;
@@ -135,11 +136,28 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
 
     try {
       const result = await generateContent(finalSettings, 'slides', []);
-      const parsed = parseHtmlToGammaSlides(
-        result.htmlContent,
+      const rawHtml = result.contentHtml || (result as unknown as { htmlContent?: string }).htmlContent || '';
+      let parsed = parseHtmlToGammaSlides(
+        rawHtml,
         settings.subject,
         settings.lessonTitle
       );
+      if (parsed.length === 0) {
+        parsed = [
+          {
+            id: 'slide_1',
+            index: 1,
+            title: settings.lessonTitle || 'العرض التقديمي التفاعلي',
+            category: 'الافتتاحية والأهداف',
+            layout: 'hero',
+            contentHtml: rawHtml,
+            points: ['الأهداف التعليمية العامة والخاصة', 'المفاهيم المحورية للدرس', 'أنشطة وتطبيقات صفية'],
+            teacherScript: 'نبدأ بالتهيئة الحافزة وعرض نواتج التعلم المتوقعة.',
+            fontFamily: 'Cairo',
+            align: 'right',
+          },
+        ];
+      }
       setSlides(parsed);
       setActiveSlideIndex(0);
       setIsDeckReady(true);
@@ -259,16 +277,23 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
 
   // Direct PPTX export
   async function handleExportPptx() {
-    if (slides.length === 0) return;
+    if (slides.length === 0) {
+      setError(isAr ? 'لا توجد شرائح حالياً لتصديرها. يرجى توليد العرض أولاً أو إضافة شرائح.' : 'No slides available to export. Please generate presentation first.');
+      return;
+    }
+    setError(null);
     setExportingPptx(true);
     try {
       const schoolName = settings.institution === 'furqan'
         ? 'مدارس الفرقان العالمية'
         : 'أكاديمية سهلة الدولية';
       await exportGammaSlidesToPptx(slides, selectedTheme, settings.lessonTitle || 'عرض_تقديمي_Gamma', schoolName);
-    } catch (err) {
+      setExportSuccess(true);
+      setTimeout(() => setExportSuccess(false), 3500);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error('PPTX export error:', err);
-      alert('حدث خطأ أثناء تصدير ملف PowerPoint، يرجى المحاولة ثانية.');
+      setError(isAr ? `حدث خطأ أثناء تنزيل ملف PowerPoint: ${msg}` : `Failed to export PowerPoint: ${msg}`);
     } finally {
       setExportingPptx(false);
     }
@@ -335,10 +360,28 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
                 type="button"
                 onClick={handleExportPptx}
                 disabled={exportingPptx}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs sm:text-sm font-extrabold shadow-md transition disabled:opacity-50"
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-slate-950 text-xs sm:text-sm font-extrabold shadow-md transition disabled:opacity-50 ${
+                  exportSuccess
+                    ? 'bg-emerald-400 hover:bg-emerald-300 text-emerald-950'
+                    : 'bg-amber-500 hover:bg-amber-400'
+                }`}
               >
-                <Download className="w-4 h-4" />
-                <span>{exportingPptx ? 'جارٍ التصدير...' : 'تنزيل بوربوينت (.pptx)'}</span>
+                {exportingPptx ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>جارٍ تجهيز وتنزيل الملف...</span>
+                  </>
+                ) : exportSuccess ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>تم التنزيل بنجاح! ✓</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    <span>تنزيل بوربوينت (.pptx)</span>
+                  </>
+                )}
               </button>
             </div>
           )}
@@ -663,10 +706,28 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
                   type="button"
                   onClick={handleExportPptx}
                   disabled={exportingPptx}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-extrabold shadow-sm transition disabled:opacity-50"
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-slate-950 text-xs font-extrabold shadow-sm transition disabled:opacity-50 ${
+                    exportSuccess
+                      ? 'bg-emerald-400 hover:bg-emerald-300 text-emerald-950'
+                      : 'bg-amber-500 hover:bg-amber-400'
+                  }`}
                 >
-                  <Download className="w-4 h-4" />
-                  <span>{exportingPptx ? 'جارٍ بناء ملف البوربوينت...' : 'تنزيل بوربوينت (.pptx)'}</span>
+                  {exportingPptx ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>جارٍ التنزيل...</span>
+                    </>
+                  ) : exportSuccess ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>تم التنزيل بنجاح! ✓</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      <span>تنزيل بوربوينت (.pptx)</span>
+                    </>
+                  )}
                 </button>
 
                 <button

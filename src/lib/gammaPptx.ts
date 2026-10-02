@@ -1,4 +1,5 @@
 import pptxgen from 'pptxgenjs';
+import { saveAs } from 'file-saver';
 import { getRecommendedImageForSlide } from './educationalImages';
 
 export type GammaThemeId = 'obsidian' | 'emerald' | 'navy' | 'ivory' | 'sunset';
@@ -253,6 +254,35 @@ export function parseHtmlToGammaSlides(
 }
 
 /**
+ * Safely fetches an image and converts to a Base64 data URL.
+ * If CORS, network, or timeout occurs, gracefully returns null instead of throwing.
+ */
+async function fetchImageAsBase64Safe(url?: string): Promise<string | null> {
+  if (!url || typeof window === 'undefined') return null;
+  if (url.startsWith('data:image/')) return url;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3500);
+    const res = await fetch(url, { signal: controller.signal, mode: 'cors' });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        resolve(typeof reader.result === 'string' ? reader.result : null);
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch (err) {
+    console.warn('Image fetch failed (CORS or network), continuing without image:', err);
+    return null;
+  }
+}
+
+/**
  * Export Gamma Slides directly to genuine Microsoft PowerPoint (.pptx) file
  * with embedded real educational images, custom formatting, and teacher notes.
  */
@@ -262,6 +292,10 @@ export async function exportGammaSlidesToPptx(
   title = 'عرض تقديمي تفاعلي',
   schoolName = 'أكاديمية سهلة & مدارس الفرقان'
 ): Promise<void> {
+  if (!slides || slides.length === 0) {
+    throw new Error('لا توجد شرائح لتصديرها');
+  }
+
   const theme = GAMMA_THEMES[themeId] || GAMMA_THEMES.navy;
   const pptx = new pptxgen();
 
@@ -271,20 +305,26 @@ export async function exportGammaSlidesToPptx(
   pptx.company = schoolName;
   pptx.title = title;
 
-  for (const slide of slides) {
+  // Pre-load all slide images into safe Base64 strings in parallel to avoid CORS failures in pptxgenjs
+  const imageBase64List = await Promise.all(
+    slides.map((s) => (s.imageUrl ? fetchImageAsBase64Safe(s.imageUrl) : Promise.resolve(null)))
+  );
+
+  slides.forEach((slide, idx) => {
     const s = pptx.addSlide();
     const fontFace = slide.fontFamily || 'Cairo';
     const isRtl = slide.align !== 'left';
+    const base64Img = imageBase64List[idx];
 
     // 1. HERO COVER SLIDE
     if (slide.layout === 'hero') {
       s.background = { color: theme.bgHex };
 
-      // Left Image / Visual Card (if present)
-      if (slide.imageUrl) {
+      // Left Image / Visual Card (if present and safely loaded)
+      if (base64Img) {
         try {
           s.addImage({
-            path: slide.imageUrl,
+            data: base64Img,
             x: '6%',
             y: '18%',
             w: '38%',
@@ -292,12 +332,12 @@ export async function exportGammaSlidesToPptx(
             rounding: true,
           });
         } catch {
-          // If image fails to load, gracefully continue
+          // Gracefully continue
         }
       }
 
-      const textWidth = slide.imageUrl ? '46%' : '84%';
-      const textX = slide.imageUrl ? '48%' : '8%';
+      const textWidth = base64Img ? '46%' : '84%';
+      const textX = base64Img ? '48%' : '8%';
 
       // Top school badge
       s.addText(schoolName, {
@@ -389,15 +429,15 @@ export async function exportGammaSlidesToPptx(
       });
 
       // Content with or without Image
-      const hasImg = Boolean(slide.imageUrl);
+      const hasImg = Boolean(base64Img);
       const textW = hasImg ? '50%' : '84%';
       const textX = hasImg ? '44%' : '8%';
 
       // Embed Image on Left
-      if (slide.imageUrl) {
+      if (base64Img) {
         try {
           s.addImage({
-            path: slide.imageUrl,
+            data: base64Img,
             x: '6%',
             y: '22%',
             w: '34%',
@@ -419,7 +459,7 @@ export async function exportGammaSlidesToPptx(
             });
           }
         } catch {
-          // Fallback if image path fails
+          // Gracefully continue
         }
       }
 
@@ -453,8 +493,26 @@ export async function exportGammaSlidesToPptx(
     if (slide.teacherScript) {
       s.addNotes(slide.teacherScript);
     }
-  }
+  });
 
-  const safeFileName = `${title.replace(/[\/\\:*?"<>|]/g, '_')}_Gamma_Deck.pptx`;
-  await pptx.writeFile({ fileName: safeFileName });
+  const safeTitle = (title || 'عرض_تقديمي_Gamma')
+    .trim()
+    .replace(/[\/\\:*?"<>|]/g, '_')
+    .slice(0, 80);
+  const safeFileName = `${safeTitle}.pptx`;
+
+  try {
+    const output = await pptx.write({ outputType: 'blob' });
+    const blob =
+      output instanceof Blob
+        ? output
+        : new Blob([output as any], {
+            type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          });
+
+    saveAs(blob, safeFileName);
+  } catch (blobErr) {
+    console.warn('saveAs blob write failed, falling back to pptx.writeFile:', blobErr);
+    await pptx.writeFile({ fileName: safeFileName });
+  }
 }

@@ -600,14 +600,28 @@ ${itemsXml}    </section>
   async function handleExportPPTX() {
     try {
       const rawHtml = editorRef.current?.innerHTML || '';
-      const slides = parseHtmlToGammaSlides(rawHtml);
+      let slides = parseHtmlToGammaSlides(rawHtml);
+      if (slides.length === 0) {
+        slides = [
+          {
+            id: 'slide_1',
+            index: 1,
+            title: currentTitle || 'عرض تقديمي',
+            category: 'الافتتاحية والأهداف',
+            layout: 'hero',
+            contentHtml: rawHtml,
+            points: ['الأهداف التعليمية الأساسية', 'المفاهيم المحورية للدرس'],
+            fontFamily: 'Cairo',
+            align: 'right',
+          },
+        ];
+      }
       const schoolName = settings?.institution === 'furqan'
         ? 'مدارس الفرقان العالمية'
         : 'أكاديمية سهلة الدولية';
       await exportGammaSlidesToPptx(slides, 'navy', currentTitle || 'عرض_تقديمي', schoolName);
     } catch (err) {
       console.error('PPTX Export Error:', err);
-      alert('حدث خطأ أثناء تصدير ملف البوربوينت، يرجى المحاولة ثانية.');
     }
   }
 
