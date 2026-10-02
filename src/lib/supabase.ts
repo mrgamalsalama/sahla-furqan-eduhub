@@ -1,8 +1,12 @@
 import { createClient, type User } from '@supabase/supabase-js';
 import type { SavedLesson, LessonSettings, ResourceComment, OutputType, InstitutionId } from '@/types';
 
-// Supabase configuration
-const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string) || 'https://opukajcwunqrxtdeikcs.supabase.co';
+// Supabase configuration with URL normalization (strips trailing /rest/v1 and slashes)
+const rawUrl = (import.meta.env.VITE_SUPABASE_URL as string) || 'https://opukajcwunqrxtdeikcs.supabase.co';
+export const supabaseUrl = rawUrl
+  .trim()
+  .replace(/\/rest\/v1\/?$/, '')
+  .replace(/\/+$/, '');
 const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || '';
 
 export const isSupabaseConfigured = (): boolean => {
@@ -28,23 +32,101 @@ export interface TeacherProfile {
   name: string;
   avatarUrl?: string;
   institution: InstitutionId;
+  schoolName?: string;
+}
+
+export function translateAuthError(msg: string): string {
+  const lower = msg.toLowerCase();
+  if (lower.includes('invalid login credentials') || lower.includes('invalid credentials')) {
+    return 'بيانات الدخول غير صحيحة. يرجى التحقق من البريد الإلكتروني وكلمة المرور.';
+  }
+  if (lower.includes('already registered') || lower.includes('user already exists')) {
+    return 'هذا البريد الإلكتروني مسجل بالفعل. يرجى تسجيل الدخول مباشرة.';
+  }
+  if (lower.includes('password should be at least')) {
+    return 'يجب أن تتكون كلمة المرور من 6 أحرف على الأقل.';
+  }
+  if (lower.includes('email not confirmed')) {
+    return 'البريد الإلكتروني بحاجة لتأكيد أو تفعيل. يرجى مراجعة بريدك الإلكتروني.';
+  }
+  if (lower.includes('rate limit') || lower.includes('too many requests')) {
+    return 'تم إجراء محاولات متكررة. يرجى الانتظار قليلاً ثم المحاولة مرة أخرى.';
+  }
+  if (lower.includes('valid email')) {
+    return 'يرجى إدخال عنوان بريد إلكتروني صحيح.';
+  }
+  return msg;
+}
+
+export async function signInWithEmail(
+  email: string,
+  password: string
+): Promise<{ user: User | null; error: Error | null }> {
+  try {
+    if (!isSupabaseConfigured()) {
+      return {
+        user: null,
+        error: new Error('خدمة المزامنة السحابية غير مهيأة بعد. تأكد من تفعيل VITE_SUPABASE_ANON_KEY.'),
+      };
+    }
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (error) {
+      return { user: null, error: new Error(translateAuthError(error.message)) };
+    }
+    return { user: data.user, error: null };
+  } catch (err: unknown) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    return { user: null, error };
+  }
+}
+
+export async function signUpWithEmail(
+  email: string,
+  password: string,
+  fullName: string,
+  school: string
+): Promise<{ user: User | null; error: Error | null }> {
+  try {
+    if (!isSupabaseConfigured()) {
+      return {
+        user: null,
+        error: new Error('خدمة المزامنة السحابية غير مهيأة بعد. تأكد من تفعيل VITE_SUPABASE_ANON_KEY.'),
+      };
+    }
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        data: {
+          full_name: fullName.trim(),
+          school: school,
+        },
+      },
+    });
+    if (error) {
+      return { user: null, error: new Error(translateAuthError(error.message)) };
+    }
+    return { user: data.user, error: null };
+  } catch (err: unknown) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    return { user: null, error };
+  }
 }
 
 export async function signInWithGoogle(): Promise<{ error: Error | null }> {
   try {
     if (!isSupabaseConfigured()) {
       return {
-        error: new Error('Supabase is not configured yet. Please provide VITE_SUPABASE_ANON_KEY in your environment variables.'),
+        error: new Error('خدمة المزامنة السحابية غير مهيأة بعد.'),
       };
     }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
       },
     });
     return { error };
@@ -79,11 +161,14 @@ export function extractProfileFromUser(user: User): TeacherProfile {
   const email = user.email || '';
   const name = metadata.full_name || metadata.name || email.split('@')[0] || 'المعلم المبدع';
   const avatarUrl = metadata.avatar_url || metadata.picture;
+  const schoolMeta = (metadata.school || '').toLowerCase();
   
-  // Heuristic school affiliation
+  // School affiliation
   let institution: InstitutionId = 'sahlah';
-  if (email.toLowerCase().includes('furqan') || (metadata.school && metadata.school.includes('furqan'))) {
+  if (schoolMeta.includes('furqan') || email.toLowerCase().includes('furqan')) {
     institution = 'furqan';
+  } else if (schoolMeta.includes('sahlah') || email.toLowerCase().includes('sahlah')) {
+    institution = 'sahlah';
   }
 
   return {
@@ -92,6 +177,7 @@ export function extractProfileFromUser(user: User): TeacherProfile {
     name,
     avatarUrl,
     institution,
+    schoolName: metadata.school || (institution === 'furqan' ? 'مدارس الفرقان العالمية' : 'أكاديمية سهلة الدولية'),
   };
 }
 

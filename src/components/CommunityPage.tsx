@@ -208,7 +208,7 @@ export default function CommunityPage({
                 {isAr ? 'شارك أعمالك مع الزملاء' : 'Share with Colleagues'}
               </div>
               <p className="text-xs text-blue-100 mb-3">
-                {isAr ? 'سجل دخولك عبر Google لنشر دروسك في المكتبة العامة وحفظها سحابياً.' : 'Sign in with Google to publish to the community and sync across devices.'}
+                {isAr ? 'سجل دخولك أو أنشئ حسابك لنشر دروسك في المكتبة العامة وحفظها سحابياً.' : 'Sign in or register to publish to the community and sync across devices.'}
               </p>
               <button
                 type="button"
@@ -216,7 +216,7 @@ export default function CommunityPage({
                 className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-blue-950 font-bold text-xs rounded-xl shadow-md hover:bg-blue-50 transition"
               >
                 <LogIn className="w-4 h-4 text-blue-900" />
-                <span>{isAr ? 'تسجيل الدخول عبر Google' : 'Sign in with Google'}</span>
+                <span>{isAr ? 'تسجيل الدخول / حساب جديد' : 'Sign In / Register'}</span>
               </button>
             </div>
           )}
@@ -537,7 +537,7 @@ export default function CommunityPage({
                     onClick={onSignIn}
                     className="px-4 py-1.5 rounded-xl bg-blue-900 text-white text-xs font-bold hover:bg-blue-800 transition"
                   >
-                    {isAr ? 'تسجيل الدخول عبر Google' : 'Sign in with Google'}
+                    {isAr ? 'تسجيل الدخول / حساب جديد' : 'Sign In / Register'}
                   </button>
                 </div>
               )}

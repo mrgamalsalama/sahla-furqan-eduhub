@@ -117,7 +117,7 @@ export default function LibraryPage({
     e.stopPropagation();
 
     if (!user) {
-      alert(isAr ? 'يرجى تسجيل الدخول بحساب Google لتتمكن من النشر في مجتمع المعلمين.' : 'Please sign in with Google to publish to the community.');
+      alert(isAr ? 'يرجى تسجيل الدخول أو إنشاء حساب لتتمكن من النشر في مجتمع المعلمين.' : 'Please sign in to publish to the community.');
       onSignIn?.();
       return;
     }
@@ -255,8 +255,8 @@ export default function LibraryPage({
               </h4>
               <p className="text-xs text-slate-600 font-medium">
                 {isAr
-                  ? 'يمكنك تسجيل الدخول بحساب Google لحفظ أعمالك سحابياً والوصول إليها من أي متصفح، ومشاركتها مع زملاء المهنة في المكتبة العامة.'
-                  : 'Sign in with Google to sync across browsers and share quality resources with fellow educators.'}
+                  ? 'يمكنك تسجيل الدخول أو إنشاء حسابك لحفظ أعمالك سحابياً والوصول إليها من أي متصفح، ومشاركتها مع زملائك في المكتبة العامة.'
+                  : 'Sign in or register to sync across browsers and share quality resources with fellow educators.'}
               </p>
             </div>
           </div>
@@ -265,8 +265,8 @@ export default function LibraryPage({
             onClick={onSignIn}
             className="shrink-0 px-4 py-2 bg-blue-900 hover:bg-blue-800 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-2"
           >
-            <LogIn className="w-4 h-4" />
-            <span>{isAr ? 'تسجيل الدخول عبر Google' : 'Sign in with Google'}</span>
+            <LogIn className="w-4 h-4 text-teal-300" />
+            <span>{isAr ? 'تسجيل الدخول / حساب جديد' : 'Sign In / Register'}</span>
           </button>
         </div>
       )}

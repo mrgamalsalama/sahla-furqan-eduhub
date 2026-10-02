@@ -4,6 +4,7 @@ import HomePage from '@/components/HomePage';
 import EditorPage from '@/components/EditorPage';
 import LibraryPage from '@/components/LibraryPage';
 import CommunityPage from '@/components/CommunityPage';
+import AuthModal from '@/components/AuthModal';
 import LessonPlanStudio from '@/components/LessonPlanStudio';
 import WorksheetStudio from '@/components/WorksheetStudio';
 import PresentationStudio from '@/components/PresentationStudio';
@@ -14,7 +15,7 @@ import BenchmarkPage from '@/components/BenchmarkPage';
 import type { View, OutputType, GenerationResult, SavedLesson } from '@/types';
 import { getUILang, saveUILang } from '@/lib/i18n';
 import type { UILang } from '@/lib/i18n';
-import { getCurrentUser, signInWithGoogle, signOut, supabase } from '@/lib/supabase';
+import { getCurrentUser, signOut, supabase } from '@/lib/supabase';
 import type { User } from '@supabase/supabase-js';
 
 interface EditorState {
@@ -28,6 +29,8 @@ const VIEW_STORAGE_KEY = 'sahlah_furqan_current_view';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
 
   useEffect(() => {
     getCurrentUser().then((u) => setUser(u));
@@ -41,8 +44,9 @@ export default function App() {
     };
   }, []);
 
-  const handleSignIn = async () => {
-    await signInWithGoogle();
+  const handleOpenAuthModal = (tab: 'signin' | 'signup' = 'signin') => {
+    setAuthModalTab(tab);
+    setAuthModalOpen(true);
   };
 
   const handleSignOut = async () => {
@@ -139,7 +143,7 @@ export default function App() {
         uiLang={uiLang}
         onToggleLang={handleToggleLang}
         user={user}
-        onSignIn={handleSignIn}
+        onSignIn={() => handleOpenAuthModal('signin')}
         onSignOut={handleSignOut}
       />
 
@@ -209,7 +213,7 @@ export default function App() {
             editingLesson={editorState.editingLesson}
             uiLang={uiLang}
             user={user}
-            onSignIn={handleSignIn}
+            onSignIn={() => handleOpenAuthModal('signin')}
           />
         )}
 
@@ -218,7 +222,7 @@ export default function App() {
             onOpenLesson={handleOpenLesson}
             uiLang={uiLang}
             user={user}
-            onSignIn={handleSignIn}
+            onSignIn={() => handleOpenAuthModal('signin')}
           />
         )}
 
@@ -227,7 +231,7 @@ export default function App() {
             onOpenLesson={handleOpenLesson}
             uiLang={uiLang}
             user={user}
-            onSignIn={handleSignIn}
+            onSignIn={() => handleOpenAuthModal('signin')}
           />
         )}
       </main>
@@ -242,6 +246,17 @@ export default function App() {
           </p>
         </div>
       </footer>
+
+      {/* Direct Email/Password Authentication & Registration Modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onSuccess={(u) => {
+          setUser(u);
+          setAuthModalOpen(false);
+        }}
+        defaultTab={authModalTab}
+      />
     </div>
   );
 }
