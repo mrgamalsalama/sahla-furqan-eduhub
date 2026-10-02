@@ -10,6 +10,23 @@ export interface QtiPackageOptions {
   grade?: string;
 }
 
+// تنظيف وتجريد أي شوائب أو علامات CDATA أو Markdown مكسورة
+function sanitizeRawXml(raw: string): string {
+  let cleaned = raw.trim();
+  // إزالة وسوم كتل الماركداون
+  cleaned = cleaned.replace(/^```(?:xml)?\s*/i, '').replace(/```$/i, '').trim();
+  // إزالة وسوم الحاويات النصية إن وجدت
+  cleaned = cleaned.replace(/<div id="qti-xml-payload"[^>]*>/gi, '').replace(/<\/div>/gi, '');
+  // تنظيف علامات CDATA التالفة أو المسبوقة بتعليقات مهملة
+  cleaned = cleaned.replace(/<!--\[CDATA\[/gi, '');
+  cleaned = cleaned.replace(/<!\[CDATA\[/gi, '');   cleaned = cleaned.replace(/\]\]>/gi, '');
+  cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, (match) => {
+    // الحفاظ على تعليقات أرقام الأسئلة مثل <!-- السؤال 1 --> وإزالة التعليقات المشبوهة
+    return match.includes('<questestinterop') ? '' : match;
+  });
+  return cleaned.trim();
+}
+
 // Convert QTI 2.1 item to QTI 1.2 item
 function convertQti21To12(qti21Xml: string): string {
   const itemMatches = qti21Xml.match(/<assessmentItem[\s\S]*?<\/assessmentItem>/gi);
@@ -19,7 +36,7 @@ function convertQti21To12(qti21Xml: string): string {
 
   const items12 = itemMatches.map((item, index) => {
     const identMatch = item.match(/identifier="([^"]+)"/i);
-    const qIdent = identMatch ? identMatch[1] : `Q_${index + 1}`;
+    const qIdent = identMatch ? identMatch[1] : `Q_${String(index + 1).padStart(2, '0')}`;
     
     const promptMatch = item.match(/<prompt>([\s\S]*?)<\/prompt>/i);
     const prompt = promptMatch ? promptMatch[1].trim() : 'سؤال';
@@ -35,10 +52,13 @@ function convertQti21To12(qti21Xml: string): string {
     }
 
     const renderChoices = choices.map(c => 
-      `        <response_label ident="${c.id}"><material><mattext texttype="text/plain">${c.text}</mattext></material></response_label>`
+      `              <response_label ident="${c.id}">
+                <material><mattext texttype="text/plain">${c.text}</mattext></material>
+              </response_label>`
     ).join('\n');
 
-    return `      <item ident="${qIdent}" title="Question ${index + 1}">
+    return `      <!-- السؤال ${index + 1} -->
+      <item ident="${qIdent}" title="السؤال ${index + 1}">
         <itemmetadata>
           <qtimetadata>
             <qtimetadatafield><fieldlabel>question_type</fieldlabel><fieldentry>multiple_choice_question</fieldentry></qtimetadatafield>
@@ -46,9 +66,9 @@ function convertQti21To12(qti21Xml: string): string {
           </qtimetadata>
         </itemmetadata>
         <presentation>
-          <material><mattext texttype="text/html"><![CDATA[${prompt}]]></mattext></material>
+          <material><mattext texttype="text/html">${prompt}</mattext></material>
           <response_lid ident="response1" rcardinality="Single">
-            <render_choice shuffle="Yes">
+            <render_choice>
 ${renderChoices}
             </render_choice>
           </response_lid>
@@ -57,13 +77,20 @@ ${renderChoices}
           <outcomes><decvar varname="SCORE" vartype="Decimal" defaultval="0"/></outcomes>
           <respcondition continue="No">
             <conditionvar><varequal respident="response1">${correctVal}</varequal></conditionvar>
-            <setvar action="Set" varname="SCORE">100</setvar>
+            <setvar action="Set" varname="SCORE">1</setvar>
           </respcondition>
         </resprocessing>
+        <itemfeedback ident="general_feedback">
+          <flow_mat>
+            <material>
+              <mattext texttype="text/html">إجابة صحيحة وفق معايير الاختبار المعتمدة.</mattext>
+            </material>
+          </flow_mat>
+        </itemfeedback>
       </item>`;
   });
 
-  return items12.join('\n');
+  return items12.join('\n\n');
 }
 
 // Convert QTI 1.2 item to QTI 2.1 assessmentItem
@@ -75,7 +102,7 @@ function convertQti12To21(qti12Xml: string): string {
 
   const items21 = itemMatches.map((item, index) => {
     const identMatch = item.match(/ident="([^"]+)"/i);
-    const qIdent = identMatch ? identMatch[1] : `Q_${index + 1}`;
+    const qIdent = identMatch ? identMatch[1] : `Q_${String(index + 1).padStart(2, '0')}`;
 
     const promptMatch = item.match(/<mattext[^>]*>([\s\S]*?)<\/mattext>/i);
     let prompt = promptMatch ? promptMatch[1].trim() : 'سؤال';
@@ -122,42 +149,40 @@ ${simpleChoices}
 export async function createAndDownloadQtiZip(options: QtiPackageOptions): Promise<void> {
   const { title, xmlPayload, target } = options;
   const zip = new JSZip();
-  const id = Date.now().toString(36);
+  const id = Math.random().toString(36).substring(2, 10);
   const safeTitle = (title || 'Assessment').replace(/[\\/:*?"<>|]/g, '_');
 
-  const cleanXml = xmlPayload
-    .replace(/<div id="qti-xml-payload"[^>]*>/i, '')
-    .replace(/<\/div>/i, '')
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
-    .trim();
+  const cleanXml = sanitizeRawXml(xmlPayload);
 
   if (target === 'sahlah_cypher') {
     // ==========================================
-    // 1. أكاديمية سهلة الدولية — QTI v1.2 ZIP
+    // 1. أكاديمية سهلة الدولية — QTI v1.2 ZIP المعتمدة
     // ==========================================
-    const hasQti12Items = cleanXml.includes('<item ') || cleanXml.includes('<item>');
-    let qti12ItemsXml = cleanXml;
-    if (!hasQti12Items && cleanXml.includes('<assessmentItem')) {
-      qti12ItemsXml = convertQti21To12(cleanXml);
+    let itemsBlock = cleanXml;
+
+    // استخلاص محتوى عناصر <item> إذا كان النص يحتوي بالفعل على وسم القسم أو المستند
+    const sectionMatch = cleanXml.match(/<section[^>]*>([\s\S]*?)<\/section>/i);
+    if (sectionMatch) {
+      itemsBlock = sectionMatch[1].trim();
+    } else if (cleanXml.includes('<assessmentItem')) {
+      itemsBlock = convertQti21To12(cleanXml);
+    } else {
+      // إزالة أي وسوم questestinterop أو assessment قديمة مشوهة للحصول على الأسئلة فقط
+      itemsBlock = itemsBlock
+        .replace(/<\/?questestinterop[^>]*>/gi, '')
+        .replace(/<\/?assessment[^>]*>/gi, '')
+        .trim();
     }
 
-    let fullQti12Xml = qti12ItemsXml;
-    if (!cleanXml.includes('<questestinterop')) {
-      fullQti12Xml = `<?xml version="1.0" encoding="UTF-8"?>
-<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2">
-  <assessment ident="SAHLAH_${id}" title="${safeTitle}">
-    <qtimetadata>
-      <qtimetadatafield>
-        <fieldlabel>qmd_assessmenttype</fieldlabel>
-        <fieldentry>Examination</fieldentry>
-      </qtimetadatafield>
-    </qtimetadata>
+    // بناء الهيكل القياسي النظيف المتطابق 100% مع نموذج سهلة الشغال
+    const fullQti12Xml = `<?xml version="1.0" encoding="UTF-8"?>
+<questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.imsglobal.org/xsd/ims_qtiasiv1p2 http://www.imsglobal.org/xsd/ims_qtiasiv1p2.xsd">
+  <assessment ident="SAHLAH_ASSESSMENT_${id}" title="${safeTitle}">
     <section ident="root_section">
-${qti12ItemsXml}
+${itemsBlock}
     </section>
   </assessment>
 </questestinterop>`;
-    }
 
     const manifestXml = `<?xml version="1.0" encoding="UTF-8"?>
 <manifest identifier="MANIFEST_SAHLAH_QTI12_${id}" xmlns="http://www.imsglobal.org/xsd/imscp_v1p1">
@@ -189,8 +214,7 @@ ${qti12ItemsXml}
     zip.folder('Folder1')?.file('QuestionBank1.xml', fullQti12Xml);
 
     const content = await zip.generateAsync({ type: 'blob' });
-    const filename = `${safeTitle}_أكاديمية_سهلة_QTI_v1.2.zip`;
-    saveAs(content, filename);
+    saveAs(content, `${safeTitle}_أكاديمية_سهلة_QTI_v1.2.zip`);
   } else {
     // ==========================================
     // 2. مدرسة الفرقان العالمية — QTI v2.1 ZIP
@@ -246,7 +270,6 @@ ${qti21ItemsXml}
     zip.file('assessment_qti21.xml', fullTestXml);
 
     const content = await zip.generateAsync({ type: 'blob' });
-    const filename = `${safeTitle}_الفرقان_العالمية_QTI_v2.1.zip`;
-    saveAs(content, filename);
+    saveAs(content, `${safeTitle}_الفرقان_العالمية_QTI_v2.1.zip`);
   }
 }
