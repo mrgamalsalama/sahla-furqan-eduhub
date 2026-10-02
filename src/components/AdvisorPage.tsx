@@ -66,16 +66,16 @@ export default function AdvisorPage({ onBack, uiLang }: AdvisorPageProps) {
   const BackIcon = isAr ? ArrowRight : ArrowLeft;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 flex flex-col min-h-[600px] h-[calc(100vh-12rem)]">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-6 flex flex-col min-h-[600px] h-[calc(100vh-12rem)]">
       {/* شريط علوي */}
-      <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-4 bg-white/50 p-3 rounded-xl">
-        <button onClick={onBack} className="btn-ghost flex items-center gap-2">
+      <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-4 bg-white/70 p-3.5 rounded-2xl shadow-xs">
+        <button onClick={onBack} className="btn-ghost flex items-center gap-2 text-slate-700 hover:text-blue-900">
           <BackIcon className="w-4 h-4" />
           {isAr ? 'العودة للرئيسية' : 'Back to Home'}
         </button>
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></span>
-          <span className="text-sm font-semibold text-gray-700">
+          <span className="w-2.5 h-2.5 bg-teal-500 rounded-full animate-pulse"></span>
+          <span className="text-xs sm:text-sm font-bold text-slate-800">
             {isAr ? 'المستشار التربوي جاهز' : 'Pedagogical Advisor Ready'}
           </span>
         </div>

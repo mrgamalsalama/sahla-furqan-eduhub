@@ -125,7 +125,7 @@ export async function createAndDownloadQtiZip(options: QtiPackageOptions): Promi
   const id = Date.now().toString(36);
   const safeTitle = (title || 'Assessment').replace(/[\\/:*?"<>|]/g, '_');
 
-  let cleanXml = xmlPayload
+  const cleanXml = xmlPayload
     .replace(/<div id="qti-xml-payload"[^>]*>/i, '')
     .replace(/<\/div>/i, '')
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')

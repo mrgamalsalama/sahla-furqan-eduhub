@@ -148,36 +148,36 @@ export default function BenchmarkPage({ onBack, onOpenResult, uiLang }: Benchmar
   const BackIcon = isAr ? ArrowRight : ArrowLeft;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-8 animate-fade-in">
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-primary-600 mb-6 transition-colors"
+        className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-blue-900 mb-6 transition-colors"
       >
         <BackIcon className="w-4 h-4" />
         {isAr ? 'العودة للرئيسية' : 'Back to Home'}
       </button>
 
       <div className="text-center mb-8">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-primary-50 text-primary-700 rounded-full text-sm font-semibold mb-3">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-blue-50 text-blue-900 border border-blue-200 rounded-full text-xs font-bold mb-3 shadow-xs">
           {isDiagnostic ? (
             <>
-              <Stethoscope className="w-4 h-4 text-primary-600" />
+              <Stethoscope className="w-4 h-4 text-teal-600" />
               {isAr ? 'أداة القياس والتشخيص الأكاديمي' : 'Diagnostic Assessment Platform'}
             </>
           ) : (
             <>
-              <Award className="w-4 h-4 text-primary-600" />
+              <Award className="w-4 h-4 text-teal-600" />
               {isAr ? 'منصة التقييم والقياس المعياري الدولي' : 'International Benchmark Assessment'}
             </>
           )}
         </div>
-        <h2 className="text-3xl font-bold text-gray-800 mb-2">
+        <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-2">
           {isDiagnostic
             ? isAr ? 'بناء اختبار تشخيصي ورصد فجوات' : 'Design Diagnostic Assessment'
             : isAr ? 'بناء اختبار معياري مخصص' : 'Design Standardized Benchmark Test'}
         </h2>
-        <p className="text-gray-500 max-w-xl mx-auto text-sm">
+        <p className="text-slate-600 max-w-2xl mx-auto text-sm font-medium">
           {isDiagnostic
             ? isAr
               ? 'توليد تقييم قبلي تشخيصي لكشف الفجوات التعليمية التراكمية، ومصفوفة نواتج التعلم، مع خطة علاجية مخصصة وتصدير QTI.'

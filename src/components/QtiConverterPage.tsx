@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   FileCode2, Sparkles, Copy, Check, Download, AlertCircle, Loader2,
-  RefreshCw, School, Eye, Code, BookOpen, Package
+  School, Eye, Code, BookOpen, Package
 } from 'lucide-react';
 import type { UILang } from '@/lib/i18n';
 import type { LmsTarget } from '@/types';
@@ -98,17 +98,17 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-8 animate-fade-in">
       {/* Title Header */}
       <div className="text-center mb-8">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold mb-3">
-          <FileCode2 className="w-4 h-4" />
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-blue-900 text-xs font-bold mb-3 shadow-xs">
+          <FileCode2 className="w-4 h-4 text-teal-600" />
           <span>{isAr ? 'محول ومعالج الأسئلة الذكي إلى معيار QTI' : 'Raw Text to Standard QTI Converter'}</span>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
           {isAr ? 'استوديو تحويل الأسئلة لمنصات LMS' : 'LMS QTI Assessment Studio'}
         </h1>
-        <p className="mt-2 text-sm sm:text-base text-gray-600 max-w-2xl mx-auto">
+        <p className="mt-2 text-sm sm:text-base text-slate-600 max-w-2xl mx-auto font-medium">
           {isAr
             ? 'الصق أسئلتك المكتوبة بأي صيغة غير منظمة، وسيقوم الذكاء الاصطناعي بضبطها وتشكيلها بنسبة 100%، واستخراج خياراتها وإجاباتها وتوليد ملف QTI XML متوافق فوراً مع منصة مدرستك.'
             : 'Paste unstructured questions from Word, PDF, or notes. The AI will parse stems, options, and keys into fully validated QTI XML ready for Cypher and Canvas LMS.'}
@@ -118,48 +118,48 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Column: Input Form */}
         <div className="lg:col-span-5 flex flex-col gap-5">
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-200">
-            <h2 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <School className="w-4 h-4 text-emerald-600" />
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+            <h2 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <School className="w-4 h-4 text-teal-600" />
               <span>{isAr ? 'إعدادات المنصة المستهدفة' : 'Target LMS Settings'}</span>
             </h2>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   {isAr ? 'نظام إدارة التعلم (LMS):' : 'Target Learning Platform:'}
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
                     onClick={() => setLmsTarget('sahlah_cypher')}
-                    className={`p-3 text-start rounded-xl border text-xs font-medium transition-all ${
+                    className={`p-3.5 text-start rounded-xl border text-xs font-medium transition-all ${
                       lmsTarget === 'sahlah_cypher'
-                        ? 'border-emerald-600 bg-emerald-50 text-emerald-900 font-bold shadow-xs'
-                        : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                        ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/50 text-blue-950 font-bold shadow-sm'
+                        : 'border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50/30 text-slate-700 shadow-sm'
                     }`}
                   >
-                    <div className="font-bold text-xs mb-0.5">أكاديمية سهلة</div>
-                    <div className="text-[11px] text-gray-600 font-semibold">QTI v1.2 ZIP</div>
+                    <div className="font-bold text-xs mb-0.5 text-blue-950">أكاديمية سهلة</div>
+                    <div className="text-[11px] text-slate-600 font-semibold">QTI v1.2 ZIP</div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setLmsTarget('furqan_canvas')}
-                    className={`p-3 text-start rounded-xl border text-xs font-medium transition-all ${
+                    className={`p-3.5 text-start rounded-xl border text-xs font-medium transition-all ${
                       lmsTarget === 'furqan_canvas'
-                        ? 'border-emerald-600 bg-emerald-50 text-emerald-900 font-bold shadow-xs'
-                        : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                        ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/50 text-blue-950 font-bold shadow-sm'
+                        : 'border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50/30 text-slate-700 shadow-sm'
                     }`}
                   >
-                    <div className="font-bold text-xs mb-0.5">مدارس الفرقان</div>
-                    <div className="text-[11px] text-gray-600 font-semibold">QTI v2.1 ZIP</div>
+                    <div className="font-bold text-xs mb-0.5 text-blue-950">مدارس الفرقان</div>
+                    <div className="text-[11px] text-slate-600 font-semibold">QTI v2.1 ZIP</div>
                   </button>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
                   {isAr ? 'عنوان التقييم / الاختبار (اختياري):' : 'Assessment Title (Optional):'}
                 </label>
                 <input
@@ -167,21 +167,21 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder={isAr ? 'مثال: اختبار الفهم القرائي - الأسبوع الخامس' : 'e.g. Reading Comprehension Quiz'}
-                  className="w-full text-xs px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className="w-full text-xs px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-bold text-gray-700">
+                  <label className="text-xs font-bold text-slate-700">
                     {isAr ? 'نص الأسئلة المنسوخ:' : 'Pasted Question Text:'}
                   </label>
                   <button
                     type="button"
                     onClick={() => setRawText(SAMPLE_QUESTIONS)}
-                    className="text-[11px] text-emerald-600 hover:text-emerald-700 font-semibold underline flex items-center gap-1"
+                    className="text-[11px] text-teal-600 hover:text-teal-700 font-bold flex items-center gap-1"
                   >
-                    <Sparkles className="w-3 h-3" />
+                    <Sparkles className="w-3.5 h-3.5" />
                     <span>{isAr ? 'لصق نموذج تجريبي' : 'Paste sample'}</span>
                   </button>
                 </div>
@@ -194,13 +194,13 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
                       ? 'الصق هنا الأسئلة بأي طريقة كُتبت بها:\n\n1. ما هو عاصمة الأندلس في عصر الخلافة؟\nأ) طليطلة\nب) قرطبة\nج) إشبيلية\nد) غرناطة\nالإجابة: ب'
                       : 'Paste questions here in any raw format...'
                   }
-                  className="w-full text-xs p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-mono leading-relaxed"
+                  className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500 font-mono leading-relaxed"
                 />
               </div>
 
               {error && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
                   <span>{error}</span>
                 </div>
               )}
@@ -209,7 +209,7 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
                 type="button"
                 onClick={handleConvert}
                 disabled={loading}
-                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-3.5 px-4 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-sm shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {loading ? (
                   <>
@@ -218,7 +218,7 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4" />
+                    <Sparkles className="w-4 h-4 text-teal-400" />
                     <span>{isAr ? 'تحويل الأسئلة وتوليد حزمة QTI' : 'Convert & Generate QTI'}</span>
                   </>
                 )}
@@ -229,15 +229,15 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
 
         {/* Right Column: Output / Preview */}
         <div className="lg:col-span-7 flex flex-col gap-4">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 flex-1 flex flex-col overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 flex-1 flex flex-col overflow-hidden">
             {/* Top Toolbar */}
-            <div className="p-3 border-b border-gray-200 bg-gray-50/70 flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-1 bg-gray-200/80 p-0.5 rounded-lg text-xs font-semibold">
+            <div className="p-3.5 border-b border-slate-200 bg-slate-50/80 flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-1 bg-slate-200/70 p-1 rounded-xl text-xs font-semibold">
                 <button
                   type="button"
                   onClick={() => setActiveTab('preview')}
-                  className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-all ${
-                    activeTab === 'preview' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
+                    activeTab === 'preview' ? 'bg-white text-blue-950 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   <Eye className="w-3.5 h-3.5" />
@@ -246,8 +246,8 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
                 <button
                   type="button"
                   onClick={() => setActiveTab('xml')}
-                  className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-all ${
-                    activeTab === 'xml' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-600 hover:text-gray-900'
+                  className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
+                    activeTab === 'xml' ? 'bg-white text-blue-950 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
                   <Code className="w-3.5 h-3.5" />
@@ -260,16 +260,16 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
                   <button
                     type="button"
                     onClick={handleCopyXml}
-                    className="px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 text-xs font-medium flex items-center gap-1 shadow-2xs"
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1 shadow-2xs"
                   >
-                    {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copied ? <Check className="w-3.5 h-3.5 text-teal-600" /> : <Copy className="w-3.5 h-3.5" />}
                     <span>{copied ? (isAr ? 'تم النسخ!' : 'Copied!') : (isAr ? 'نسخ XML' : 'Copy XML')}</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={handleDownloadZip}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs"
+                    className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs"
                     title={isAr ? 'تصدير حزمة مضغوطة متوافقة مع نظام إدارة التعلم' : 'Download complete QTI ZIP package'}
                   >
                     <Package className="w-3.5 h-3.5" />
@@ -279,7 +279,7 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
                   <button
                     type="button"
                     onClick={handleDownloadXml}
-                    className="px-2 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-600 text-xs font-medium flex items-center gap-1"
+                    className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium flex items-center gap-1"
                     title="تحميل كود XML فقط"
                   >
                     <Download className="w-3 h-3" />
@@ -290,16 +290,16 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
             </div>
 
             {/* Display Body */}
-            <div className="p-5 flex-1 overflow-auto max-h-[700px]">
+            <div className="p-6 flex-1 overflow-auto max-h-[700px]">
               {!result && !loading && (
-                <div className="h-96 flex flex-col items-center justify-center text-center p-6 text-gray-400">
-                  <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mb-3">
-                    <BookOpen className="w-7 h-7 text-gray-400" />
+                <div className="h-96 flex flex-col items-center justify-center text-center p-6 text-slate-400">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
+                    <BookOpen className="w-7 h-7 text-slate-400" />
                   </div>
-                  <h3 className="font-bold text-gray-700 text-sm mb-1">
+                  <h3 className="font-bold text-slate-700 text-sm mb-1">
                     {isAr ? 'بانتظار لصق الأسئلة للتحويل' : 'Awaiting questions to convert'}
                   </h3>
-                  <p className="text-xs text-gray-500 max-w-sm">
+                  <p className="text-xs text-slate-500 max-w-sm">
                     {isAr
                       ? 'الصق نصوص الأسئلة في الصندوق المقابل واضغط على زر التحويل ليظهر هنا جدول الفحص وكود QTI XML.'
                       : 'Paste question text on the left and click Convert to inspect formatted review and valid XML here.'}
@@ -309,11 +309,11 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
 
               {loading && (
                 <div className="h-96 flex flex-col items-center justify-center text-center p-6">
-                  <Loader2 className="w-8 h-8 text-emerald-600 animate-spin mb-3" />
-                  <p className="text-sm font-bold text-gray-700">
+                  <Loader2 className="w-8 h-8 text-teal-600 animate-spin mb-3" />
+                  <p className="text-sm font-bold text-slate-800">
                     {isAr ? 'جاري معالجة الأسئلة وتطبيق التشكيل التام بنسبة 100%...' : 'Processing questions & applying full diacritics...'}
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-slate-500 mt-1">
                     {isAr ? 'يتم مطابقة المعايير وهيكلة حزمة QTI القياسية' : 'Building standardized QTI assessment package'}
                   </p>
                 </div>
@@ -321,13 +321,13 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
 
               {result && activeTab === 'preview' && (
                 <div
-                  className="prose max-w-none text-sm"
+                  className="prose max-w-none text-sm text-slate-800"
                   dangerouslySetInnerHTML={{ __html: result.previewHtml }}
                 />
               )}
 
               {result && activeTab === 'xml' && (
-                <pre className="p-4 bg-gray-900 text-emerald-400 rounded-xl text-xs font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed">
+                <pre className="p-4 bg-slate-900 text-teal-400 rounded-xl text-xs font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed">
                   {result.qtiXml}
                 </pre>
               )}

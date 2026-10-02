@@ -1,25 +1,18 @@
-import { useState, useRef, useCallback } from 'react';
 import {
   ClipboardList, Layers, Presentation, FileQuestion, FileCode2,
-  FileCheck2, Sparkles, BookOpenCheck, ArrowLeft, ArrowRight,
-  Upload, FileText, FileType2, X, Loader2, Award, School, Star
+  FileCheck2, Sparkles, ArrowLeft, ArrowRight
 } from 'lucide-react';
-import type {
-  LessonSettings, OutputType, UploadedFile, GenerationResult, View
-} from '@/types';
+import type { View } from '@/types';
 import { INSTITUTIONS } from '@/types';
-import { getLessonSettings, saveLessonSettings, uid } from '@/lib/storage';
-import { generateContent } from '@/lib/gemini';
 import type { UILang } from '@/lib/i18n';
-import { t } from '@/lib/i18n';
 
 interface HomePageProps {
-  onOpenResult: (result: GenerationResult, outputType: OutputType) => void;
+  onOpenResult?: (result: GenerationResult, outputType: OutputType) => void;
   uiLang: UILang;
   onNavigate?: (view: View) => void;
 }
 
-export default function HomePage({ onOpenResult, uiLang, onNavigate }: HomePageProps) {
+export default function HomePage({ uiLang, onNavigate }: HomePageProps) {
   const isAr = uiLang === 'ar';
   const Arrow = isAr ? ArrowLeft : ArrowRight;
 
@@ -98,9 +91,9 @@ export default function HomePage({ onOpenResult, uiLang, onNavigate }: HomePageP
   ];
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-8 animate-fade-in">
       {/* Official Hub Hero */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-900 via-primary-800 to-slate-900 text-white p-6 sm:p-10 mb-10 shadow-xl border border-primary-700/50">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 text-white p-6 sm:p-10 mb-10 shadow-xl border border-blue-800/40">
         <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="max-w-2xl text-center md:text-start">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-blue-200 text-xs font-bold mb-4">
@@ -110,7 +103,7 @@ export default function HomePage({ onOpenResult, uiLang, onNavigate }: HomePageP
             <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight mb-3">
               {isAr ? 'مرحباً بك في مركز إعداد الدروس والاختبارات الذكية' : 'Teacher Innovation & Preparation Hub'}
             </h1>
-            <p className="text-sm sm:text-base text-blue-100/90 leading-relaxed">
+            <p className="text-sm sm:text-base text-blue-100/90 leading-relaxed font-medium">
               {isAr
                 ? 'استوديوهات مستقلة ومخصصة لمساعدة المعلم في إعداد خطط الدروس، وتصميم أوراق العمل بهرم بلوم، والعروض التقديمية، وتوليد حزم الاختبارات القياسية (QTI ZIP) مع شعارات المدارس الرسمية والتشكيل التام 100%.'
                 : 'Dedicated standalone teacher workspaces for lesson plans, worksheets, presentations, exam banks, and LMS QTI packaging.'}
@@ -130,10 +123,10 @@ export default function HomePage({ onOpenResult, uiLang, onNavigate }: HomePageP
       <div className="mb-12">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-xl sm:text-2xl font-black text-gray-900">
+            <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900">
               {isAr ? 'اختر استوديو العمل المتخصص:' : 'Choose a Dedicated Studio:'}
             </h2>
-            <p className="text-xs sm:text-sm text-gray-500 mt-1">
+            <p className="text-xs sm:text-sm text-slate-600 mt-1 font-medium">
               {isAr ? 'مساحات عمل مركزة توفر لك الأدوات المحددة فقط دون تعقيد' : 'Streamlined workspaces tailored specifically for your target educational task.'}
             </p>
           </div>
@@ -147,7 +140,7 @@ export default function HomePage({ onOpenResult, uiLang, onNavigate }: HomePageP
                 key={st.id}
                 type="button"
                 onClick={() => onNavigate?.(st.id)}
-                className="group relative flex flex-col justify-between text-start p-6 bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-xl hover:border-primary-400 hover:-translate-y-1 transition-all duration-200 overflow-hidden"
+                className="group relative flex flex-col justify-between text-start p-6 bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-lg hover:border-blue-600 hover:-translate-y-1 transition-all duration-200 overflow-hidden"
               >
                 <div>
                   {/* Icon & Badge Header */}
@@ -162,18 +155,18 @@ export default function HomePage({ onOpenResult, uiLang, onNavigate }: HomePageP
                     )}
                   </div>
 
-                  <h3 className="text-base sm:text-lg font-bold text-gray-900 group-hover:text-primary-600 transition-colors mb-1">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 group-hover:text-blue-900 transition-colors mb-1">
                     {st.title}
                   </h3>
-                  <div className="text-xs font-semibold text-primary-700/80 mb-2.5">
+                  <div className="text-xs font-semibold text-teal-700 mb-2.5">
                     {st.subtitle}
                   </div>
-                  <p className="text-xs text-gray-500 leading-relaxed">
+                  <p className="text-xs text-slate-600 leading-relaxed">
                     {st.description}
                   </p>
                 </div>
 
-                <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between text-xs font-bold text-primary-600 group-hover:text-primary-700">
+                <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-blue-900 group-hover:text-blue-700">
                   <span>{isAr ? 'الدخول إلى الاستوديو' : 'Open Studio'}</span>
                   <Arrow className="w-4 h-4 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform" />
                 </div>

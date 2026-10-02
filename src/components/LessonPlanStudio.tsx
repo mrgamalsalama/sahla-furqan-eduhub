@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import {
   ClipboardList, Sparkles, Loader2, AlertCircle, Upload, X,
-  FileText, School, Clock, User, BookOpen, Layers
+  FileText
 } from 'lucide-react';
-import type { LessonSettings, OutputType, UploadedFile, GenerationResult, InstitutionId } from '@/types';
+import type { LessonSettings, OutputType, UploadedFile, GenerationResult } from '@/types';
 import {
   SUBJECT_OPTIONS, GRADES_AR, GRADES_EN, DURATIONS_AR, DURATIONS_EN,
   STUDENT_LEVELS_AR, STUDENT_LEVELS_EN, INSTITUTIONS
@@ -76,44 +76,44 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-8 animate-fade-in">
       {/* Studio Header */}
       <div className="text-center mb-8">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary-50 text-primary-700 text-xs font-bold border border-primary-200 mb-3">
-          <ClipboardList className="w-4 h-4" />
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 text-blue-900 text-xs font-bold border border-blue-200 mb-3 shadow-xs">
+          <ClipboardList className="w-4 h-4 text-teal-600" />
           <span>{isAr ? 'استوديو خطط الدروس المعتمدة (سهلة & الفرقان)' : 'Official Lesson Plan Studio'}</span>
         </div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
           {isAr ? 'إعداد خطة درس نموذجية متكاملة' : 'Prepare an Approved Lesson Plan'}
         </h1>
-        <p className="mt-2 text-sm text-gray-600 max-w-xl mx-auto">
+        <p className="mt-2 text-sm text-slate-600 max-w-2xl mx-auto font-medium">
           {isAr
             ? 'توليد خطة الدرس الرسمية المطابقة لنموذج الاعتماد الأكاديمي مع جداول الترويسة، الأساسيات، مراحل الدرس الخمس، التمايز، والتقييم مع التشكيل التام بنسبة 100%.'
             : 'Generate official lesson plans featuring header tables, 5-phase lesson flow, differentiation, and assessment matrices.'}
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 sm:p-8 space-y-6">
+      <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
         {error && (
           <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
+            <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
             <span>{error}</span>
           </div>
         )}
 
         {/* Institution selection */}
         <div>
-          <label className="block text-xs font-bold text-gray-700 mb-2">
+          <label className="block text-xs font-bold text-slate-700 mb-2">
             {isAr ? 'المؤسسة التعليمية المعتمدة:' : 'Educational Institution:'}
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <button
               type="button"
               onClick={() => setSettings({ ...settings, institution: 'sahlah' })}
-              className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-bold transition-all ${
+              className={`flex items-center justify-center gap-2 p-3.5 rounded-xl border text-xs font-bold transition-all ${
                 settings.institution === 'sahlah'
-                  ? 'border-primary-600 bg-primary-50 text-primary-900 shadow-xs'
-                  : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                  ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/50 text-blue-950 shadow-sm'
+                  : 'border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50/30 text-slate-700 shadow-sm'
               }`}
             >
               <img src={INSTITUTIONS.sahlah.logo} alt="Sahlah" className="h-5 w-auto object-contain" />
@@ -122,10 +122,10 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
             <button
               type="button"
               onClick={() => setSettings({ ...settings, institution: 'furqan' })}
-              className={`flex items-center justify-center gap-2 p-3 rounded-xl border text-xs font-bold transition-all ${
+              className={`flex items-center justify-center gap-2 p-3.5 rounded-xl border text-xs font-bold transition-all ${
                 settings.institution === 'furqan'
-                  ? 'border-primary-600 bg-primary-50 text-primary-900 shadow-xs'
-                  : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                  ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/50 text-blue-950 shadow-sm'
+                  : 'border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50/30 text-slate-700 shadow-sm'
               }`}
             >
               <img src={INSTITUTIONS.furqan.logo} alt="Furqan" className="h-6 w-auto object-contain" />
@@ -134,10 +134,10 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
             <button
               type="button"
               onClick={() => setSettings({ ...settings, institution: 'both' })}
-              className={`flex items-center justify-center gap-1.5 p-3 rounded-xl border text-xs font-bold transition-all ${
+              className={`flex items-center justify-center gap-1.5 p-3.5 rounded-xl border text-xs font-bold transition-all ${
                 settings.institution === 'both'
-                  ? 'border-primary-600 bg-primary-50 text-primary-900 shadow-xs'
-                  : 'border-gray-200 hover:bg-gray-50 text-gray-700'
+                  ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/50 text-blue-950 shadow-sm'
+                  : 'border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50/30 text-slate-700 shadow-sm'
               }`}
             >
               <span>سهلة &amp; الفرقان (مشترك)</span>
@@ -146,24 +146,22 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
         </div>
 
         {/* Basic fields */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1">
+            <label className="block text-xs font-bold text-slate-700 mb-1">
               {isAr ? 'اسم المعلم / المعلمة:' : 'Teacher Name:'}
             </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={settings.teacherName}
-                onChange={(e) => setSettings({ ...settings, teacherName: e.target.value })}
-                placeholder={isAr ? 'أ/ جمال سلامة' : 'e.g. Mr. Gamal'}
-                className="w-full text-xs px-3 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary-500"
-              />
-            </div>
+            <input
+              type="text"
+              value={settings.teacherName}
+              onChange={(e) => setSettings({ ...settings, teacherName: e.target.value })}
+              placeholder={isAr ? 'أ/ جمال سلامة' : 'e.g. Mr. Gamal'}
+              className="w-full text-xs px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500"
+            />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1">
+            <label className="block text-xs font-bold text-slate-700 mb-1">
               {isAr ? 'عنوان الدرس:' : 'Lesson Title:'}
             </label>
             <input
@@ -171,18 +169,20 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
               value={settings.lessonTitle}
               onChange={(e) => setSettings({ ...settings, lessonTitle: e.target.value })}
               placeholder={isAr ? 'مثال: علامات الإعراب الأصلية والفرعية' : 'e.g. Photosynthesis'}
-              className="w-full text-xs px-3 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary-500"
+              className="w-full text-xs px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500"
             />
           </div>
+        </div>
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1">
+            <label className="block text-xs font-bold text-slate-700 mb-1">
               {isAr ? 'المادة الدراسية:' : 'Subject:'}
             </label>
             <select
               value={settings.subject}
               onChange={(e) => setSettings({ ...settings, subject: e.target.value })}
-              className="w-full text-xs px-3 py-2.5 rounded-xl border border-gray-300 bg-white focus:ring-2 focus:ring-primary-500"
+              className="w-full text-xs px-3 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500"
             >
               <option value="">{isAr ? '-- اختر المادة --' : 'Select Subject'}</option>
               {SUBJECT_OPTIONS.map((sub) => (
@@ -194,13 +194,13 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1">
+            <label className="block text-xs font-bold text-slate-700 mb-1">
               {isAr ? 'الصف الدراسي:' : 'Grade Level:'}
             </label>
             <select
               value={settings.grade}
               onChange={(e) => setSettings({ ...settings, grade: e.target.value })}
-              className="w-full text-xs px-3 py-2.5 rounded-xl border border-gray-300 bg-white focus:ring-2 focus:ring-primary-500"
+              className="w-full text-xs px-3 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500"
             >
               <option value="">{isAr ? '-- اختر الصف --' : 'Select Grade'}</option>
               {grades.map((g) => (
@@ -210,13 +210,13 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1">
+            <label className="block text-xs font-bold text-slate-700 mb-1">
               {isAr ? 'زمن الحصة:' : 'Duration:'}
             </label>
             <select
               value={settings.duration}
               onChange={(e) => setSettings({ ...settings, duration: e.target.value })}
-              className="w-full text-xs px-3 py-2.5 rounded-xl border border-gray-300 bg-white focus:ring-2 focus:ring-primary-500"
+              className="w-full text-xs px-3 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500"
             >
               {durations.map((d) => (
                 <option key={d} value={d}>{d}</option>
@@ -225,13 +225,13 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1">
+            <label className="block text-xs font-bold text-slate-700 mb-1">
               {isAr ? 'مستوى الطلاب المستهدف:' : 'Student Level:'}
             </label>
             <select
               value={settings.studentLevel}
               onChange={(e) => setSettings({ ...settings, studentLevel: e.target.value })}
-              className="w-full text-xs px-3 py-2.5 rounded-xl border border-gray-300 bg-white focus:ring-2 focus:ring-primary-500"
+              className="w-full text-xs px-3 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500"
             >
               {studentLevels.map((l) => (
                 <option key={l} value={l}>{l}</option>
@@ -295,7 +295,7 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+          className="w-full py-3.5 px-6 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-sm shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
         >
           {loading ? (
             <>
@@ -304,7 +304,7 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
             </>
           ) : (
             <>
-              <Sparkles className="w-5 h-5" />
+              <Sparkles className="w-5 h-5 text-teal-400" />
               <span>{isAr ? 'توليد خطة الدرس المعتمدة الآن' : 'Generate Approved Lesson Plan Now'}</span>
             </>
           )}

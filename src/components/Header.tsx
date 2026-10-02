@@ -1,6 +1,6 @@
 import {
   Home, ClipboardList, Layers, Presentation, FileQuestion, FileCode2,
-  FileCheck2, Library, Languages, Award
+  FileCheck2, Library, Languages
 } from 'lucide-react';
 import type { View } from '@/types';
 import type { UILang } from '@/lib/i18n';
@@ -29,7 +29,7 @@ export default function Header({ currentView, onNavigate, uiLang, onToggleLang }
   ];
 
   return (
-    <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 shadow-sm no-print">
+    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-xs no-print">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -38,7 +38,7 @@ export default function Header({ currentView, onNavigate, uiLang, onToggleLang }
             className="flex items-center gap-3 group"
           >
             {/* أيقونة المعلم الذكي */}
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-600 to-secondary-500 flex items-center justify-center shadow-md group-hover:scale-105 transition-transform p-2">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-900 to-teal-600 flex items-center justify-center shadow-md group-hover:scale-105 transition-transform p-2">
               <svg
                 viewBox="0 0 24 24"
                 fill="none"
@@ -113,8 +113,8 @@ export default function Header({ currentView, onNavigate, uiLang, onToggleLang }
             </div>
 
             <div className={uiLang === 'ar' ? 'text-right' : 'text-left'}>
-              <h1 className="text-lg font-bold text-gray-800 leading-tight">{s.brandName}</h1>
-              <p className="text-xs text-gray-500 leading-tight">{s.brandSub}</p>
+              <h1 className="text-base sm:text-lg font-extrabold text-blue-950 leading-tight">{s.brandName}</h1>
+              <p className="text-[11px] text-slate-500 font-medium leading-tight">{s.brandSub}</p>
             </div>
           </button>
 
@@ -125,10 +125,10 @@ export default function Header({ currentView, onNavigate, uiLang, onToggleLang }
                 <button
                   key={view}
                   onClick={() => onNavigate(view)}
-                  className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
+                  className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl font-medium text-sm transition-all duration-150 ${
                     currentView === view
-                      ? 'bg-primary-50 text-primary-700 font-semibold'
-                      : 'text-gray-600 hover:bg-gray-100'
+                      ? 'bg-blue-50 text-blue-900 font-bold border border-blue-200 shadow-2xs'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -140,9 +140,9 @@ export default function Header({ currentView, onNavigate, uiLang, onToggleLang }
             <button
               onClick={onToggleLang}
               title={s.langSwitchLabel}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm text-gray-600 hover:bg-primary-50 hover:text-primary-700 transition-all duration-200 border border-gray-200"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl font-bold text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-900 transition-all duration-150 border border-slate-200 bg-white shadow-2xs"
             >
-              <Languages className="w-4 h-4" />
+              <Languages className="w-4 h-4 text-teal-600" />
               <span>{s.langSwitchLabel}</span>
             </button>
           </div>

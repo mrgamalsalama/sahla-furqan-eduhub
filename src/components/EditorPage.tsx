@@ -743,7 +743,7 @@ ${itemsXml}    </section>
   const BackIcon = isAr ? ArrowRight : ArrowLeft;
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-6 animate-fade-in">
       {/* الشريط العلوي */}
       <div className="flex items-center justify-between mb-4 no-print">
         <button onClick={onBack} className="btn-ghost">
@@ -751,7 +751,7 @@ ${itemsXml}    </section>
           {s.back}
         </button>
         <div className="flex items-center gap-2">
-          <span className="px-3 py-1 bg-primary-50 text-primary-700 rounded-lg text-sm font-semibold">
+          <span className="px-3 py-1 bg-blue-50 text-blue-900 rounded-lg text-sm font-bold border border-blue-200">
             {outputLabels[outputType]}
           </span>
         </div>
@@ -1016,14 +1016,14 @@ ${itemsXml}    </section>
           outputType === 'standardized-test' ||
           title?.includes('اختبار') ||
           currentTitle?.includes('اختبار')) && (
-          <div className="inline-flex items-center gap-1.5 p-1 bg-emerald-50/80 rounded-xl border border-emerald-200">
-            <span className="text-xs font-bold text-emerald-900 px-2 flex items-center gap-1">
-              <Package className="w-3.5 h-3.5 text-emerald-600" />
+          <div className="inline-flex items-center gap-1.5 p-1 bg-blue-50/80 rounded-xl border border-blue-200">
+            <span className="text-xs font-bold text-blue-950 px-2 flex items-center gap-1">
+              <Package className="w-3.5 h-3.5 text-teal-600" />
               <span>{isAr ? '📦 حزمة الاختبار (QTI ZIP):' : 'QTI Packages:'}</span>
             </span>
             <button
               onClick={() => handleDownloadQtiZip('sahlah_cypher')}
-              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition flex items-center gap-1"
+              className="px-3 py-1.5 rounded-lg bg-blue-900 hover:bg-blue-800 text-white text-xs font-bold shadow-xs transition flex items-center gap-1"
               title="أكاديمية سهلة الدولية - QTI v1.2 ZIP"
             >
               <span>{isAr ? 'أكاديمية سهلة QTI v1.2 zip' : 'Sahlah QTI v1.2 ZIP'}</span>
@@ -1040,7 +1040,7 @@ ${itemsXml}    </section>
       </div>
 
       {/* مساحة المحرر */}
-      <div className="card overflow-hidden shadow-sm border border-gray-200">
+      <div className="card overflow-hidden shadow-sm border border-slate-200">
         <div
           ref={editorRef}
           contentEditable
