@@ -249,19 +249,23 @@ export interface CloudResourceRecord {
 }
 
 function mapRecordToLesson(rec: CloudResourceRecord): SavedLesson {
+  const parsedSettings = (typeof rec.settings === 'object' && rec.settings !== null ? rec.settings : {}) as Record<string, unknown>;
+  const resolvedInstitution = (rec.institution || parsedSettings.institution || 'sahlah') as InstitutionId;
+
   return {
     id: rec.id,
     title: rec.title,
     outputType: rec.output_type as OutputType,
-    settings: (rec.settings as unknown as LessonSettings) || {
-      subject: rec.subject || '',
-      grade: rec.grade || '',
-      duration: '45 دقيقة',
-      studentLevel: 'متوسط',
-      teacherName: rec.user_name || '',
-      lessonTitle: rec.title,
-      contentLanguage: 'ar',
-      institution: (rec.institution as InstitutionId) || 'sahlah',
+    settings: {
+      subject: rec.subject || (parsedSettings.subject as string) || '',
+      grade: rec.grade || (parsedSettings.grade as string) || '',
+      duration: (parsedSettings.duration as string) || '45 دقيقة',
+      studentLevel: (parsedSettings.studentLevel as string) || 'متوسط',
+      teacherName: (parsedSettings.teacherName as string) || rec.user_name || '',
+      lessonTitle: (parsedSettings.lessonTitle as string) || rec.title,
+      contentLanguage: (parsedSettings.contentLanguage as any) || 'ar',
+      institution: resolvedInstitution,
+      ...(parsedSettings as unknown as Partial<LessonSettings>),
     },
     contentHtml: rec.content_html,
     createdAt: new Date(rec.created_at).getTime(),
@@ -271,7 +275,7 @@ function mapRecordToLesson(rec: CloudResourceRecord): SavedLesson {
     userName: rec.user_name,
     userEmail: rec.user_email,
     userAvatar: rec.user_avatar,
-    institution: (rec.institution as InstitutionId) || 'sahlah',
+    institution: resolvedInstitution,
     likesCount: rec.likes_count || 0,
     commentsCount: rec.comments_count || 0,
   };
@@ -291,29 +295,57 @@ export async function saveCloudResource(
     }
 
     const profile = extractProfileFromUser(user);
+    const inst = lesson.settings?.institution || profile.institution || 'sahlah';
 
-    const payload = {
+    // Store institution reliably inside settings JSON to prevent schema mismatch errors
+    const enhancedSettings = {
+      ...(lesson.settings || {}),
+      institution: inst,
+    };
+
+    // Notice: We deliberately do NOT put 'institution' as a top-level column here
+    // because the Supabase 'resources' table schema does not include an 'institution' column.
+    // It is preserved reliably inside the 'settings' JSON column.
+    const payload: Record<string, unknown> = {
       id: lesson.id,
       user_id: user.id,
       user_email: profile.email,
       user_name: profile.name,
       user_avatar: profile.avatarUrl,
-      institution: lesson.settings?.institution || profile.institution,
       title: lesson.title,
       subject: lesson.settings?.subject || '',
       grade: lesson.settings?.grade || '',
       output_type: lesson.outputType,
       content_html: lesson.contentHtml,
-      settings: lesson.settings,
+      settings: enhancedSettings,
       is_public: isPublic,
       likes_count: lesson.likesCount || 0,
       updated_at: new Date().toISOString(),
       created_at: new Date(lesson.createdAt || Date.now()).toISOString(),
     };
 
-    const { error } = await supabase
+    let { error } = await supabase
       .from('resources')
       .upsert(payload, { onConflict: 'id' });
+
+    // Resilient schema cache fallback: if any optional column is reported missing
+    // in the Supabase schema cache, strip it and retry immediately.
+    let retries = 0;
+    while (error && error.message && retries < 3) {
+      const match = error.message.match(/Could not find the '([^']+)' column/i);
+      if (match && match[1]) {
+        const missingCol = match[1];
+        console.warn(`Supabase schema cache missing column '${missingCol}', stripping and retrying...`);
+        delete payload[missingCol];
+        const retryResult = await supabase
+          .from('resources')
+          .upsert(payload, { onConflict: 'id' });
+        error = retryResult.error;
+        retries++;
+      } else {
+        break;
+      }
+    }
 
     if (error) {
       console.warn('Supabase save error:', error.message);
