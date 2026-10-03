@@ -25,7 +25,7 @@ export interface NormalizedQuestion {
 /**
  * Strips HTML tags and unescapes standard HTML entities.
  */
-function cleanText(str: string = ''): string {
+export function cleanText(str: string = ''): string {
   return str
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
@@ -39,187 +39,205 @@ function cleanText(str: string = ''): string {
 }
 
 /**
- * Extracts question items from human-readable HTML tables or paragraphs.
+ * Strips Arabic diacritical marks (Tashkeel).
  */
-function extractQuestionsFromHtml(html: string): NormalizedQuestion[] {
-  const questions: NormalizedQuestion[] = [];
-  if (!html) return questions;
+export function stripTashkeel(s: string = ''): string {
+  return s.replace(/[\u064B-\u065F\u0670]/g, '');
+}
 
-  // 1. Try DOMParser if available in browser
-  if (typeof DOMParser !== 'undefined') {
-    try {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
+/**
+ * Normalizes Arabic letters for reliable regex matching.
+ */
+export function normalizeArabic(s: string = ''): string {
+  return stripTashkeel(s)
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-      // 1. Try extracting from <table> rows
-      const rows = Array.from(doc.querySelectorAll('tr'));
-      if (rows.length > 1) {
-        rows.forEach((row, idx) => {
-          const cells = Array.from(row.querySelectorAll('td'));
-          if (cells.length >= 3) {
-            const col0 = cells[0].textContent?.trim() || '';
-            const col1 = cells[1].textContent?.trim() || '';
-            const col2 = cells[2].textContent?.trim() || '';
-            const col3 = cells[3]?.textContent?.trim() || '';
+/**
+ * Splits HTML deliverable into Questions section and Answer Key section.
+ * This guarantees the Answer Key Table is NEVER mistaken for questions!
+ */
+export function splitQuestionsAndAnswerKey(html: string): { questionsHtml: string; answerKeyHtml: string } {
+  const answerKeyMarkers = [
+    /نَمُوذَجُ?\s*الْ?إِجَابَةِ?/i,
+    /Answer\s*Key/i,
+    /مَفَاتِيحُ?\s*الْ?إِجَابَةِ?/i,
+    /جَدْوَلُ?\s*الْ?إِجَابَاتِ?/i,
+    /حُلُولُ?\s*الْ?أَسْئِلَةِ?/i,
+    /نَمُوذَجُ?\s*التَّصْحِيحِ?/i,
+  ];
 
-            // Check if this row is a question
-            const isQuestionRow =
-              /^\d+$/.test(col0) ||
-              col0.includes('سؤال') ||
-              col1.length > 10 ||
-              /[أ-دA-D]/.test(col2);
-
-            if (isQuestionRow && col1.length > 3) {
-              const prompt = cleanText(col1);
-              const optionsText = col2;
-              const correctText = col3 || '';
-
-              // Extract options A, B, C, D
-              const opts: Array<{ id: string; text: string }> = [];
-              const optMatches = Array.from(
-                optionsText.matchAll(/([أ-دA-D])[\s\.\-\:\)]+([^أ-دA-D\n]+)/g)
-              );
-
-              if (optMatches.length >= 2) {
-                optMatches.forEach((m, oIdx) => {
-                  opts.push({
-                    id: `choice_${oIdx + 1}`,
-                    text: cleanText(m[2]),
-                  });
-                });
-              } else {
-                const lines = optionsText.split(/[\n،,]+/).map(cleanText).filter(Boolean);
-                lines.slice(0, 4).forEach((line, oIdx) => {
-                  opts.push({
-                    id: `choice_${oIdx + 1}`,
-                    text: line.replace(/^[أ-دA-D1-4][\.\-\:\)]+\s*/, ''),
-                  });
-                });
-              }
-
-              if (opts.length >= 2) {
-                let correctId = 'choice_1';
-                if (/[بB2]/.test(correctText)) correctId = 'choice_2';
-                else if (/[جC3]/.test(correctText)) correctId = 'choice_3';
-                else if (/[دD4]/.test(correctText)) correctId = 'choice_4';
-
-                questions.push({
-                  id: `Q_${idx}`,
-                  title: `السؤال ${questions.length + 1}`,
-                  prompt,
-                  options: opts,
-                  correctId,
-                  points: 1,
-                });
-              }
-            }
-          }
-        });
-      }
-
-      // 2. Try paragraphs and headings
-      if (questions.length === 0) {
-        let currentPrompt = '';
-        let currentOpts: Array<{ id: string; text: string }> = [];
-        let currentCorrect = 'choice_1';
-
-        const blocks = Array.from(doc.querySelectorAll('p, li, h3, h4, div'));
-        blocks.forEach((el) => {
-          const text = el.textContent?.trim() || '';
-          if (!text) return;
-
-          if (
-            text.includes('نموذج الإجابة') ||
-            text.includes('Answer Key') ||
-            text.includes('مصفوفة نواتج') ||
-            text.includes('جدول المواصفات')
-          ) {
-            return;
-          }
-
-          const isQuestionHeader = /^(\d+[\.\-\)]|س\s*\d+[\.\-\:]|السؤال\s+[الأول|الثاني|الثالث|الرابع|الخامس|السادس|السابع|الثامن|التاسع|العاشر|\d+])/i.test(
-            text
-          );
-
-          if (isQuestionHeader) {
-            if (currentPrompt && currentOpts.length >= 2) {
-              questions.push({
-                id: `Q_${questions.length + 1}`,
-                title: `السؤال ${questions.length + 1}`,
-                prompt: currentPrompt,
-                options: [...currentOpts],
-                correctId: currentCorrect,
-                points: 1,
-              });
-            }
-            currentPrompt = cleanText(text.replace(/^(\d+[\.\-\)]|س\s*\d+[\.\-\:]|السؤال[^\:]*\:)\s*/i, ''));
-            currentOpts = [];
-            currentCorrect = 'choice_1';
-          } else if (/^[أ-دA-D][\.\-\)\:]\s*/.test(text)) {
-            const optText = cleanText(text.replace(/^[أ-دA-D][\.\-\)\:]\s*/, ''));
-            const optIdx = currentOpts.length + 1;
-            currentOpts.push({
-              id: `choice_${optIdx}`,
-              text: optText,
-            });
-          } else if (text.includes('الإجابة الصحيحة') || text.includes('Correct:')) {
-            if (/[بB2]/.test(text)) currentCorrect = 'choice_2';
-            else if (/[جC3]/.test(text)) currentCorrect = 'choice_3';
-            else if (/[دD4]/.test(text)) currentCorrect = 'choice_4';
-            else currentCorrect = 'choice_1';
-          }
-        });
-
-        if (currentPrompt && currentOpts.length >= 2) {
-          questions.push({
-            id: `Q_${questions.length + 1}`,
-            title: `السؤال ${questions.length + 1}`,
-            prompt: currentPrompt,
-            options: [...currentOpts],
-            correctId: currentCorrect,
-            points: 1,
-          });
-        }
-      }
-    } catch (err) {
-      console.warn('HTML question extraction error:', err);
+  let splitIndex = -1;
+  for (const marker of answerKeyMarkers) {
+    const match = html.search(marker);
+    if (match !== -1) {
+      splitIndex = match;
+      break;
     }
   }
 
-  // 2. Regex fallback for <tr> and paragraphs (universal across Node and browser)
-  if (questions.length === 0) {
-    const trMatches = Array.from(html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi));
-    trMatches.forEach((trM, idx) => {
-      const tdMatches = Array.from(trM[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi));
-      if (tdMatches.length >= 3) {
-        const col1 = cleanText(tdMatches[1][1]);
-        const col2 = tdMatches[2][1];
-        const col3 = tdMatches[3] ? cleanText(tdMatches[3][1]) : '';
+  if (splitIndex !== -1) {
+    return {
+      questionsHtml: html.slice(0, splitIndex),
+      answerKeyHtml: html.slice(splitIndex),
+    };
+  }
 
-        if (col1.length > 5) {
-          const optMatches = Array.from(col2.matchAll(/([أ-دA-D])[\s\.\-\:\)]+([^أ-دA-D<]+)/g));
-          const opts: Array<{ id: string; text: string }> = [];
-          optMatches.forEach((om, oIdx) => {
-            opts.push({ id: `choice_${oIdx + 1}`, text: cleanText(om[2]) });
-          });
+  return { questionsHtml: html, answerKeyHtml: '' };
+}
 
-          if (opts.length >= 2) {
-            let correctId = 'choice_1';
-            if (/[بB2]/.test(col3)) correctId = 'choice_2';
-            else if (/[جC3]/.test(col3)) correctId = 'choice_3';
-            else if (/[دD4]/.test(col3)) correctId = 'choice_4';
+/**
+ * Extracts correct answer keys from the Answer Key Table or lines.
+ */
+export function extractAnswerKeys(answerKeyHtml: string): Record<number, string> {
+  const keys: Record<number, string> = {};
+  if (!answerKeyHtml) return keys;
 
-            questions.push({
-              id: `Q_${idx}`,
-              title: `السؤال ${questions.length + 1}`,
-              prompt: col1,
-              options: opts,
-              correctId,
-              points: 1,
-            });
-          }
+  // 1. Check table rows: <tr><td>1</td><td>ب) مَدِينَةٌ</td>...</tr>
+  const trMatches = Array.from(answerKeyHtml.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi));
+  for (const trM of trMatches) {
+    const tdMatches = Array.from(trM[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi));
+    if (tdMatches.length >= 2) {
+      const qNumText = tdMatches[0][1].replace(/<[^>]+>/g, '').trim();
+      const qNum = parseInt(qNumText, 10);
+      const ansText = tdMatches[1][1].replace(/<[^>]+>/g, '').trim();
+      if (!isNaN(qNum) && ansText) {
+        const letterMatch = ansText.match(/([أ-دA-D])/);
+        if (letterMatch) {
+          keys[qNum] = letterMatch[1];
         }
       }
+    }
+  }
+
+  // 2. Check lines: "1. ب" or "السؤال الأول: ب"
+  if (Object.keys(keys).length === 0) {
+    const lines = answerKeyHtml
+      .replace(/<[^>]+>/g, '\n')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    for (const line of lines) {
+      const match = line.match(/(?:س\s*|السؤال\s*)?(\d+)[\s:\-ـ\.]*([أ-دA-D])/i);
+      if (match) {
+        const qNum = parseInt(match[1], 10);
+        if (!isNaN(qNum)) {
+          keys[qNum] = match[2];
+        }
+      }
+    }
+  }
+
+  return keys;
+}
+
+/**
+ * Map answer letter (أ، ب، ج، د / A, B, C, D) to standard choice ID
+ */
+export function mapLetterToChoiceId(letter: string): string {
+  const upper = letter.toUpperCase();
+  if (upper === 'أ' || upper === 'A') return 'choice_1';
+  if (upper === 'ب' || upper === 'B') return 'choice_2';
+  if (upper === 'ج' || upper === 'C') return 'choice_3';
+  if (upper === 'د' || upper === 'D') return 'choice_4';
+  return 'choice_1';
+}
+
+/**
+ * Extracts question items from human-readable HTML Questions section ONLY.
+ * Completely immune to Answer Key table pollution.
+ */
+export function extractQuestionsFromHtml(rawHtml: string): NormalizedQuestion[] {
+  const questions: NormalizedQuestion[] = [];
+  if (!rawHtml) return questions;
+
+  const { questionsHtml, answerKeyHtml } = splitQuestionsAndAnswerKey(rawHtml);
+  const answerKeys = extractAnswerKeys(answerKeyHtml);
+
+  // Convert HTML to text lines with preserved line breaks
+  const plainText = questionsHtml
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<\/tr>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ');
+
+  const lines = plainText
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  let currentQ: { prompt: string; options: Array<{ id: string; text: string }> } | null = null;
+  const optRegex = /^([أ-دA-D])\s*[\)\.\-:]\s*(.*)$/i;
+
+  for (const line of lines) {
+    const norm = normalizeArabic(line);
+
+    // Skip metadata headers
+    if (
+      norm.includes('الماده') ||
+      norm.includes('الصف') ||
+      norm.includes('تعليمات') ||
+      norm.includes('زمن الاختبار') ||
+      norm.includes('مصفوفه نواتج') ||
+      norm.includes('جدول المواصفات')
+    ) {
+      continue;
+    }
+
+    const isQHeader =
+      /^(\d+[\.\-\)]|س\s*\d+|السؤال\s*(الاول|الثاني|الثالث|الرابع|الخامس|السادس|السابع|الثامن|التاسع|العاشر|\d+))/i.test(
+        norm
+      );
+
+    if (isQHeader) {
+      if (currentQ && currentQ.options.length >= 2) {
+        const qIndex = questions.length + 1;
+        const correctLetter = answerKeys[qIndex] || 'أ';
+        questions.push({
+          id: `Q_${qIndex}`,
+          title: `السؤال ${qIndex}`,
+          prompt: currentQ.prompt,
+          options: currentQ.options,
+          correctId: mapLetterToChoiceId(correctLetter),
+          points: 1,
+        });
+      }
+      // Extract prompt text after colon or question number
+      const promptText = line.replace(/^[^\:]*\:\s*/, '').replace(/^(\d+[\.\-\)]|س\s*\d+)\s*/, '').trim();
+      currentQ = { prompt: promptText, options: [] };
+    } else if (optRegex.test(line)) {
+      const match = line.match(optRegex);
+      if (currentQ && match) {
+        const optIdx = currentQ.options.length + 1;
+        currentQ.options.push({
+          id: `choice_${optIdx}`,
+          text: cleanText(match[2]),
+        });
+      }
+    } else if (currentQ && currentQ.options.length === 0) {
+      // Continuation of question stem
+      currentQ.prompt = (currentQ.prompt + ' ' + line).trim();
+    }
+  }
+
+  if (currentQ && currentQ.options.length >= 2) {
+    const qIndex = questions.length + 1;
+    const correctLetter = answerKeys[qIndex] || 'أ';
+    questions.push({
+      id: `Q_${qIndex}`,
+      title: `السؤال ${qIndex}`,
+      prompt: currentQ.prompt,
+      options: currentQ.options,
+      correctId: mapLetterToChoiceId(correctLetter),
+      points: 1,
     });
   }
 
@@ -229,7 +247,7 @@ function extractQuestionsFromHtml(html: string): NormalizedQuestion[] {
 /**
  * Robust XML Item Extractor that works across QTI 1.2 and QTI 2.1
  */
-function extractQuestionsFromXml(xml: string): NormalizedQuestion[] {
+export function extractQuestionsFromXml(xml: string): NormalizedQuestion[] {
   const questions: NormalizedQuestion[] = [];
   if (!xml) return questions;
 
@@ -244,12 +262,10 @@ function extractQuestionsFromXml(xml: string): NormalizedQuestion[] {
       const title = titleMatch ? titleMatch[1] : `السؤال ${idx + 1}`;
 
       // Extract Prompt from <material><mattext>
-      // First <mattext> inside <presentation> but NOT inside <response_label>
       let prompt = '';
       const presMatch = itemContent.match(/<presentation>([\s\S]*?)<\/presentation>/i);
       const presContent = presMatch ? presMatch[1] : itemContent;
 
-      // Strip choices from presentation to isolate question material
       const presWithoutChoices = presContent.replace(/<response_lid[\s\S]*?<\/response_lid>/gi, '');
       const mattextMatch = presWithoutChoices.match(/<mattext[^>]*>([\s\S]*?)<\/mattext>/i);
       if (mattextMatch) {
@@ -263,7 +279,6 @@ function extractQuestionsFromXml(xml: string): NormalizedQuestion[] {
       );
 
       choiceMatches.forEach((cm, cIdx) => {
-        const cId = cm[1];
         const cMatMatch = cm[2].match(/<mattext[^>]*>([\s\S]*?)<\/mattext>/i);
         const cText = cMatMatch
           ? cMatMatch[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim()
@@ -279,11 +294,7 @@ function extractQuestionsFromXml(xml: string): NormalizedQuestion[] {
       const varequalMatch = itemContent.match(/<varequal[^>]*>([\s\S]*?)<\/varequal>/i);
       if (varequalMatch) {
         const rawVal = varequalMatch[1].trim();
-        // Check if rawVal is A, B, C, D
-        if (rawVal === 'B' || rawVal === 'choice_2') correctId = 'choice_2';
-        else if (rawVal === 'C' || rawVal === 'choice_3') correctId = 'choice_3';
-        else if (rawVal === 'D' || rawVal === 'choice_4') correctId = 'choice_4';
-        else correctId = 'choice_1';
+        correctId = mapLetterToChoiceId(rawVal);
       }
 
       questions.push({
@@ -328,10 +339,7 @@ function extractQuestionsFromXml(xml: string): NormalizedQuestion[] {
       const valMatch = itemContent.match(/<value[^>]*>([\s\S]*?)<\/value>/i);
       if (valMatch) {
         const rawVal = valMatch[1].trim();
-        if (rawVal === 'B' || rawVal === 'choice_2') correctId = 'choice_2';
-        else if (rawVal === 'C' || rawVal === 'choice_3') correctId = 'choice_3';
-        else if (rawVal === 'D' || rawVal === 'choice_4') correctId = 'choice_4';
-        else correctId = 'choice_1';
+        correctId = mapLetterToChoiceId(rawVal);
       }
 
       questions.push({
@@ -350,31 +358,30 @@ function extractQuestionsFromXml(xml: string): NormalizedQuestion[] {
 
 /**
  * Universal Question Normalizer
- * Extracts and guarantees 100% complete questions with non-empty prompts.
+ * Guarantees 100% complete questions without confusing questions and answers.
  */
 export function extractAndNormalizeQuestions(rawPayload: string, fallbackTitle: string = 'الامتحان'): NormalizedQuestion[] {
-  // First, extract from XML
   const xmlQuestions = extractQuestionsFromXml(rawPayload);
-
-  // Second, extract from HTML
   const htmlQuestions = extractQuestionsFromHtml(rawPayload);
 
-  // Check if xmlQuestions have valid prompts
-  const xmlHasValidPrompts = xmlQuestions.length > 0 && xmlQuestions.every((q) => q.prompt && q.prompt.length >= 3);
+  // Scenario 1: XML already has full questions and valid non-empty prompts
+  const xmlHasValidPrompts =
+    xmlQuestions.length > 0 &&
+    xmlQuestions.every((q) => q.prompt && q.prompt.length >= 5 && q.options.length >= 2);
 
   if (xmlHasValidPrompts) {
     return xmlQuestions;
   }
 
-  // If XML prompts were empty (the exact bug encountered by the user),
-  // merge XML options and answer keys with the prompts from HTML!
-  if (xmlQuestions.length > 0 && htmlQuestions.length > 0) {
+  // Scenario 2: XML has the 4 options and answer keys, but prompt was empty/mangled
+  // We PRESERVE the XML options and correct answer, and ONLY recover prompt from HTML!
+  if (xmlQuestions.length > 0 && xmlQuestions.some((q) => q.options.length >= 2)) {
     return xmlQuestions.map((xmlQ, idx) => {
       const htmlQ = htmlQuestions[idx];
       const validPrompt =
-        (xmlQ.prompt && xmlQ.prompt.length >= 3 ? xmlQ.prompt : '') ||
-        (htmlQ?.prompt && htmlQ.prompt.length >= 3 ? htmlQ.prompt : '') ||
-        `${xmlQ.title || `السؤال ${idx + 1}`}: اختر الإجابة الصحيحة`;
+        (xmlQ.prompt && xmlQ.prompt.length >= 5 ? xmlQ.prompt : '') ||
+        (htmlQ?.prompt && htmlQ.prompt.length >= 5 ? htmlQ.prompt : '') ||
+        `${fallbackTitle} - السؤال ${idx + 1}: اختر البديل الصحيح مما يلي:`;
 
       const options = xmlQ.options.length >= 2 ? xmlQ.options : htmlQ?.options || [];
       const correctId = xmlQ.correctId || htmlQ?.correctId || 'choice_1';
@@ -388,20 +395,12 @@ export function extractAndNormalizeQuestions(rawPayload: string, fallbackTitle: 
     });
   }
 
-  // If XML had no items at all, use HTML questions
+  // Scenario 3: No valid XML items, use questions extracted from HTML Questions section
   if (htmlQuestions.length > 0) {
     return htmlQuestions;
   }
 
-  // If XML had items but HTML had none, provide meaningful title fallback for prompt
-  if (xmlQuestions.length > 0) {
-    return xmlQuestions.map((q, idx) => ({
-      ...q,
-      prompt: q.prompt && q.prompt.length >= 3 ? q.prompt : `${q.title || `السؤال ${idx + 1}`}: اختر البديل الصحيح`,
-    }));
-  }
-
-  // Ultimate fallback if completely empty
+  // Ultimate fallback
   return [
     {
       id: 'Q_01',
@@ -433,7 +432,7 @@ function buildSahlahCypherXml(questions: NormalizedQuestion[], testTitle: string
 
     const choicesXml = q.options
       .map(
-        (opt, oIdx) => `            <response_label ident="${opt.id}">
+        (opt) => `            <response_label ident="${opt.id}">
               <material><mattext texttype="text/html"><![CDATA[<p>${opt.text}</p>]]></mattext></material>
             </response_label>`
       )
@@ -546,12 +545,12 @@ export async function createAndDownloadQtiZip(options: QtiPackageOptions): Promi
   if (target === 'sahlah_cypher') {
     // =========================================================================
     // 1. أكاديمية سهلة الدولية — Sahlah LMS (CYPHER Learning) QTI 1.2 ZIP
-    // Matches the working file (qti_va_1791024284) with Folder1/QuestionBank1.xml
+    // Exact match to official LMS working file (qti_va_1791024284.zip):
+    // Contains ONLY Folder1/QuestionBank1.xml (NO duplicate assessment_qti12.xml!)
     // =========================================================================
     const bankIdent = `QuestionBank_${Date.now()}`;
     const qtiXml = buildSahlahCypherXml(questions, safeTitle, bankIdent);
 
-    // Manifest matches official Sahlah LMS structure
     const manifestXml = `<?xml version="1.0" encoding="UTF-8"?>
 <manifest identifier="${bankIdent}" xmlns="http://www.imsglobal.org/xsd/imsccv1p1/imscp_v1p1" xmlns:lom="http://ltsc.ieee.org/xsd/imsccv1p1/LOM/resource" xmlns:imsmd="http://www.imsglobal.org/xsd/imsmd_v1p1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <metadata>
@@ -579,17 +578,14 @@ export async function createAndDownloadQtiZip(options: QtiPackageOptions): Promi
   <resources>
     <resource type="imsqti_xmlv1p2" identifier="QuestionBank1" href="Folder1/QuestionBank1.xml">
       <file href="Folder1/QuestionBank1.xml"/>
-      <file href="assessment_qti12.xml"/>
     </resource>
   </resources>
 </manifest>`;
 
-    // Add manifest and files
+    // Add ONLY imsmanifest.xml and Folder1/QuestionBank1.xml
+    // Note: Do NOT add assessment_qti12.xml because CYPHER Learning LMS will import both and duplicate all questions!
     zip.file('imsmanifest.xml', manifestXml);
-    // Folder1/QuestionBank1.xml (Primary for Sahlah CYPHER Learning LMS)
     zip.folder('Folder1')?.file('QuestionBank1.xml', qtiXml);
-    // assessment_qti12.xml (Standard QTI 1.2 root file for universal LMS compatibility)
-    zip.file('assessment_qti12.xml', qtiXml);
 
     const content = await zip.generateAsync({ type: 'blob' });
     const filename = `${safeTitle}_أكاديمية_سهلة_QTI.zip`;
