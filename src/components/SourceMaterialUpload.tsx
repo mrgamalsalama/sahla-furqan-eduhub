@@ -188,8 +188,8 @@ export default function SourceMaterialUpload({
             </p>
             <p className="text-[11px] text-slate-500 mt-0.5">
               {isAr
-                ? 'يدعم مستندات Word (.docx) • عروض PowerPoint (.pptx) • ملفات PDF • نصوص ومستندات وصور'
-                : 'Supports Word (.docx), PowerPoint (.pptx), PDF, Text (.txt), and Images'}
+                ? 'يدعم مستندات Word (.docx) • عروض PowerPoint (.pptx) • ملفات PDF • نصوص وصور (تُضغط وتُعالج نصوصها تلقائياً)'
+                : 'Supports Word (.docx), PowerPoint (.pptx), PDF, Text (.txt), and Images (auto-optimized)'}
             </p>
           </div>
 
