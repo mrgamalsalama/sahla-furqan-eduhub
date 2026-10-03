@@ -175,16 +175,16 @@ export default function EditorPage({
   }
 
   async function handleDownloadQtiZip(target: 'sahlah_cypher' | 'furqan_canvas') {
-    const rawHtml = editorRef.current?.innerHTML || '';
+    const rawHtml = editorRef.current?.innerHTML || initialContent || '';
     const xmlMatch = rawHtml.match(/<div id="qti-xml-payload"[^>]*>([\s\S]*?)<\/div>/i);
-    let xml = xmlMatch ? xmlMatch[1] : '';
-    if (!xml) {
-      const itemsMatch = rawHtml.match(/<assessmentItem[\s\S]*?<\/assessmentItem>/gi);
-      xml = itemsMatch ? itemsMatch.join('\n') : '';
-    }
+    const xml = xmlMatch ? xmlMatch[1] : '';
+
+    // Always pass both XML and HTML so questions and prompts are 100% recovered if XML was truncated
+    const combinedPayload = xml ? `${xml}\n\n<!-- HTML_CONTENT -->\n${rawHtml}` : rawHtml;
+
     await createAndDownloadQtiZip({
       title: currentTitle || 'Assessment_QTI',
-      xmlPayload: xml || rawHtml,
+      xmlPayload: combinedPayload,
       target,
     });
   }

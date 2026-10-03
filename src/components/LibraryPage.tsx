@@ -180,16 +180,14 @@ export default function LibraryPage({
     try {
       const rawHtml = lesson.contentHtml || '';
       const xmlMatch = rawHtml.match(/<div id="qti-xml-payload"[^>]*>([\s\S]*?)<\/div>/i);
-      let xml = xmlMatch ? xmlMatch[1] : '';
-      if (!xml) {
-        const itemsMatch = rawHtml.match(/<assessmentItem[\s\S]*?<\/assessmentItem>/gi);
-        xml = itemsMatch ? itemsMatch.join('\n') : '';
-      }
+      const xml = xmlMatch ? xmlMatch[1] : '';
+
+      const combinedPayload = xml ? `${xml}\n\n<!-- HTML_CONTENT -->\n${rawHtml}` : rawHtml;
 
       const target = lesson.settings?.institution === 'furqan' ? 'furqan_canvas' : 'sahlah_cypher';
       await createAndDownloadQtiZip({
         title: lesson.title || 'Assessment_QTI',
-        xmlPayload: xml || rawHtml,
+        xmlPayload: combinedPayload,
         target,
         subject: lesson.settings?.subject,
         grade: lesson.settings?.grade,

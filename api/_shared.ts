@@ -179,12 +179,13 @@ function getLmsXmlSchemaDirective(lmsTarget?: string, isAr: boolean = true): str
   const isSahlah = lmsTarget === 'sahlah_cypher';
   if (isSahlah) {
     return isAr
-      ? `\nتَنْبِيهٌ إِصْدَارِ QTI لِأَكَادِيمِيَّةِ سَهْلَةَ (QTI v1.2 ZIP):
-يَجِبُ أَنْ يَكُونَ كُودُ XML مُتَوَافِقاً مَعَ مِعْيَارِ IMS QTI v1.2 القياسي مع استخدام وسوم:
+      ? `\nتَنْبِيهٌ هَامٌّ جِدّاً لِإِصْدَارِ QTI لِأَكَادِيمِيَّةِ سَهْلَةَ (QTI v1.2 ZIP - CYPHER LMS):
+قَاعِدَةٌ صَارِمَةٌ وَإِلْزَامِيَّةٌ 100%: يَجِبُ أَنْ يَتَضَمَّنَ كُلُّ عُنْصُرِ سُؤَالٍ <item> نَصَّ السُّؤَالِ كَامِلاً وَمَشْكُولاً دَاخِلَ وَسْمِ <mattext texttype="text/html"><![CDATA[<p>نص السؤال كاملاً ومشكولاً هنا</p>]]></mattext>، وَيُحْظَرُ حَظْراً قَاطِعاً تَرْكُ وسم <mattext> فَارِغاً!
+كُودُ XML يَجِبُ أَنْ يَكُونَ مُتَوَافِقاً تَمَاماً مَعَ مِعْيَارِ IMS QTI v1.2:
 <questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2">
   <assessment ident="SAHLAH_ASSESSMENT_01" title="...">
     <section ident="root_section">
-      <item ident="Q_01" title="...">
+      <item ident="Q_01" title="السؤال الأول">
         <itemmetadata>
           <qtimetadata>
             <qtimetadatafield><fieldlabel>question_type</fieldlabel><fieldentry>multiple_choice_question</fieldentry></qtimetadatafield>
@@ -192,28 +193,28 @@ function getLmsXmlSchemaDirective(lmsTarget?: string, isAr: boolean = true): str
           </qtimetadata>
         </itemmetadata>
         <presentation>
-          <material><mattext texttype="text/html"><![CDATA[نص السؤال المشكول كاملاً]]></mattext></material>
+          <material><mattext texttype="text/html"><![CDATA[<p>مَيِّزِ الِاسْمَ النَّكِرَةَ مِنَ الْبَدَائِلِ التَّالِيَةِ:</p>]]></mattext></material>
           <response_lid ident="response1" rcardinality="Single">
             <render_choice>
-              <response_label ident="A"><material><mattext texttype="text/plain">الخيار الأول</mattext></material></response_label>
-              <response_label ident="B"><material><mattext texttype="text/plain">الخيار الثاني</mattext></material></response_label>
-              <response_label ident="C"><material><mattext texttype="text/plain">الخيار الثالث</mattext></material></response_label>
-              <response_label ident="D"><material><mattext texttype="text/plain">الخيار الرابع</mattext></material></response_label>
+              <response_label ident="A"><material><mattext texttype="text/plain">الْكِتَابُ</mattext></material></response_label>
+              <response_label ident="B"><material><mattext texttype="text/plain">مَدِينَةٌ</mattext></material></response_label>
+              <response_label ident="C"><material><mattext texttype="text/plain">مَكَّةُ</mattext></material></response_label>
+              <response_label ident="D"><material><mattext texttype="text/plain">هَذَا</mattext></material></response_label>
             </render_choice>
           </response_lid>
         </presentation>
         <resprocessing>
           <outcomes><decvar varname="SCORE" vartype="Decimal" defaultval="0"/></outcomes>
           <respcondition continue="No">
-            <conditionvar><varequal respident="response1">A</varequal></conditionvar>
-            <setvar action="Set" varname="SCORE">100</setvar>
+            <conditionvar><varequal respident="response1">B</varequal></conditionvar>
+            <setvar action="Set" varname="SCORE">1</setvar>
           </respcondition>
         </resprocessing>
       </item>
     </section>
   </assessment>
 </questestinterop>`
-      : `\nQTI Schema Directive for Sahlah Academy (QTI v1.2): Use IMS QTI v1.2 <questestinterop> with <assessment>, <section>, and <item> format.`;
+      : `\nQTI Schema Directive for Sahlah Academy (QTI v1.2): Use IMS QTI v1.2 <questestinterop> with <assessment>, <section>, and <item> format. Every <item> MUST contain the full question text inside <mattext texttype="text/html"><![CDATA[<p>Question text...</p>]]></mattext>. Never leave mattext empty!`;
   }
 
   // Furqan International School (QTI v2.1)
@@ -587,11 +588,11 @@ ${isAutoPilot ? '- نِظَامُ الطَّيَّارِ الْآلِيِّ (AI 
 - عَدَدُ الْأَسْئِلَةِ: 10 أَسْئِلَةِ اخْتِيَارٍ مِنْ مُتَعَدِّدٍ فَقَطْ.
 - كُلُّ سُؤَالٍ يَتَضَمَّنُ 4 خِيَارَاتٍ مُحَدَّدَةً بِوُضُوحٍ (أ، ب، ج، د).
 - نَمُوذَجُ الْإِجَابَةِ الْمُعَلَّلِ (Answer Key & Rationale).
-- فِي نِهَايَةِ الْمُخْرَجِ تَمَاماً: كُودُ QTI XML الصَّالِحُ لِجَمِيعِ الْأَسْئِلَةِ الْعَشَرَةِ دَاخِلَ الْوَسْمِ:
+- فِي نِهَايَةِ الْمُخْرَجِ تَمَاماً: كُودُ QTI XML الصَّالِحُ لِجَمِيعِ الْأَسْئِلَةِ الْعَشَرَةِ دَاخِلَ الْوَسْمِ (مَعَ كِتَابَةِ نَصِّ كُلِّ سُؤَالٍ كَامِلاً وَعَدَمِ تَرْكِهِ فَارِغاً أَبَداً):
 ${lmsXmlDirective}
-<div id="qti-xml-payload" style="display:none;"><![CDATA[
-<!-- كُودُ QTI XML لِلْأَسْئِلَةِ مِنْ Q_01 إِلَى Q_10 -->
-]]></div>
+<div id="qti-xml-payload" style="display:none;">
+<!-- كُودُ QTI XML لِلْأَسْئِلَةِ مِنْ Q_01 إِلَى Q_10 كَامِلاً مَعَ نُصُوصِ الْأَسْئِلَةِ وَالْخِيَارَاتِ -->
+</div>
 
 اسْتَخْدِمْ وُسُومَ HTML فَقَطْ: <h1>, <h2>, <h3>, <p>, <table>, <tr>, <th>, <td>, <ul>, <li>, <strong>, <ol>, <div>.`;
       }
@@ -611,9 +612,9 @@ ${lmsXmlDirective}
 - نَمُوذَجُ الْإِجَابَةِ الْمُعْتَمَدُ لِجَمِيعِ الْأَسْئِلَةِ الْخَمْسِينَ.
 - فِي نِهَايَةِ الْمُخْرَجِ تَمَاماً: كُودُ QTI XML الْكَامِلُ لِلْـ 50 سُؤَالاً دَاخِلَ:
 ${lmsXmlDirective}
-<div id="qti-xml-payload" style="display:none;"><![CDATA[
-<!-- كُودُ QTI XML الصَّالِحُ لِجَمِيعِ الْأَسْئِلَةِ مِنْ Q_01 إِلَى Q_50 -->
-]]></div>
+<div id="qti-xml-payload" style="display:none;">
+<!-- كُودُ QTI XML الصَّالِحُ لِجَمِيعِ الْأَسْئِلَةِ مِنْ Q_01 إِلَى Q_50 مَعَ نُصُوصِ الْأَسْئِلَةِ الْكَامِلَةِ -->
+</div>
 
 اسْتَخْدِمْ وُسُومَ HTML فَقَطْ: <h1>, <h2>, <h3>, <p>, <table>, <tr>, <th>, <td>, <ul>, <li>, <strong>, <ol>, <div>.`;
       }
@@ -770,7 +771,13 @@ Strict rule: Use the attached content below as the primary reference for this ge
       ? `${titlePrefix} - ${settings.lessonTitle}`
       : `${titlePrefix} - ${settings.subject || ''} - ${settings.grade || ''}`;
 
-    return res.status(200).json({ contentHtml: fullHtml, title });
+    let qtiXml = '';
+    const xmlMatch = text.match(/<div id="qti-xml-payload"[^>]*>([\s\S]*?)<\/div>/i);
+    if (xmlMatch && xmlMatch[1]) {
+      qtiXml = xmlMatch[1].replace(/^<!\[CDATA\[/i, '').replace(/\]\]>$/i, '').trim();
+    }
+
+    return res.status(200).json({ contentHtml: fullHtml, title, qtiXml });
   } catch (error: any) {
     console.error('executeGenerate error:', error);
     const { status, message } = formatApiError(error);
