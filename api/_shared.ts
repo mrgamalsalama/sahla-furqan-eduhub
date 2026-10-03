@@ -19,23 +19,72 @@ function getInstitutionHeader(settings: any): string {
   </div>`;
 }
 
-export function getApiKey(): string | undefined {
-  let key = process.env.GEMINI_API_KEY;
-  if (!key || key === 'MY_GEMINI_API_KEY' || key.startsWith('MY_')) {
+export function getApiKeys(): string[] {
+  const keys: string[] = [];
+
+  // 1. Check GEMINI_API_KEYS (comma or newline separated list)
+  const multiKeys = process.env.GEMINI_API_KEYS;
+  if (multiKeys) {
+    multiKeys
+      .split(/[,\n]/)
+      .map((k) => k.trim())
+      .filter((k) => k && !k.startsWith('MY_'))
+      .forEach((k) => {
+        if (!keys.includes(k)) keys.push(k);
+      });
+  }
+
+  // 2. Check GEMINI_API_KEY (can also be comma-separated or single)
+  const singleKey = process.env.GEMINI_API_KEY;
+  if (singleKey) {
+    singleKey
+      .split(/[,\n]/)
+      .map((k) => k.trim())
+      .filter((k) => k && !k.startsWith('MY_'))
+      .forEach((k) => {
+        if (!keys.includes(k)) keys.push(k);
+      });
+  }
+
+  // 3. Check numbered keys GEMINI_API_KEY_1 to GEMINI_API_KEY_10
+  for (let i = 1; i <= 10; i++) {
+    const numberedKey = process.env[`GEMINI_API_KEY_${i}`];
+    if (numberedKey && !numberedKey.startsWith('MY_')) {
+      const clean = numberedKey.trim();
+      if (clean && !keys.includes(clean)) keys.push(clean);
+    }
+  }
+
+  // 4. Fallback to .env file if available
+  if (keys.length === 0) {
     try {
       const envPath = path.resolve(process.cwd(), '.env');
       if (fs.existsSync(envPath)) {
         const envText = fs.readFileSync(envPath, 'utf-8');
-        const match = envText.match(/GEMINI_API_KEY=([^\r\n]+)/);
-        if (match && match[1].trim() && !match[1].startsWith('MY_')) {
-          key = match[1].trim();
+        const matches = envText.matchAll(/GEMINI_API_KEY(?:_\d+|S)?=([^\r\n]+)/g);
+        for (const m of matches) {
+          const val = m[1]?.trim();
+          if (val && !val.startsWith('MY_')) {
+            val.split(/[,\n]/).forEach((k) => {
+              const cleaned = k.trim();
+              if (cleaned && !cleaned.startsWith('MY_') && !keys.includes(cleaned)) {
+                keys.push(cleaned);
+              }
+            });
+          }
         }
       }
     } catch {
       // ignore
     }
   }
-  return key && !key.startsWith('MY_') ? key.trim() : undefined;
+
+  return keys;
+}
+
+export function getApiKey(): string | undefined {
+  const keys = getApiKeys();
+  return keys.length > 0 ? keys[0] : undefined;
 }
 
 const CANDIDATE_MODELS = [
@@ -45,9 +94,11 @@ const CANDIDATE_MODELS = [
   'gemini-3.5-flash',
 ];
 
+let currentKeyIndex = 0;
+
 export async function callGemini(contents: any) {
-  const apiKey = getApiKey();
-  if (!apiKey) {
+  const keys = getApiKeys();
+  if (keys.length === 0) {
     const err = new Error(
       'مفتاح الذكاء الاصطناعي (GEMINI_API_KEY) غير مهيأ في بيئة Vercel. يرجى إضافة GEMINI_API_KEY في Project Settings > Environment Variables.'
     );
@@ -55,32 +106,58 @@ export async function callGemini(contents: any) {
     throw err;
   }
 
-  const ai = new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
-    },
-  });
+  // Round-robin index rotation across available keys to distribute load
+  const startIndex = currentKeyIndex % keys.length;
+  currentKeyIndex = (currentKeyIndex + 1) % keys.length;
+
+  const orderedKeys = [
+    ...keys.slice(startIndex),
+    ...keys.slice(0, startIndex),
+  ];
 
   let lastError: any;
 
-  for (const model of CANDIDATE_MODELS) {
-    try {
-      const response = await ai.models.generateContent({
-        model,
-        contents,
-      });
-      return response;
-    } catch (err: any) {
-      const errMessage = err?.message || String(err);
-      console.warn(`Model ${model} failed, switching immediately:`, errMessage.slice(0, 150));
-      lastError = err;
+  // Try each API key in case of quota exhaustion or rate limits (429 / RESOURCE_EXHAUSTED)
+  for (let kIdx = 0; kIdx < orderedKeys.length; kIdx++) {
+    const apiKey = orderedKeys[kIdx];
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+
+    for (const model of CANDIDATE_MODELS) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents,
+        });
+        return response;
+      } catch (err: any) {
+        const errMessage = err?.message || String(err);
+        const isQuotaOrRateLimit =
+          errMessage.includes('429') ||
+          errMessage.includes('RESOURCE_EXHAUSTED') ||
+          errMessage.includes('quota') ||
+          errMessage.includes('rate limit');
+
+        // If key reached its quota and we have other keys in the pool, switch immediately!
+        if (isQuotaOrRateLimit && orderedKeys.length > 1) {
+          console.warn(`Key #${kIdx + 1} quota/rate limit reached. Switching to next key in pool...`);
+          lastError = err;
+          break; // break to next API key
+        }
+
+        console.warn(`Model ${model} failed, switching immediately:`, errMessage.slice(0, 150));
+        lastError = err;
+      }
     }
   }
 
-  throw lastError || new Error('فشلت جميع نماذج الذكاء الاصطناعي المتاحة.');
+  throw lastError || new Error('فشلت جميع نماذج ومفاتيح الذكاء الاصطناعي المتاحة.');
 }
 
 export function formatApiError(error: any): { status: number; message: string } {
