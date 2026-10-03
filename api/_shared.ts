@@ -55,28 +55,26 @@ export function getApiKeys(): string[] {
     }
   }
 
-  // 4. Fallback to .env file if available
-  if (keys.length === 0) {
-    try {
-      const envPath = path.resolve(process.cwd(), '.env');
-      if (fs.existsSync(envPath)) {
-        const envText = fs.readFileSync(envPath, 'utf-8');
-        const matches = envText.matchAll(/GEMINI_API_KEY(?:_\d+|S)?=([^\r\n]+)/g);
-        for (const m of matches) {
-          const val = m[1]?.trim();
-          if (val && !val.startsWith('MY_')) {
-            val.split(/[,\n]/).forEach((k) => {
-              const cleaned = k.trim();
-              if (cleaned && !cleaned.startsWith('MY_') && !keys.includes(cleaned)) {
-                keys.push(cleaned);
-              }
-            });
-          }
+  // 4. Also load and merge any keys defined in .env
+  try {
+    const envPath = path.resolve(process.cwd(), '.env');
+    if (fs.existsSync(envPath)) {
+      const envText = fs.readFileSync(envPath, 'utf-8');
+      const matches = envText.matchAll(/GEMINI_API_KEY(?:_\d+|S)?=([^\r\n]+)/g);
+      for (const m of matches) {
+        const val = m[1]?.trim();
+        if (val && !val.startsWith('MY_')) {
+          val.split(/[,\n]/).forEach((k) => {
+            const cleaned = k.trim();
+            if (cleaned && !cleaned.startsWith('MY_') && !keys.includes(cleaned)) {
+              keys.push(cleaned);
+            }
+          });
         }
       }
-    } catch {
-      // ignore
     }
+  } catch {
+    // ignore
   }
 
   return keys;
