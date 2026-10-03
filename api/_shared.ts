@@ -39,12 +39,10 @@ export function getApiKey(): string | undefined {
 }
 
 const CANDIDATE_MODELS = [
-  'gemini-3.6-flash',
+  'gemini-3.1-flash-lite',
+  'gemini-flash-latest',
   'gemini-3.8-flash',
   'gemini-3.5-flash',
-  'gemini-3.1-flash-lite',
-  'gemini-3.5-flash-lite',
-  'gemini-flash-latest',
 ];
 
 export async function callGemini(contents: any) {
@@ -69,31 +67,20 @@ export async function callGemini(contents: any) {
   let lastError: any;
 
   for (const model of CANDIDATE_MODELS) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const response = await ai.models.generateContent({
-          model,
-          contents,
-        });
-        return response;
-      } catch (err: any) {
-        const errMessage = err?.message || String(err);
-        const isTransient =
-          errMessage.includes('503') ||
-          errMessage.includes('UNAVAILABLE') ||
-          errMessage.includes('429') ||
-          errMessage.includes('high demand');
-        if (isTransient && attempt === 0) {
-          await new Promise((resolve) => setTimeout(resolve, 800));
-          continue;
-        }
-        console.warn(`Model ${model} failed, trying next:`, errMessage);
-        lastError = err;
-        break;
-      }
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents,
+      });
+      return response;
+    } catch (err: any) {
+      const errMessage = err?.message || String(err);
+      console.warn(`Model ${model} failed, switching immediately:`, errMessage.slice(0, 150));
+      lastError = err;
     }
   }
-  throw lastError;
+
+  throw lastError || new Error('فشلت جميع نماذج الذكاء الاصطناعي المتاحة.');
 }
 
 export function formatApiError(error: any): { status: number; message: string } {
@@ -708,7 +695,12 @@ Strict rule: Use the attached content below as the primary reference for this ge
 
         textFiles.forEach((file: any, idx: number) => {
           const fileTypeLabel = (file.type || 'DOCUMENT').toUpperCase();
-          prompt += `\n--- مَلَفٌّ ${idx + 1} [${fileTypeLabel}]: ${file.name} ---\n${file.textContent}\n`;
+          const rawContent = (file.textContent || '').trim();
+          const safeContent =
+            rawContent.length > 25000
+              ? rawContent.slice(0, 25000) + '\n[... تم اعتماد هذا الجزء الرئيسي من المستند لتسريع الإنتاج وتفادي تأخير الخادم ...]'
+              : rawContent;
+          prompt += `\n--- مَلَفٌّ ${idx + 1} [${fileTypeLabel}]: ${file.name} ---\n${safeContent}\n`;
         });
       }
     }
