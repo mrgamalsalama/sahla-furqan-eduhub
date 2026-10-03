@@ -179,15 +179,10 @@ export default function LibraryPage({
     setExportingId(`qti_${lesson.id}`);
     try {
       const rawHtml = lesson.contentHtml || '';
-      const xmlMatch = rawHtml.match(/<div id="qti-xml-payload"[^>]*>([\s\S]*?)<\/div>/i);
-      const xml = xmlMatch ? xmlMatch[1] : '';
-
-      const combinedPayload = xml ? `${xml}\n\n<!-- HTML_CONTENT -->\n${rawHtml}` : rawHtml;
-
       const target = lesson.settings?.institution === 'furqan' ? 'furqan_canvas' : 'sahlah_cypher';
       await createAndDownloadQtiZip({
         title: lesson.title || 'Assessment_QTI',
-        xmlPayload: combinedPayload,
+        xmlPayload: rawHtml,
         target,
         subject: lesson.settings?.subject,
         grade: lesson.settings?.grade,

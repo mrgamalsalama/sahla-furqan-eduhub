@@ -76,13 +76,11 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
 
   async function handleDownloadZip() {
     if (!result?.qtiXml && !result?.previewHtml) return;
-    const combinedPayload = result?.qtiXml
-      ? `${result.qtiXml}\n\n<!-- HTML_CONTENT -->\n${result.previewHtml || ''}`
-      : result?.previewHtml || '';
+    const payload = result?.qtiXml || result?.previewHtml || '';
 
     await createAndDownloadQtiZip({
       title: title || 'Assessment_QTI',
-      xmlPayload: combinedPayload,
+      xmlPayload: payload,
       target: lmsTarget,
     });
   }

@@ -23,10 +23,14 @@ export interface NormalizedQuestion {
 }
 
 /**
- * Strips HTML tags and unescapes standard HTML entities.
+ * Strips HTML tags, CDATA artifacts, and unescapes standard HTML entities.
+ * Absolutely guarantees no stray `]]>` or `<![CDATA[` is left in the string.
  */
 export function cleanText(str: string = ''): string {
   return str
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/\]\]>/g, '')
+    .replace(/<!\[CDATA\[/g, '')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
@@ -46,7 +50,7 @@ export function stripTashkeel(s: string = ''): string {
 }
 
 /**
- * Normalizes Arabic letters for reliable regex matching.
+ * Normalizes Arabic letters for reliable matching.
  */
 export function normalizeArabic(s: string = ''): string {
   return stripTashkeel(s)
@@ -59,7 +63,6 @@ export function normalizeArabic(s: string = ''): string {
 
 /**
  * Splits HTML deliverable into Questions section and Answer Key section.
- * This guarantees the Answer Key Table is NEVER mistaken for questions!
  */
 export function splitQuestionsAndAnswerKey(html: string): { questionsHtml: string; answerKeyHtml: string } {
   const answerKeyMarkers = [
@@ -91,13 +94,12 @@ export function splitQuestionsAndAnswerKey(html: string): { questionsHtml: strin
 }
 
 /**
- * Extracts correct answer keys from the Answer Key Table or lines.
+ * Extracts correct answer keys from Answer Key Table.
  */
 export function extractAnswerKeys(answerKeyHtml: string): Record<number, string> {
   const keys: Record<number, string> = {};
   if (!answerKeyHtml) return keys;
 
-  // 1. Check table rows: <tr><td>1</td><td>ب) مَدِينَةٌ</td>...</tr>
   const trMatches = Array.from(answerKeyHtml.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi));
   for (const trM of trMatches) {
     const tdMatches = Array.from(trM[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi));
@@ -114,7 +116,6 @@ export function extractAnswerKeys(answerKeyHtml: string): Record<number, string>
     }
   }
 
-  // 2. Check lines: "1. ب" or "السؤال الأول: ب"
   if (Object.keys(keys).length === 0) {
     const lines = answerKeyHtml
       .replace(/<[^>]+>/g, '\n')
@@ -136,30 +137,27 @@ export function extractAnswerKeys(answerKeyHtml: string): Record<number, string>
   return keys;
 }
 
-/**
- * Map answer letter (أ، ب، ج، د / A, B, C, D) to standard choice ID
- */
 export function mapLetterToChoiceId(letter: string): string {
   const upper = letter.toUpperCase();
-  if (upper === 'أ' || upper === 'A') return 'choice_1';
-  if (upper === 'ب' || upper === 'B') return 'choice_2';
-  if (upper === 'ج' || upper === 'C') return 'choice_3';
-  if (upper === 'د' || upper === 'D') return 'choice_4';
+  if (upper === 'أ' || upper === 'A' || upper === 'CHOICE_1') return 'choice_1';
+  if (upper === 'ب' || upper === 'B' || upper === 'CHOICE_2') return 'choice_2';
+  if (upper === 'ج' || upper === 'C' || upper === 'CHOICE_3') return 'choice_3';
+  if (upper === 'د' || upper === 'D' || upper === 'CHOICE_4') return 'choice_4';
   return 'choice_1';
 }
 
 /**
- * Extracts question items from human-readable HTML Questions section ONLY.
- * Completely immune to Answer Key table pollution.
+ * Extracts questions from clean HTML questions section.
  */
 export function extractQuestionsFromHtml(rawHtml: string): NormalizedQuestion[] {
   const questions: NormalizedQuestion[] = [];
   if (!rawHtml) return questions;
 
-  const { questionsHtml, answerKeyHtml } = splitQuestionsAndAnswerKey(rawHtml);
+  // Clean out any embedded XML divs first
+  const sanitizedHtml = rawHtml.replace(/<div id="qti-xml-payload"[^>]*>[\s\S]*?<\/div>/gi, '');
+  const { questionsHtml, answerKeyHtml } = splitQuestionsAndAnswerKey(sanitizedHtml);
   const answerKeys = extractAnswerKeys(answerKeyHtml);
 
-  // Convert HTML to text lines with preserved line breaks
   const plainText = questionsHtml
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n')
@@ -180,7 +178,6 @@ export function extractQuestionsFromHtml(rawHtml: string): NormalizedQuestion[] 
   for (const line of lines) {
     const norm = normalizeArabic(line);
 
-    // Skip metadata headers
     if (
       norm.includes('الماده') ||
       norm.includes('الصف') ||
@@ -204,13 +201,12 @@ export function extractQuestionsFromHtml(rawHtml: string): NormalizedQuestion[] 
         questions.push({
           id: `Q_${qIndex}`,
           title: `السؤال ${qIndex}`,
-          prompt: currentQ.prompt,
+          prompt: cleanText(currentQ.prompt),
           options: currentQ.options,
           correctId: mapLetterToChoiceId(correctLetter),
           points: 1,
         });
       }
-      // Extract prompt text after colon or question number
       const promptText = line.replace(/^[^\:]*\:\s*/, '').replace(/^(\d+[\.\-\)]|س\s*\d+)\s*/, '').trim();
       currentQ = { prompt: promptText, options: [] };
     } else if (optRegex.test(line)) {
@@ -223,7 +219,6 @@ export function extractQuestionsFromHtml(rawHtml: string): NormalizedQuestion[] 
         });
       }
     } else if (currentQ && currentQ.options.length === 0) {
-      // Continuation of question stem
       currentQ.prompt = (currentQ.prompt + ' ' + line).trim();
     }
   }
@@ -234,7 +229,7 @@ export function extractQuestionsFromHtml(rawHtml: string): NormalizedQuestion[] 
     questions.push({
       id: `Q_${qIndex}`,
       title: `السؤال ${qIndex}`,
-      prompt: currentQ.prompt,
+      prompt: cleanText(currentQ.prompt),
       options: currentQ.options,
       correctId: mapLetterToChoiceId(correctLetter),
       points: 1,
@@ -245,13 +240,13 @@ export function extractQuestionsFromHtml(rawHtml: string): NormalizedQuestion[] 
 }
 
 /**
- * Robust XML Item Extractor that works across QTI 1.2 and QTI 2.1
+ * Extracts items from raw QTI XML string.
  */
 export function extractQuestionsFromXml(xml: string): NormalizedQuestion[] {
   const questions: NormalizedQuestion[] = [];
   if (!xml) return questions;
 
-  // 1. Try QTI 1.2 <item> tags
+  // 1. QTI 1.2 items
   const qti12Items = Array.from(xml.matchAll(/<item\b([\s\S]*?)<\/item>/gi));
   if (qti12Items.length > 0) {
     qti12Items.forEach((m, idx) => {
@@ -259,20 +254,17 @@ export function extractQuestionsFromXml(xml: string): NormalizedQuestion[] {
       const identMatch = itemContent.match(/ident="([^"]+)"/i);
       const titleMatch = itemContent.match(/title="([^"]+)"/i);
       const id = identMatch ? identMatch[1] : `Q_${idx + 1}`;
-      const title = titleMatch ? titleMatch[1] : `السؤال ${idx + 1}`;
+      const title = titleMatch ? cleanText(titleMatch[1]) : `السؤال ${idx + 1}`;
 
-      // Extract Prompt from <material><mattext>
       let prompt = '';
       const presMatch = itemContent.match(/<presentation>([\s\S]*?)<\/presentation>/i);
       const presContent = presMatch ? presMatch[1] : itemContent;
-
       const presWithoutChoices = presContent.replace(/<response_lid[\s\S]*?<\/response_lid>/gi, '');
       const mattextMatch = presWithoutChoices.match(/<mattext[^>]*>([\s\S]*?)<\/mattext>/i);
       if (mattextMatch) {
-        prompt = mattextMatch[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim();
+        prompt = cleanText(mattextMatch[1]);
       }
 
-      // Extract Choices <response_label>
       const choices: Array<{ id: string; text: string }> = [];
       const choiceMatches = Array.from(
         itemContent.matchAll(/<response_label\b[^>]*ident="([^"]+)"[^>]*>([\s\S]*?)<\/response_label>/gi)
@@ -280,21 +272,17 @@ export function extractQuestionsFromXml(xml: string): NormalizedQuestion[] {
 
       choiceMatches.forEach((cm, cIdx) => {
         const cMatMatch = cm[2].match(/<mattext[^>]*>([\s\S]*?)<\/mattext>/i);
-        const cText = cMatMatch
-          ? cMatMatch[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim()
-          : `خيار ${cIdx + 1}`;
+        const cText = cMatMatch ? cleanText(cMatMatch[1]) : `خيار ${cIdx + 1}`;
         choices.push({
           id: `choice_${cIdx + 1}`,
-          text: cleanText(cText),
+          text: cText,
         });
       });
 
-      // Extract Correct Answer
       let correctId = 'choice_1';
       const varequalMatch = itemContent.match(/<varequal[^>]*>([\s\S]*?)<\/varequal>/i);
       if (varequalMatch) {
-        const rawVal = varequalMatch[1].trim();
-        correctId = mapLetterToChoiceId(rawVal);
+        correctId = mapLetterToChoiceId(varequalMatch[1].trim());
       }
 
       questions.push({
@@ -310,7 +298,7 @@ export function extractQuestionsFromXml(xml: string): NormalizedQuestion[] {
     return questions;
   }
 
-  // 2. Try QTI 2.1 <assessmentItem> tags
+  // 2. QTI 2.1 items
   const qti21Items = Array.from(xml.matchAll(/<assessmentItem\b([\s\S]*?)<\/assessmentItem>/gi));
   if (qti21Items.length > 0) {
     qti21Items.forEach((m, idx) => {
@@ -318,10 +306,10 @@ export function extractQuestionsFromXml(xml: string): NormalizedQuestion[] {
       const identMatch = itemContent.match(/identifier="([^"]+)"/i);
       const titleMatch = itemContent.match(/title="([^"]+)"/i);
       const id = identMatch ? identMatch[1] : `Q_${idx + 1}`;
-      const title = titleMatch ? titleMatch[1] : `السؤال ${idx + 1}`;
+      const title = titleMatch ? cleanText(titleMatch[1]) : `السؤال ${idx + 1}`;
 
       const promptMatch = itemContent.match(/<prompt[^>]*>([\s\S]*?)<\/prompt>/i);
-      const prompt = promptMatch ? promptMatch[1].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim() : '';
+      const prompt = promptMatch ? cleanText(promptMatch[1]) : '';
 
       const choices: Array<{ id: string; text: string }> = [];
       const choiceMatches = Array.from(
@@ -331,21 +319,20 @@ export function extractQuestionsFromXml(xml: string): NormalizedQuestion[] {
       choiceMatches.forEach((cm, cIdx) => {
         choices.push({
           id: `choice_${cIdx + 1}`,
-          text: cleanText(cm[2].replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')),
+          text: cleanText(cm[2]),
         });
       });
 
       let correctId = 'choice_1';
       const valMatch = itemContent.match(/<value[^>]*>([\s\S]*?)<\/value>/i);
       if (valMatch) {
-        const rawVal = valMatch[1].trim();
-        correctId = mapLetterToChoiceId(rawVal);
+        correctId = mapLetterToChoiceId(valMatch[1].trim());
       }
 
       questions.push({
         id,
         title,
-        prompt: cleanText(prompt),
+        prompt,
         options: choices,
         correctId,
         points: 1,
@@ -357,14 +344,43 @@ export function extractQuestionsFromXml(xml: string): NormalizedQuestion[] {
 }
 
 /**
+ * Deduplicates questions by prompt text.
+ */
+function deduplicateQuestions(list: NormalizedQuestion[]): NormalizedQuestion[] {
+  const seen = new Set<string>();
+  const unique: NormalizedQuestion[] = [];
+  for (const q of list) {
+    const key = normalizeArabic(q.prompt).slice(0, 35);
+    if (!key || !seen.has(key)) {
+      if (key) seen.add(key);
+      unique.push(q);
+    }
+  }
+  return unique;
+}
+
+/**
  * Universal Question Normalizer
- * Guarantees 100% complete questions without confusing questions and answers.
  */
 export function extractAndNormalizeQuestions(rawPayload: string, fallbackTitle: string = 'الامتحان'): NormalizedQuestion[] {
-  const xmlQuestions = extractQuestionsFromXml(rawPayload);
-  const htmlQuestions = extractQuestionsFromHtml(rawPayload);
+  let xmlString = '';
+  let htmlString = rawPayload;
 
-  // Scenario 1: XML already has full questions and valid non-empty prompts
+  const xmlMatch = rawPayload.match(/<div id="qti-xml-payload"[^>]*>([\s\S]*?)<\/div>/i);
+  if (xmlMatch && xmlMatch[1]) {
+    xmlString = xmlMatch[1];
+    htmlString = rawPayload.replace(/<div id="qti-xml-payload"[^>]*>[\s\S]*?<\/div>/gi, '');
+  } else if (rawPayload.includes('<questestinterop') || rawPayload.includes('<assessmentItem')) {
+    xmlString = rawPayload;
+    htmlString = '';
+  }
+
+  const rawXmlQuestions = extractQuestionsFromXml(xmlString);
+  const xmlQuestions = deduplicateQuestions(rawXmlQuestions);
+  const rawHtmlQuestions = extractQuestionsFromHtml(htmlString);
+  const htmlQuestions = deduplicateQuestions(rawHtmlQuestions);
+
+  // Scenario 1: XML questions exist and have non-empty prompts
   const xmlHasValidPrompts =
     xmlQuestions.length > 0 &&
     xmlQuestions.every((q) => q.prompt && q.prompt.length >= 5 && q.options.length >= 2);
@@ -373,8 +389,7 @@ export function extractAndNormalizeQuestions(rawPayload: string, fallbackTitle: 
     return xmlQuestions;
   }
 
-  // Scenario 2: XML has the 4 options and answer keys, but prompt was empty/mangled
-  // We PRESERVE the XML options and correct answer, and ONLY recover prompt from HTML!
+  // Scenario 2: XML has choices, but prompt is empty/short
   if (xmlQuestions.length > 0 && xmlQuestions.some((q) => q.options.length >= 2)) {
     return xmlQuestions.map((xmlQ, idx) => {
       const htmlQ = htmlQuestions[idx];
@@ -388,19 +403,18 @@ export function extractAndNormalizeQuestions(rawPayload: string, fallbackTitle: 
 
       return {
         ...xmlQ,
-        prompt: validPrompt,
-        options,
+        prompt: cleanText(validPrompt),
+        options: options.map((o) => ({ id: o.id, text: cleanText(o.text) })),
         correctId,
       };
     });
   }
 
-  // Scenario 3: No valid XML items, use questions extracted from HTML Questions section
+  // Scenario 3: Rely on HTML questions
   if (htmlQuestions.length > 0) {
     return htmlQuestions;
   }
 
-  // Ultimate fallback
   return [
     {
       id: 'Q_01',
@@ -420,36 +434,34 @@ export function extractAndNormalizeQuestions(rawPayload: string, fallbackTitle: 
 
 /**
  * Builds Sahlah Academy CYPHER Learning QTI 1.2 XML string.
- * Conforms 100% to official CYPHER / IMS CC QTI 1.2 standard.
+ * Strictly adheres to official working template (`qti_va_1791024284.zip`).
  */
 function buildSahlahCypherXml(questions: NormalizedQuestion[], testTitle: string, bankIdent: string): string {
   let itemsXml = '';
 
   questions.forEach((q, idx) => {
-    const itemIdent = `${bankIdent}_${idx + 1}`;
+    const itemIdent = `${Date.now()}_${idx + 1}`;
     const qRef = `MultipleChoiceOneAnswer_${itemIdent}`;
-    const questionTitle = q.title || `السؤال ${idx + 1}`;
+    const cleanedPrompt = cleanText(q.prompt);
 
     const choicesXml = q.options
       .map(
-        (opt) => `            <response_label ident="${opt.id}">
-              <material><mattext texttype="text/html"><![CDATA[<p>${opt.text}</p>]]></mattext></material>
+        (opt, oIdx) => `            <response_label ident="choice_${oIdx + 1}">
+              <material><mattext texttype="text/html"><![CDATA[<p>${cleanText(opt.text)}</p>]]></mattext></material>
             </response_label>`
       )
       .join('\n');
 
-    itemsXml += `      <item ident="${itemIdent}" title="${questionTitle}">
+    itemsXml += `      <item ident="${itemIdent}">
         <itemmetadata>
           <qtimetadata>
-            <qtimetadatafield><fieldlabel>question_type</fieldlabel><fieldentry>multiple_choice_question</fieldentry></qtimetadatafield>
-            <qtimetadatafield><fieldlabel>points_possible</fieldlabel><fieldentry>${q.points.toFixed(1)}</fieldentry></qtimetadatafield>
             <qtimetadatafield><fieldlabel>cc_profile</fieldlabel><fieldentry>cc.multiple_choice.v0p1</fieldentry></qtimetadatafield>
             <qtimetadatafield><fieldlabel>cc_weighting</fieldlabel><fieldentry>1.0</fieldentry></qtimetadatafield>
             <qtimetadatafield><fieldlabel>assessment_question_identifierref</fieldlabel><fieldentry>${qRef}</fieldentry></qtimetadatafield>
           </qtimetadata>
         </itemmetadata>
         <presentation>
-          <material><mattext texttype="text/html"><![CDATA[<p>${q.prompt}</p>]]></mattext></material>
+          <material><mattext texttype="text/html"><![CDATA[<p>${cleanedPrompt}</p>]]></mattext></material>
           <response_lid ident="${qRef}" rcardinality="Single" rtiming="No">
             <render_choice shuffle="Yes">
 ${choicesXml}
@@ -458,10 +470,6 @@ ${choicesXml}
         </presentation>
         <resprocessing>
           <outcomes><decvar varname="SCORE" vartype="Integer" defaultval="0" minvalue="0" maxvalue="1"/></outcomes>
-          <respcondition continue="No">
-            <conditionvar><varequal respident="${qRef}">${q.correctId}</varequal></conditionvar>
-            <setvar action="Set" varname="SCORE">1</setvar>
-          </respcondition>
           <respcondition continue="yes">
             <conditionvar><varequal respident="${qRef}va">${q.correctId}</varequal></conditionvar>
             <setvar varname="SCORE" action="Set">1</setvar>
@@ -473,12 +481,6 @@ ${choicesXml}
   return `<?xml version="1.0" encoding="UTF-8"?>
 <questestinterop xmlns="http://www.imsglobal.org/xsd/ims_qtiasiv1p2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.imsglobal.org/xsd/ims_qtiasiv1p2 http://www.imsglobal.org/xsd/ims_qtiasiv1p2p1.xsd">
   <assessment ident="${bankIdent}" title="${testTitle}">
-    <qtimetadata>
-      <qtimetadatafield>
-        <fieldlabel>qmd_assessmenttype</fieldlabel>
-        <fieldentry>Examination</fieldentry>
-      </qtimetadatafield>
-    </qtimetadata>
     <section ident="root_section">
 ${itemsXml}    </section>
   </assessment>
@@ -492,12 +494,12 @@ function buildFurqanQti21Xml(questions: NormalizedQuestion[], testTitle: string,
   const items21 = questions.map((q, idx) => {
     const qIdent = q.id || `Q_${idx + 1}`;
     const simpleChoices = q.options
-      .map((c) => `      <simpleChoice identifier="${c.id}">${c.text}</simpleChoice>`)
+      .map((c) => `      <simpleChoice identifier="${c.id}">${cleanText(c.text)}</simpleChoice>`)
       .join('\n');
 
     return `    <assessmentItem xmlns="http://www.imsglobal.org/xsd/imsqtiasi_v2p1" 
                     identifier="${qIdent}" 
-                    title="${q.title || `السؤال ${idx + 1}`}" 
+                    title="${cleanText(q.title) || `السؤال ${idx + 1}`}" 
                     adaptive="false" 
                     timeDependent="false">
       <responseDeclaration identifier="RESPONSE" cardinality="single" baseType="identifier">
@@ -507,7 +509,7 @@ function buildFurqanQti21Xml(questions: NormalizedQuestion[], testTitle: string,
         <defaultValue><value>0</value></defaultValue>
       </outcomeDeclaration>
       <itemBody>
-        <prompt>${q.prompt}</prompt>
+        <prompt>${cleanText(q.prompt)}</prompt>
         <choiceInteraction responseIdentifier="RESPONSE" shuffle="true" maxChoices="1">
 ${simpleChoices}
         </choiceInteraction>
@@ -529,24 +531,22 @@ ${items21.join('\n\n')}
 }
 
 /**
- * Main Entry Point: Creates and downloads the official QTI ZIP package.
+ * Main Entry Point: Creates and downloads official QTI ZIP package.
  */
 export async function createAndDownloadQtiZip(options: QtiPackageOptions): Promise<void> {
   const { title, xmlPayload, target } = options;
   const zip = new JSZip();
-  const id = Date.now().toString(36);
   const safeTitle = (title || 'Assessment').replace(/[\\/:*?"<>|]/g, '_');
   const d = new Date();
   const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-  // Normalize questions across XML and HTML
   const questions = extractAndNormalizeQuestions(xmlPayload, safeTitle);
 
   if (target === 'sahlah_cypher') {
     // =========================================================================
     // 1. أكاديمية سهلة الدولية — Sahlah LMS (CYPHER Learning) QTI 1.2 ZIP
     // Exact match to official LMS working file (qti_va_1791024284.zip):
-    // Contains ONLY Folder1/QuestionBank1.xml (NO duplicate assessment_qti12.xml!)
+    // Contains ONLY Folder1/QuestionBank1.xml
     // =========================================================================
     const bankIdent = `QuestionBank_${Date.now()}`;
     const qtiXml = buildSahlahCypherXml(questions, safeTitle, bankIdent);
@@ -582,8 +582,6 @@ export async function createAndDownloadQtiZip(options: QtiPackageOptions): Promi
   </resources>
 </manifest>`;
 
-    // Add ONLY imsmanifest.xml and Folder1/QuestionBank1.xml
-    // Note: Do NOT add assessment_qti12.xml because CYPHER Learning LMS will import both and duplicate all questions!
     zip.file('imsmanifest.xml', manifestXml);
     zip.folder('Folder1')?.file('QuestionBank1.xml', qtiXml);
 
@@ -594,14 +592,14 @@ export async function createAndDownloadQtiZip(options: QtiPackageOptions): Promi
     // =========================================================================
     // 2. مدرسة الفرقان العالمية — QTI v2.1 ZIP
     // =========================================================================
-    const testIdent = `FURQAN_TEST_${id}`;
+    const testIdent = `FURQAN_TEST_${Date.now()}`;
     const fullTestXml = buildFurqanQti21Xml(questions, safeTitle, testIdent);
 
     const manifestXml = `<?xml version="1.0" encoding="UTF-8"?>
 <manifest xmlns="http://www.imsglobal.org/xsd/imscp_v1p1" 
           xmlns:imsmd="http://www.imsglobal.org/xsd/imsmd_v1p2" 
           xmlns:imsqti="http://www.imsglobal.org/xsd/imsqti_v2p1" 
-          identifier="MANIFEST_FURQAN_QTI21_${id}">
+          identifier="MANIFEST_FURQAN_QTI21_${Date.now()}">
   <metadata>
     <schema>QTIv2.1</schema>
     <schemaversion>2.1</schemaversion>
