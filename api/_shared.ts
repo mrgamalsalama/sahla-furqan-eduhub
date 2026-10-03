@@ -748,7 +748,6 @@ Strict rule: Use the attached content below as the primary reference for this ge
     const htmlContent = extractHtml(text);
     const institutionHeader = getInstitutionHeader(settings);
 
-    const isAr = settings.contentLanguage === 'ar';
     const direction = isAr ? 'rtl' : 'ltr';
     const alignment = isAr ? 'right' : 'left';
 
