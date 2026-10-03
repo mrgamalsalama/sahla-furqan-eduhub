@@ -1,7 +1,7 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState } from 'react';
 import {
   Award, ArrowRight, ArrowLeft, Sparkles, AlertCircle, Loader2,
-  BookOpen, CheckCircle2, Upload, X, FileText, FileType2,
+  BookOpen, CheckCircle2,
   Stethoscope, CheckSquare, Layers, Calendar, Hash,
 } from 'lucide-react';
 import type {
@@ -17,6 +17,7 @@ import { getLessonSettings, saveLessonSettings, uid } from '@/lib/storage';
 import { generateContent } from '@/lib/gemini';
 import type { UILang } from '@/lib/i18n';
 import { t } from '@/lib/i18n';
+import SourceMaterialUpload from './SourceMaterialUpload';
 
 interface BenchmarkPageProps {
   onBack: () => void;
@@ -30,8 +31,6 @@ export default function BenchmarkPage({ onBack, onOpenResult, uiLang }: Benchmar
   const grades = isAr ? GRADES_AR : GRADES_EN;
 
   const [files, setFiles] = useState<UploadedFile[]>([]);
-  const [dragActive, setDragActive] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [settings, setSettings] = useState<LessonSettings>(() => {
     try {
@@ -71,58 +70,6 @@ export default function BenchmarkPage({ onBack, onOpenResult, uiLang }: Benchmar
   const [error, setError] = useState<string | null>(null);
 
   const isDiagnostic = settings.standardFramework === 'diagnostic';
-
-  const handleFiles = useCallback(async (fileList: FileList | null) => {
-    if (!fileList) return;
-    setError(null);
-
-    for (const file of Array.from(fileList)) {
-      const isImage = file.type.startsWith('image/');
-      const isPdf = file.type === 'application/pdf';
-      const isWord =
-        file.type === 'application/msword' ||
-        file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-
-      if (!isImage && !isPdf && !isWord) {
-        setError(s.unsupportedFile);
-        continue;
-      }
-
-      const base64 = await fileToBase64(file);
-      const uploaded: UploadedFile = {
-        id: uid(),
-        name: file.name,
-        type: isImage ? 'image' : isPdf ? 'pdf' : 'word',
-        dataUrl: isImage ? `data:${file.type};base64,${base64}` : '',
-        base64,
-        mimeType: file.type,
-      };
-      setFiles((prev) => [...prev, uploaded]);
-    }
-  }, [s.unsupportedFile]);
-
-  function fileToBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        const base64 = result.split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-
-  function removeFile(id: string) {
-    setFiles((prev) => prev.filter((f) => f.id !== id));
-  }
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setDragActive(false);
-    handleFiles(e.dataTransfer.files);
-  }
 
   function handleGenerate() {
     setGenerating(true);
@@ -195,85 +142,18 @@ export default function BenchmarkPage({ onBack, onOpenResult, uiLang }: Benchmar
         </div>
       )}
 
-      {/* منطقة رفع الملفات */}
-      <div
-        className={`card p-6 mb-6 transition-all duration-200 border-dashed border-2 ${
-          dragActive ? 'border-primary-400 bg-primary-50/50 scale-[1.01]' : 'border-gray-200 bg-white'
-        }`}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragActive(true);
-        }}
-        onDragLeave={() => setDragActive(false)}
-        onDrop={handleDrop}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept="image/*,application/pdf,.doc,.docx"
-          className="hidden"
-          onChange={(e) => handleFiles(e.target.files)}
+      {/* منطقة رفع المستندات وتوجيهات المعلم */}
+      <div className="card p-6 mb-6 bg-white border border-gray-100 shadow-sm">
+        <SourceMaterialUpload
+          files={files}
+          onFilesChange={setFiles}
+          teacherPrompt={settings.teacherPrompt || ''}
+          onTeacherPromptChange={(prompt) => setSettings({ ...settings, teacherPrompt: prompt })}
+          uiLang={uiLang}
+          title={isAr ? 'رفع ملف مصدري (Word / PDF / PowerPoint) وبناء الاختبار عليه' : 'Upload Source Document & Build Assessment'}
+          description={isAr ? 'ارفع ملف الاختبار أو نص القراءة وسيعتمد عليه الذكاء الاصطناعي حصرياً.' : 'Upload file or reading passage to base test on.'}
         />
-        <div className="text-center">
-          <div className="w-12 h-12 mx-auto rounded-xl bg-primary-50 flex items-center justify-center mb-3">
-            <Upload className="w-6 h-6 text-primary-600" />
-          </div>
-          <h3 className="text-base font-bold text-gray-800 mb-1">
-            {isAr ? 'رفع ملف أو صورة لبناء الاختبار عليها' : 'Upload File / Image to Base Test Upon'}
-          </h3>
-          <p className="text-gray-500 text-xs mb-3">
-            {isAr ? 'يدعم الصور، ملفات PDF، ومستندات Word' : 'Supports Images, PDF, and Word documents'}
-          </p>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="btn-primary text-xs py-2 px-4"
-          >
-            <Upload className="w-3.5 h-3.5" />
-            {s.uploadBtn}
-          </button>
-        </div>
       </div>
-
-      {/* قائمة الملفات المرفوعة */}
-      {files.length > 0 && (
-        <div className="card p-4 mb-6 bg-white border border-gray-100 animate-slide-up">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold text-gray-800 text-xs">{s.uploadedFiles(files.length)}</h3>
-            <button
-              type="button"
-              onClick={() => setFiles([])}
-              className="text-error-500 hover:text-error-600 text-xs font-medium"
-            >
-              {s.clearAll}
-            </button>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {files.map((file) => (
-              <div key={file.id} className="relative group bg-gray-50 rounded-xl p-2.5 border border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => removeFile(file.id)}
-                  className={`absolute -top-2 ${isAr ? '-left-2' : '-right-2'} w-5 h-5 bg-error-500 text-white rounded-full flex items-center justify-center shadow-md hover:scale-110 transition-transform z-10`}
-                >
-                  <X className="w-3 h-3" />
-                </button>
-                <div className="w-full aspect-square rounded-lg bg-white flex items-center justify-center mb-1.5 overflow-hidden">
-                  {file.type === 'image' ? (
-                    <img src={file.dataUrl} alt={file.name} className="w-full h-full object-contain" />
-                  ) : (
-                    <div className="text-gray-400">
-                      {file.type === 'pdf' ? <FileType2 className="w-8 h-8" /> : <FileText className="w-8 h-8" />}
-                    </div>
-                  )}
-                </div>
-                <p className="text-[11px] text-gray-700 truncate font-medium">{file.name}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       <div className="bg-white rounded-2xl p-6 sm:p-8 space-y-6 shadow-sm border border-gray-100">
         {/* معلومات الاختبار الأساسية */}

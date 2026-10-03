@@ -2,13 +2,14 @@ import { useState } from 'react';
 import {
   Sparkles, Loader2, AlertCircle, Layers, Sliders
 } from 'lucide-react';
-import type { LessonSettings, OutputType, GenerationResult, WorksheetTheme } from '@/types';
+import type { LessonSettings, OutputType, GenerationResult, WorksheetTheme, UploadedFile } from '@/types';
 import {
   SUBJECT_OPTIONS, GRADES_AR, GRADES_EN, STUDENT_LEVELS_AR, STUDENT_LEVELS_EN
 } from '@/types';
 import { getLessonSettings, saveLessonSettings } from '@/lib/storage';
 import { generateContent } from '@/lib/gemini';
 import type { UILang } from '@/lib/i18n';
+import SourceMaterialUpload from './SourceMaterialUpload';
 
 interface WorksheetStudioProps {
   onOpenResult: (result: GenerationResult, outputType: OutputType) => void;
@@ -36,6 +37,7 @@ export default function WorksheetStudio({ onOpenResult, uiLang }: WorksheetStudi
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [files, setFiles] = useState<UploadedFile[]>([]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,7 +54,7 @@ export default function WorksheetStudio({ onOpenResult, uiLang }: WorksheetStudi
     saveLessonSettings(finalSettings);
 
     try {
-      const result = await generateContent(finalSettings, 'worksheet', []);
+      const result = await generateContent(finalSettings, 'worksheet', files);
       onOpenResult(result, 'worksheet');
     } catch (err: any) {
       setError(err?.message || (isAr ? 'حدث خطأ أثناء توليد ورقة العمل.' : 'Failed to generate worksheet.'));
@@ -227,21 +229,20 @@ export default function WorksheetStudio({ onOpenResult, uiLang }: WorksheetStudi
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              {isAr ? 'توجيهات وأنشطة مخصصة يطلبها المعلم في الورقة (اختياري):' : 'Custom Exercises or Instructions:'}
-            </label>
-            <textarea
-              rows={2}
-              value={ws.teacherCustomPrompt || ''}
-              onChange={(e) =>
+          {/* Source Material & Teacher Instructions */}
+          <div className="pt-2 border-t border-slate-100">
+            <SourceMaterialUpload
+              files={files}
+              onFilesChange={setFiles}
+              teacherPrompt={settings.teacherPrompt || ws.teacherCustomPrompt || ''}
+              onTeacherPromptChange={(prompt) =>
                 setSettings({
                   ...settings,
-                  worksheetSettings: { ...ws, teacherCustomPrompt: e.target.value },
+                  teacherPrompt: prompt,
+                  worksheetSettings: { ...ws, teacherCustomPrompt: prompt },
                 })
               }
-              placeholder={isAr ? 'مثال: ضع تمريناً لاستخراج الأفعال الناسخة في جدول، وسؤالاً مفتوحاً لإبداء الرأي...' : 'e.g. Focus on contextual vocabulary matching in page 1...'}
-              className="w-full text-xs p-3 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500"
+              uiLang={uiLang}
             />
           </div>
         </div>

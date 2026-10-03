@@ -202,6 +202,10 @@ export default function ImagePickerModal({
                         alt={img.titleAr}
                         className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                         loading="lazy"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=300&q=60';
+                        }}
                       />
                     </div>
                     <div className="p-2.5 bg-white text-right">

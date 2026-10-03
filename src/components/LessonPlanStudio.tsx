@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import {
-  ClipboardList, Sparkles, Loader2, AlertCircle, Upload, X,
-  FileText
+  ClipboardList, Sparkles, Loader2, AlertCircle
 } from 'lucide-react';
 import type { LessonSettings, OutputType, UploadedFile, GenerationResult } from '@/types';
 import {
   SUBJECT_OPTIONS, GRADES_AR, GRADES_EN, DURATIONS_AR, DURATIONS_EN,
   STUDENT_LEVELS_AR, STUDENT_LEVELS_EN, INSTITUTIONS
 } from '@/types';
-import { getLessonSettings, saveLessonSettings, uid } from '@/lib/storage';
+import { getLessonSettings, saveLessonSettings } from '@/lib/storage';
 import { generateContent } from '@/lib/gemini';
 import type { UILang } from '@/lib/i18n';
+import SourceMaterialUpload from './SourceMaterialUpload';
 
 interface LessonPlanStudioProps {
   onOpenResult: (result: GenerationResult, outputType: OutputType) => void;
@@ -27,29 +27,6 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
   const grades = isAr ? GRADES_AR : GRADES_EN;
   const durations = isAr ? DURATIONS_AR : DURATIONS_EN;
   const studentLevels = isAr ? STUDENT_LEVELS_AR : STUDENT_LEVELS_EN;
-
-  async function handleFiles(fileList: FileList | null) {
-    if (!fileList) return;
-    for (const file of Array.from(fileList)) {
-      const isImg = file.type.startsWith('image/');
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = (reader.result as string).split(',')[1];
-        setFiles((prev) => [
-          ...prev,
-          {
-            id: uid(),
-            name: file.name,
-            type: isImg ? 'image' : 'pdf',
-            dataUrl: isImg ? (reader.result as string) : '',
-            base64,
-            mimeType: file.type,
-          },
-        ]);
-      };
-      reader.readAsDataURL(file);
-    }
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -240,55 +217,15 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
           </div>
         </div>
 
-        {/* Custom standards and focus */}
-        <div>
-          <label className="block text-xs font-bold text-gray-700 mb-1">
-            {isAr ? 'أهداف خاصة أو معايير محددة يطلبها المعلم (اختياري):' : 'Specific Objectives or Standards:'}
-          </label>
-          <textarea
-            rows={3}
-            value={settings.customStandards || ''}
-            onChange={(e) => setSettings({ ...settings, customStandards: e.target.value })}
-            placeholder={isAr ? 'اكتب أي نواتج تعلم أو أنشطة تريد التركيز عليها في خطة هذا الدرس...' : 'Add any custom outcomes or special activities...'}
-            className="w-full text-xs p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary-500"
+        {/* Source Material Upload & Teacher Custom Instructions */}
+        <div className="pt-2 border-t border-slate-100">
+          <SourceMaterialUpload
+            files={files}
+            onFilesChange={setFiles}
+            teacherPrompt={settings.teacherPrompt || ''}
+            onTeacherPromptChange={(prompt) => setSettings({ ...settings, teacherPrompt: prompt })}
+            uiLang={uiLang}
           />
-        </div>
-
-        {/* Attachments */}
-        <div>
-          <label className="block text-xs font-bold text-gray-700 mb-1.5">
-            {isAr ? 'إرفاق نصوص أو صور مساندة من المقرر (اختياري):' : 'Attach Lesson Materials (Optional):'}
-          </label>
-          <div className="flex items-center gap-3">
-            <label className="cursor-pointer px-4 py-2 rounded-xl border border-gray-300 hover:bg-gray-50 text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-              <Upload className="w-3.5 h-3.5" />
-              <span>{isAr ? 'رفع ملفات' : 'Upload Files'}</span>
-              <input
-                type="file"
-                multiple
-                accept="image/*,.pdf,.doc,.docx"
-                onChange={(e) => handleFiles(e.target.files)}
-                className="hidden"
-              />
-            </label>
-            <span className="text-xs text-gray-500">
-              {files.length > 0 ? `${files.length} ملفات مرفقة` : 'صور أو ملفات PDF للدرس'}
-            </span>
-          </div>
-
-          {files.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2">
-              {files.map((f) => (
-                <span key={f.id} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs px-2.5 py-1 rounded-lg">
-                  <FileText className="w-3 h-3" />
-                  <span className="truncate max-w-[120px]">{f.name}</span>
-                  <button type="button" onClick={() => setFiles(files.filter(x => x.id !== f.id))}>
-                    <X className="w-3 h-3 text-red-500" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Submit button */}

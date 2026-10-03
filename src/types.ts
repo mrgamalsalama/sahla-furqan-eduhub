@@ -152,6 +152,7 @@ export interface LessonSettings {
   presentationSettings?: PresentationSettings;
   lmsTarget?: LmsTarget;
   selectedSubCriteria?: string[];
+  teacherPrompt?: string; // Optional custom instructions from teacher: توجيهات ومتطلبات خاصة بالمعلم يلتزم بها الذكاء الاصطناعي بدقة
 }
 
 export interface FrameworkSubCriterion {
@@ -210,11 +211,12 @@ export const FRAMEWORK_SUB_CRITERIA: Record<string, FrameworkSubCriterion[]> = {
 export interface UploadedFile {
   id: string;
   name: string;
-  type: 'image' | 'pdf' | 'word';
+  type: 'image' | 'pdf' | 'word' | 'powerpoint' | 'text';
   dataUrl: string;
   base64: string;
   mimeType: string;
   textContent?: string;
+  size?: number;
 }
 
 export interface SavedLesson {

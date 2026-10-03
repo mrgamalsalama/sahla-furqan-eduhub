@@ -40,8 +40,8 @@ export const SAFE_EDUCATIONAL_IMAGES: EducationalImage[] = [
   },
   {
     id: 'arb_04',
-    url: 'https://images.unsplash.com/photo-1584281722576-904d6e91ea6b?auto=format&fit=crop&w=1200&q=80',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1584281722576-904d6e91ea6b?auto=format&fit=crop&w=300&q=60',
+    url: 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?auto=format&fit=crop&w=1200&q=80',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?auto=format&fit=crop&w=300&q=60',
     titleAr: 'إضاءة هادئة ومصحف شريف وقراءة',
     titleEn: 'Spiritual Reading and Light',
     category: 'arabic_islamic',

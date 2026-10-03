@@ -6,7 +6,7 @@ import {
   Image as ImageIcon, Bold, Italic, AlignRight, AlignCenter,
   AlignLeft, Type, Layout, ShieldCheck, ChevronDown, RefreshCw
 } from 'lucide-react';
-import type { LessonSettings, OutputType, GenerationResult } from '@/types';
+import type { LessonSettings, OutputType, GenerationResult, UploadedFile } from '@/types';
 import { SUBJECT_OPTIONS, GRADES_AR, GRADES_EN } from '@/types';
 import { getLessonSettings, saveLessonSettings, saveLesson } from '@/lib/storage';
 import { generateContent } from '@/lib/gemini';
@@ -19,6 +19,7 @@ import {
 import type { GammaSlide, GammaThemeId } from '@/lib/gammaPptx';
 import GammaPresenterModal from './GammaPresenterModal';
 import ImagePickerModal from './ImagePickerModal';
+import SourceMaterialUpload from './SourceMaterialUpload';
 import { saveCloudResource, getCurrentUser } from '@/lib/supabase';
 
 interface PresentationStudioProps {
@@ -84,6 +85,7 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
   const [exportingPptx, setExportingPptx] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
   const [savedFeedback, setSavedFeedback] = useState(false);
+  const [files, setFiles] = useState<UploadedFile[]>([]);
 
   const themeConfig = GAMMA_THEMES[selectedTheme] || GAMMA_THEMES.navy;
   const ps = settings.presentationSettings || {};
@@ -135,7 +137,7 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
     saveLessonSettings(finalSettings);
 
     try {
-      const result = await generateContent(finalSettings, 'slides', []);
+      const result = await generateContent(finalSettings, 'slides', files);
       const rawHtml = result.contentHtml || (result as unknown as { htmlContent?: string }).htmlContent || '';
       let parsed = parseHtmlToGammaSlides(
         rawHtml,
@@ -518,6 +520,17 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
                 })}
               </div>
             </div>
+          </div>
+
+          {/* Source Material Upload & Teacher Instructions */}
+          <div className="pt-2 border-t border-slate-100">
+            <SourceMaterialUpload
+              files={files}
+              onFilesChange={setFiles}
+              teacherPrompt={settings.teacherPrompt || ''}
+              onTeacherPromptChange={(prompt) => setSettings({ ...settings, teacherPrompt: prompt })}
+              uiLang={uiLang}
+            />
           </div>
 
           {/* Sharia compliance assurance banner */}
@@ -1086,6 +1099,10 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
                                 alt={slide.title}
                                 className="w-full h-full object-cover group-hover/img:scale-105 transition duration-300"
                                 loading="lazy"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src =
+                                    'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=1200&q=80';
+                                }}
                               />
 
                               {/* Hover Change Image Button */}

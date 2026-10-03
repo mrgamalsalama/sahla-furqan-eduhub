@@ -449,6 +449,13 @@ function buildBasePrompt(settings: any, outputType: string): string {
       : `\n- Custom Standards/Outcomes to enforce:\n"""\n${settings.customStandards.trim()}\n"""`;
   }
 
+  let teacherPromptText = '';
+  if (settings.teacherPrompt?.trim()) {
+    teacherPromptText = isAr
+      ? `\n\n⚠️ تَوْجِيهَاتٌ وَمُتَطَلَّبَاتٌ خَاصَّةٌ جِدّاً مِنَ الْمُعَلِّمِ (أَوْلَوِيَّةٌ قُصْوَى وَالْتِزَامٌ إِجْبَارِيٌّ 100%):\n"""\n${settings.teacherPrompt.trim()}\n"""\nقَاعِدَةٌ صَارِمَةٌ: هَذِهِ التَّوْجِيهَاتُ كَتَبَهَا الْمُعَلِّمُ بِنَفْسِهِ لِتَحْدِيدِ مَا يُرِيدُهُ بِدِقَّةٍ. يَجِبُ عَلَيْكَ الِالْتِزَامُ التَّامُّ وَالْحَرْفِيُّ بِكُلِّ مَا وَرَدَ فِيهَا، وَتَقْدِيمُهَا عَلَى أَيِّ خِيَارَاتٍ افْتِرَاضِيَّةٍ أَوْ نَمَطِيَّةٍ.`
+      : `\n\n⚠️ SPECIAL TEACHER INSTRUCTIONS (STRICT HIGHEST PRIORITY - 100% MANDATORY):\n"""\n${settings.teacherPrompt.trim()}\n"""\nStrict rule: These instructions were explicitly provided by the teacher. You MUST strictly comply with every single requirement, constraint, or emphasis mentioned here above any default options.`;
+  }
+
   if (isAr) {
     const ctx = `أَنْتَ مُعَلِّمٌ خَبِيرٌ وَمُسَاعِدٌ تَرْبَوِيٌّ مُتَقَدِّمٌ لِإِعْدَادِ الدُّرُوسِ وَالْمَنَاهِجِ التَّعْلِيمِيَّةِ التَّابِعَةِ لِأَكَادِيمِيَّةِ سَهْلَةَ الدَّوْلِيَّةِ وَمَدْرَسَةِ الْفُرْقَانِ الْعَالَمِيَّةِ، وَخَبِيرٌ مُتَمَرِّسٌ فِي التَّدْرِيسِ وَالتَّقْيِيمِ لِلُّغَةِ الْعَرَبِيَّةِ وَالْمَنَاهِجِ الدَّوْلِيَّةِ.
 
@@ -463,7 +470,8 @@ function buildBasePrompt(settings: any, outputType: string): string {
 - اسْمُ الْمُعَلِّمِ: ${settings.teacherName || 'غَيْرُ مُحَدَّدٍ'}
 - عُنْوَانُ الدَّرْسِ: ${settings.lessonTitle || 'سَيَتِمُّ اسْتِنْتَاجُهُ مِنَ الْمُحْتَوَى'}
 ${subjectGuidance}
-${customStandardsText}`;
+${customStandardsText}
+${teacherPromptText}`;
 
     switch (outputType) {
       case 'standardized-test':
@@ -685,30 +693,46 @@ export async function executeGenerate(req: any, res: any) {
     const { settings = {}, outputType = 'lesson-plan', files = [] } = body || {};
 
     let prompt = buildBasePrompt(settings, outputType);
+    const isAr = settings.contentLanguage === 'ar';
 
+    // 1. Process files with text content (Word .docx, PowerPoint .pptx, Text .txt, etc.)
     if (Array.isArray(files) && files.length > 0) {
-      const textFiles = files.filter((f: any) => f.textContent);
+      const textFiles = files.filter((f: any) => f.textContent && f.textContent.trim().length > 0);
       if (textFiles.length > 0) {
-        prompt += `\n\nنُصُوصٌ وَوَثَائِقُ تَعْلِيمِيَّةٌ مُرْفَقَةٌ:\n`;
+        prompt += isAr
+          ? `\n\n📚 مُسْتَنَدَاتٌ وَمَلَفَّاتٌ مَصْدَرِيَّةٌ مُرْفَقَةٌ مِنَ الْمُعَلِّمِ (Word / PowerPoint / PDF / Text):
+قَاعِدَةٌ إِلْزَامِيَّةٌ حَوْلَ الْمَلَفَّاتِ الْمُرْفَقَةِ: هَذِهِ الْمَلَفَّاتُ هِيَ الْمَصْدَرُ الْأَسَاسِيُّ لِلدَّرْسِ أَوْ الِاخْتِبَارِ. اعْتَمِدْ عَلَيْهَا كُلِّيّاً فِي اسْتِخْرَاجِ الْمَفَاهِيمِ وَالْأَمْثِلَةِ وَالْأَسْئِلَةِ وَالتَّطْبِيقَاتِ:\n`
+          : `\n\n📚 ATTACHED SOURCE DOCUMENTS & MATERIALS (Word / PowerPoint / PDF / Text):
+Strict rule: Use the attached content below as the primary reference for this generation:\n`;
+
         textFiles.forEach((file: any, idx: number) => {
-          prompt += `\n--- مَلَفٌّ ${idx + 1}: ${file.name} ---\n${file.textContent}\n`;
+          const fileTypeLabel = (file.type || 'DOCUMENT').toUpperCase();
+          prompt += `\n--- مَلَفٌّ ${idx + 1} [${fileTypeLabel}]: ${file.name} ---\n${file.textContent}\n`;
         });
       }
     }
 
-    const imageFiles = Array.isArray(files)
-      ? files.filter((f: any) => f.base64 && (f.type === 'image' || f.mimeType?.startsWith('image/')))
+    // 2. Process binary files (PDFs and Images) passed to Gemini inlineData
+    const binaryMediaFiles = Array.isArray(files)
+      ? files.filter(
+          (f: any) =>
+            f.base64 &&
+            (f.type === 'image' ||
+              f.type === 'pdf' ||
+              f.mimeType?.startsWith('image/') ||
+              f.mimeType === 'application/pdf')
+        )
       : [];
 
     let response;
-    if (imageFiles.length > 0) {
+    if (binaryMediaFiles.length > 0) {
       const parts: any[] = [];
-      imageFiles.forEach((img: any) => {
-        const cleanBase64 = img.base64?.replace(/^data:image\/[a-z]+;base64,/, '') || '';
+      binaryMediaFiles.forEach((media: any) => {
+        const cleanBase64 = media.base64?.replace(/^data:[^;]+;base64,/, '') || '';
         if (cleanBase64) {
           parts.push({
             inlineData: {
-              mimeType: img.mimeType || 'image/png',
+              mimeType: media.mimeType || (media.type === 'pdf' ? 'application/pdf' : 'image/png'),
               data: cleanBase64,
             },
           });

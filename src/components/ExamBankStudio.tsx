@@ -4,7 +4,7 @@ import {
   Layers, Edit3, HelpCircle
 } from 'lucide-react';
 import type {
-  LessonSettings, OutputType, GenerationResult, StandardFramework
+  LessonSettings, OutputType, GenerationResult, StandardFramework, UploadedFile
 } from '@/types';
 import {
   SUBJECT_OPTIONS, GRADES_AR, GRADES_EN, INTERNATIONAL_FRAMEWORKS,
@@ -13,6 +13,7 @@ import {
 import { getLessonSettings, saveLessonSettings } from '@/lib/storage';
 import { generateContent } from '@/lib/gemini';
 import type { UILang } from '@/lib/i18n';
+import SourceMaterialUpload from './SourceMaterialUpload';
 
 interface ExamBankStudioProps {
   onOpenResult: (result: GenerationResult, outputType: OutputType) => void;
@@ -38,6 +39,7 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
   const [examType, setExamType] = useState<OutputType>('quiz');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [files, setFiles] = useState<UploadedFile[]>([]);
 
   // Active framework
   const activeFrameworkId = (settings.standardFramework || 'diagnostic_gap') as StandardFramework;
@@ -78,7 +80,7 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
     saveLessonSettings(finalSettings);
 
     try {
-      const result = await generateContent(finalSettings, examType, []);
+      const result = await generateContent(finalSettings, examType, files);
       onOpenResult(result, examType);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -473,17 +475,14 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
           </div>
         </div>
 
-        {/* 5. Source Text for reading comprehension or passage-based items */}
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1.5">
-            {isAr ? 'النص القرائي أو المادة العلمية المرجعية لبناء الأسئلة عليها (اختياري):' : 'Source Passage or Reading Text (Optional):'}
-          </label>
-          <textarea
-            rows={4}
-            value={settings.sourceText || ''}
-            onChange={(e) => setSettings({ ...settings, sourceText: e.target.value })}
-            placeholder={isAr ? 'الصق هنا نص القراءة أو المقال أو المسألة العلمية إذا كنت تريد بناء أسئلة الاختبار عليها حصراً...' : 'Paste passage text if questions should be derived from it...'}
-            className="w-full text-xs p-3.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500"
+        {/* 5. Source Material Upload & Teacher Custom Instructions */}
+        <div className="pt-2 border-t border-slate-100">
+          <SourceMaterialUpload
+            files={files}
+            onFilesChange={setFiles}
+            teacherPrompt={settings.teacherPrompt || ''}
+            onTeacherPromptChange={(prompt) => setSettings({ ...settings, teacherPrompt: prompt })}
+            uiLang={uiLang}
           />
         </div>
 
