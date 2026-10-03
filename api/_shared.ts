@@ -1,11 +1,24 @@
 import { GoogleGenAI } from '@google/genai';
 import fs from 'node:fs';
 import path from 'node:path';
+import { SAHLAH_LOGO, FURQAN_LOGO } from '../src/lib/logos';
 
 // Clean Institution Headers
-function getInstitutionHeader(settings: any): string {
+function getInstitutionHeader(settings: any, outputType?: string): string {
   const isAr = settings.contentLanguage === 'ar';
-  const inst = settings.institution;
+  const inst = settings.institution || 'sahlah';
+
+  // For official Weekly Lesson Plan: Render exact template header (Title + Logo)
+  if (outputType === 'lesson-plan') {
+    const logoSrc = inst === 'furqan' ? FURQAN_LOGO : SAHLAH_LOGO;
+    const logoAlt = inst === 'furqan' ? 'Al-Furqan School' : 'SAHLAH';
+    return `<div class="sahlah-lesson-header" style="text-align: center; margin-bottom: 20px;">
+      <div style="font-size: 16px; font-weight: 800; color: #1e293b; margin-bottom: 12px; letter-spacing: 0.5px;">${isAr ? 'خطة الدرس الأسبوعية' : 'Weekly Lesson Plan'}</div>
+      <div style="margin-bottom: 6px;">
+        <img src="${logoSrc}" alt="${logoAlt}" style="height: 44px; max-width: 220px; object-fit: contain; display: inline-block;" />
+      </div>
+    </div>`;
+  }
 
   const titleText =
     inst === 'sahlah'
@@ -540,20 +553,78 @@ ${teacherPromptText}`;
       case 'standardized-test':
         return buildStandardizedPrompt(settings, true, ctx);
 
-      case 'lesson-plan':
+      case 'lesson-plan': {
+        const todayDate = settings.lessonDate || new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: '2-digit', day: '2-digit' });
+        const weekText = settings.weekNumber || 'الأسبوع الأول';
+        const teacher = settings.teacherName || '—';
+        const subj = settings.subject || '—';
+        const grd = settings.grade || '—';
+        const dur = settings.duration || '—';
+        const title = settings.lessonTitle || '—';
+
         return `${ctx}
-الْمَطْلُوبُ: تَوْلِيدُ "خُطَّةِ دَرْسٍ مُعْتَمَدَةٍ" كَامِلَةٍ بِاللُّغَةِ الْعَرَبِيَّةِ وَمَشْكُولَةٍ تَشْكِيلاً تَامّاً (100%) عَلَى شَكْلِ HTML مُنَسَّقٍ وَجَاهِزٍ لِلْعَرْضِ وَالطِّبَاعَةِ.
+الْمَطْلُوبُ: تَوْلِيدُ "خُطَّةِ دَرْسٍ أُسْبُوعِيَّةٍ مُعْتَمَدَةٍ" تُطَابِقُ تَمَاماً النَّمُوذَجَ الرَّسْمِيَّ الْمُعْتَمَدَ لِأَكَادِيمِيَّةِ سَهْلَةَ الدَّوْلِيَّةِ وَمَدَارِسِ الْفُرْقَانِ (3 صَفَحَاتٍ مُنَظَّمَةٍ)، مَشْكُولَةً بِالْكَامِلِ تَشْكِيلاً تَامّاً (100%)، وَبِالتَّصْمِيمِ وَالْأَلْوَانِ وَالْجَدَاوِلِ الْمُطَابِقَةِ حَرْفِيّاً كَمَا يَلِي:
 
-يَجِبُ أَنْ يَحْتَوِيَ HTML عَلَى جَدَاوِلَ مُنَظَّمَةٍ تَمَاماً بِالشَّكْلِ التَّالِي:
-1. جَدْوَلُ التَّرْوِيسَةِ: اسْمُ الْمُعَلِّمِ (${settings.teacherName || '—'})، الْمَادَّةُ (${settings.subject || '—'})، الصَّفُّ (${settings.grade || '—'})، عُنْوَانُ الدَّرْسِ (${settings.lessonTitle || '—'})، التَّارِيخُ: —، مُدَّةُ الدَّرْسِ (${settings.duration || '—'}).
-2. جَدْوَلُ "الْأَسَاسِيَّاتِ": الْأَهْدَافُ الْعَامَّةُ وَالْخَاصَّةُ، الْمَعَايِيرُ التَّعْلِيمِيَّةُ، الْقِيَمُ الْإِسْلَامِيَّةُ، الْمَصَادِرُ وَتَطْبِيقُ التِّكْنُولُوجِيَا، وَالْمَهَارَاتُ الْحَيَاتِيَّةُ.
-3. جَدْوَلُ "خَطَوَاتِ الدَّرْسِ" بِـ 4 أَعْمِدَةٍ: (النَّشَاطُ | الْمُدَّةُ الزَّمَنِيَّةُ | الْوَصْفُ | أَسَالِيبُ التَّقْيِيمِ) وَيَحْتَوِي عَلَى 5 صُفُوفٍ: (النَّشَاطُ التَّحْفِيزِيُّ، الشَّرْحُ الْمُبَاشِرُ، التَّطْبِيقُ الْمُوَجَّهُ، الْعَمَلُ الْفَرْدِيُّ، تَذْكِرَةُ الْخُرُوجِ).
-4. جَدْوَلُ "التَّقْيِيمِ".
-5. جَدْوَلُ "التَّمَايُزِ وَمُرَاعَاةِ الْفُرُوقِ الْفَرْدِيَّةِ".
-6. جَدْوَلُ "مُلَاحَظَاتِ الْمُعَلِّمِ".
+قَوَاعِدُ التَّصْمِيمِ وَالْهَيْكَلِ الْإِلْزَامِيَّةُ (HTML دَقِيقٌ وَمُنَسَّقٌ بِأَلْوَانِ النَّمُوذَجِ):
+(مُلَاحَظَةٌ: تَمَّ دَمْجُ عُنْوَانِ "خُطَّةُ الدَّرْسِ الْأُسْبُوعِيَّةُ" وَشِعَارِ الْمُؤَسَّسَةِ فِي أَعْلَى الصَّفْحَةِ تِلْقَائِيّاً؛ ابْدَأْ مُبَاشَرَةً بِجَدْوَلِ التَّرْوِيسَةِ):
 
-اسْتَخْدِمْ وُسُومَ HTML فَقَطْ: <h1>, <h2>, <h3>, <p>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <ul>, <li>, <strong>.
-لَا تَسْتَخْدِمْ وُسُومَ <html> أَوْ <body> أَوْ <style>.`;
+1. جَدْوَلُ مَعْلُومَاتِ التَّرْوِيسَةِ (الصَّفْحَةُ 1 - 2 صُفُوفٍ × 4 خَلَايَا):
+<table style="width: 100%; border-collapse: collapse; margin-bottom: 22px; border: 1px solid #94a3b8;">
+  <tr>
+    <td style="background-color: #1e293b; color: #ffffff; font-weight: bold; padding: 9px 12px; width: 18%; border: 1px solid #94a3b8; text-align: center;">الْأُسْبُوعُ - التَّارِيخُ</td>
+    <td style="background-color: #f8fafc; color: #0f172a; padding: 9px 12px; width: 32%; border: 1px solid #94a3b8; text-align: right;">${weekText} - ${todayDate}</td>
+    <td style="background-color: #1e293b; color: #ffffff; font-weight: bold; padding: 9px 12px; width: 18%; border: 1px solid #94a3b8; text-align: center;">اسْمُ الْمُعَلِّمِ</td>
+    <td style="background-color: #f8fafc; color: #0f172a; padding: 9px 12px; width: 32%; border: 1px solid #94a3b8; text-align: right;">${teacher}</td>
+  </tr>
+  <tr>
+    <td style="background-color: #1e293b; color: #ffffff; font-weight: bold; padding: 9px 12px; width: 18%; border: 1px solid #94a3b8; text-align: center;">الْمَادَّةُ</td>
+    <td style="background-color: #f8fafc; color: #0f172a; padding: 9px 12px; width: 32%; border: 1px solid #94a3b8; text-align: right;">${subj}</td>
+    <td style="background-color: #1e293b; color: #ffffff; font-weight: bold; padding: 9px 12px; width: 18%; border: 1px solid #94a3b8; text-align: center;">الصَّفُّ</td>
+    <td style="background-color: #f8fafc; color: #0f172a; padding: 9px 12px; width: 32%; border: 1px solid #94a3b8; text-align: right;">${grd}</td>
+  </tr>
+</table>
+
+2. جَدْوَلُ مَعْلُومَاتِ وَأَسَاسِيَّاتِ الدَّرْسِ (الصَّفْحَةُ 1 - 8 صُفُوفٍ):
+- جَدْوَلٌ بِعَمُودَيْنِ: الْعَمُودُ الْأَيْمَنُ هُوَ رَأْسُ الْبَنْدِ (خَلْفِيَّةٌ تِرْكُوَازِيَّةٌ بَتْرُولِيَّةٌ عميقة #13748e مَعَ نَصٍّ أَبْيَضَ عَرِيضٍ #ffffff بِنِسْبَةِ عَرْضٍ 22%)، وَالْعَمُودُ الْأَيْسَرُ هُوَ الْمُحْتَوَى التَّفْصِيلِيُّ لِلْبَنْدِ (خَلْفِيَّةٌ بَيْضَاءُ #ffffff):
+الصُّفُوفُ الثَّمَانِيَةُ بِالتَّرْتِيبِ الدَّقِيقِ:
+1. عُنْوَانُ الدَّرْسِ (${title})
+2. التَّارِيخُ (${todayDate})
+3. مُدَّةُ الدَّرْسِ (${dur})
+4. الْأَهْدَافُ (أَهْدَافٌ سُلُوكِيَّةٌ مَعْرِفِيَّةٌ وَمَهَارِيَّةٌ وَوِجْدَانِيَّةٌ مَصَاغَةٌ بِدِقَّةٍ وِفْقَ مَعَايِيرِ SMART وَمَشْكُولَةٌ بِالتَّمَامِ)
+5. الْمَعَايِيرُ (الْمَعَايِيرُ التَّعْلِيمِيَّةُ الْمُعْتَمَدَةُ لِلْمَادَّةِ مَعَ أَرْقَامِ الْكُودِ)
+6. الْقِيَمُ الْإِسْلَامِيَّةُ (الْقِيَمُ الْإِسْلَامِيَّةُ وَالْأَخْلَاقِيَّةُ وَالْهُوِيَّةُ الْمُرْتَبِطَةُ بِجَوْهَرِ الدَّرْسِ)
+7. الْمَصَادِرُ - تَطْبِيقُ التِّكْنُولُوجِيَا (الْكُتُبُ، الْمِنَصَّاتُ الرَّقْمِيَّةُ التَّفَاعُلِيَّةُ، التَّطْبِيقَاتُ، أَدَوَاتُ LMS)
+8. الْمَهَارَاتُ الْحَيَاتِيَّةُ (التَّفْكِيرُ النَّاقِدُ، حَلُّ الْمُشْكِلَاتِ، التَّوَاصُلُ، التَّعَاوُنُ)
+
+3. فَاصِلُ الصَّفْحَةِ الثَّانِيَةِ (إِلْزَامِيٌّ):
+<div class="page-break" style="page-break-after: always; break-after: page; margin: 28px 0; border-top: 1px dashed #cbd5e1; text-align: center; color: #94a3b8; font-size: 11px; padding-top: 4px;">--- صَفْحَةُ 2 (خطوات الدرس) ---</div>
+
+4. عُنْوَانُ خَطَوَاتِ الدَّرْسِ (الصَّفْحَةُ 2):
+<h3 style="font-size: 1.15rem; font-weight: 800; color: #0f172a; margin: 18px 0 10px 0;">خَطَوَاتُ الدَّرْسِ :</h3>
+
+5. جَدْوَلُ خَطَوَاتِ الدَّرْسِ (الصَّفْحَةُ 2):
+- جَدْوَلٌ بِأَرْبَعَةِ أَعْمِدَةٍ، رُؤُوسُهَا بِخَلْفِيَّةٍ دَاكِنَةٍ #1e293b وَنَصٍّ أَبْيَضَ عَرِيضٍ:
+(النَّشَاطُ | الْمُدَّةُ الزَّمَنِيَّةُ | الْوَصْفُ | أَسَالِيبُ التَّقْيِيمِ)
+- عَمُودُ "النَّشَاطُ" خَلَايَاهُ بِخَلْفِيَّةٍ تِرْكُوَازِيَّةٍ بَتْرُولِيَّةٍ #13748e وَنَصٍّ أَبْيَضَ عَرِيضٍ، وَيَحْتَوِي عَلَى الْمَرَاحِلِ الْخَمْسِ:
+1. النَّشَاطُ التَّحْفِيزِيُّ (الْمُدَّةُ الزَّمَنِيَّةُ، وَصْفُ تَهْيِئَةِ الطُّلَّابِ وَإِثَارَةِ الشَّغَفِ، أَسَالِيبُ التَّقْيِيمِ الْمُنَاسِبَةِ)
+2. الشَّرْحُ الْمُبَاشِرُ (الْمُدَّةُ الزَّمَنِيَّةُ، الشَّرْحُ الْمُمَنْهَجُ لِلْمَفَاهِيمِ وَالْأَمْثِلَةِ، أَسَالِيبُ التَّقْيِيمِ)
+3. التَّطْبِيقُ الْمُوَجَّهُ (الْمُدَّةُ الزَّمَنِيَّةُ، الْأَنْشِطَةُ التَّدْرِيبِيَّةُ الْمُشْتَرَكَةُ بِإِرْشَادِ الْمُعَلِّمِ، أَسَالِيبُ التَّقْيِيمِ)
+4. الْعَمَلُ الْفَرْدِيُّ (الْمُدَّةُ الزَّمَنِيَّةُ، أَنْشِطَةُ الْمُمَارَسَةِ الْمُسْتَقِلَّةِ لِكُلِّ طَالِبٍ، أَسَالِيبُ التَّقْيِيمِ)
+5. تَذْكِرَةُ الْخُرُوجِ (الْمُدَّةُ الزَّمَنِيَّةُ، سُؤَالُ الْإِغْلَاقِ السَّرِيعِ لِلتَّحَقُّقِ مِنَ الْفَهْمِ، أَسَالِيبُ التَّقْيِيمِ)
+- وَيَلِيهِ فِي نَفْسِ الْجَدْوَلِ صَفُّ التَّقْيِيمِ:
+خَلِيَّةُ النَّشَاطِ (تِرْكُوَازِيَّةٌ #13748e بِنَصٍّ أَبْيَضَ عَرِيضٍ): "التَّقْيِيمُ (الْوَاجِبَاتُ الْمَنْزِلِيَّةُ / الِاخْتِبَارَاتُ / التَّقْيِيمُ التَّكْوِينِيُّ)"
+مَعَ مَلْءِ خَلَايَا الْمُدَّةِ وَالْوَصْفِ وَأَسَالِيبِ التَّقْيِيمِ.
+
+6. فَاصِلُ الصَّفْحَةِ الثَّالِثَةِ (إِلْزَامِيٌّ):
+<div class="page-break" style="page-break-after: always; break-after: page; margin: 28px 0; border-top: 1px dashed #cbd5e1; text-align: center; color: #94a3b8; font-size: 11px; padding-top: 4px;">--- صَفْحَةُ 3 (التمايز وملاحظات المعلم) ---</div>
+
+7. جَدْوَلُ التَّمَايُزِ وَمُلَاحَظَاتِ الْمُعَلِّمِ (الصَّفْحَةُ 3 - صَفَّانِ):
+- جَدْوَلٌ بِعَمُودَيْنِ: الْعَمُودُ الْأَيْمَنُ بِخَلْفِيَّةٍ تِرْكُوَازِيَّةٍ بَتْرُولِيَّةٍ #13748e وَنَصٍّ أَبْيَضَ عَرِيضٍ بِنِسْبَةِ عَرْضٍ 22%، وَالْأَيْسَرُ بَيْضَاءُ #ffffff:
+- الصَّفُّ 1: "التَّمَايُزُ": تَفْصِيلُ إِسْتِرَاتِيجِيَّاتِ التَّمَايُزِ (دَعْمُ الْمُتَعَثِّرِينَ عِلَاجِيّاً، مَهَامُّ الْمُتَوَسِّطِينَ، إِثْرَاءُ الْمُتَفَوِّقِينَ، وَمُرَاعَاةُ أَنْمَاطِ التَّعَلُّمِ).
+- الصَّفُّ 2: "مُلَاحَظَاتُ الْمُعَلِّمِ الشَّخْصِيَّةُ لِلدَّرْسِ": تَأَمُّلٌ تَرْبَوِيٌّ مُمَنْهَجٌ، نِقَاطُ الْقُوَّةِ الْمُتَوَقَّعَةُ، التَّحَدِّيَاتُ وَكَيْفِيَّةُ تَجَاوُزِهَا، وَالتَّوْصِيَاتُ لِلْحِصَصِ الْقَادِمَةِ.
+
+تَنْبِيهٌ حَاسِمٌ: اسْتَخْدِمْ وُسُومَ HTML الْمُطَابِقَةَ فَقَطْ مَعَ التَّشْكِيلِ التَّامِّ (100%) لِكُلِّ كَلِمَةٍ دُونَ اسْتِثْنَاءِ.`;
+      }
 
       case 'worksheet': {
         const ws = settings.worksheetSettings || {};
@@ -705,17 +776,78 @@ ${customStandardsText}`;
       case 'standardized-test':
         return buildStandardizedPrompt(settings, false, ctx);
 
-      case 'lesson-plan':
+      case 'lesson-plan': {
+        const todayDate = settings.lessonDate || new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        const weekText = settings.weekNumber || 'Week 1';
+        const teacher = settings.teacherName || '—';
+        const subj = settings.subject || '—';
+        const grd = settings.grade || '—';
+        const dur = settings.duration || '—';
+        const title = settings.lessonTitle || '—';
+
         return `${ctx}
-Task: Generate a complete "Approved Lesson Plan" in English formatted in clean semantic HTML tables.
-Include:
-1. Header Table (Teacher, Subject, Grade, Title, Duration, Date).
-2. Essentials Table (General & Specific Objectives, Standards, Islamic Values, Tech & Life Skills).
-3. Lesson Procedure Table (4 columns: Activity | Duration | Description | Assessment across 5 phases: Warmup, Direct Instruction, Guided Practice, Independent Work, Exit Ticket).
-4. Assessment Table.
-5. Differentiation Table.
-6. Teacher Notes Table.
-Use standard HTML tags only.`;
+TASK: Generate a complete "Official Weekly Lesson Plan" in English matching the accredited template of Sahlah Academy and Al-Furqan Schools across 3 organized pages, styled with identical layout, colors, and tables:
+
+DESIGN & STRUCTURE RULES:
+(Note: The top title "Weekly Lesson Plan" and the institution logo are already injected at the very top of the page; begin immediately with the Header Metadata Table):
+
+1. Header Metadata Table (Page 1 - 2 rows x 4 cells, #1e293b dark header cells with white text, #f8fafc value cells):
+<table style="width: 100%; border-collapse: collapse; margin-bottom: 22px; border: 1px solid #94a3b8;">
+  <tr>
+    <td style="background-color: #1e293b; color: #ffffff; font-weight: bold; padding: 9px 12px; width: 18%; border: 1px solid #94a3b8; text-align: center;">Week - Date</td>
+    <td style="background-color: #f8fafc; color: #0f172a; padding: 9px 12px; width: 32%; border: 1px solid #94a3b8; text-align: left;">${weekText} - ${todayDate}</td>
+    <td style="background-color: #1e293b; color: #ffffff; font-weight: bold; padding: 9px 12px; width: 18%; border: 1px solid #94a3b8; text-align: center;">Teacher Name</td>
+    <td style="background-color: #f8fafc; color: #0f172a; padding: 9px 12px; width: 32%; border: 1px solid #94a3b8; text-align: left;">${teacher}</td>
+  </tr>
+  <tr>
+    <td style="background-color: #1e293b; color: #ffffff; font-weight: bold; padding: 9px 12px; width: 18%; border: 1px solid #94a3b8; text-align: center;">Subject</td>
+    <td style="background-color: #f8fafc; color: #0f172a; padding: 9px 12px; width: 32%; border: 1px solid #94a3b8; text-align: left;">${subj}</td>
+    <td style="background-color: #1e293b; color: #ffffff; font-weight: bold; padding: 9px 12px; width: 18%; border: 1px solid #94a3b8; text-align: center;">Grade</td>
+    <td style="background-color: #f8fafc; color: #0f172a; padding: 9px 12px; width: 32%; border: 1px solid #94a3b8; text-align: left;">${grd}</td>
+  </tr>
+</table>
+
+2. Page 1 Essentials & Core Information Table (8 Rows):
+- 2 Columns: Left header column has deep petrol teal background #13748e with white bold text #ffffff (~22% width), right column has white background #ffffff:
+The 8 rows strictly in order:
+1. Lesson Title (${title})
+2. Date (${todayDate})
+3. Lesson Duration (${dur})
+4. Objectives (Detailed SMART cognitive, behavioral, and skills objectives)
+5. Standards (Curriculum standards and codes)
+6. Islamic Values (Ethical values, citizenship, and Islamic moral connections)
+7. Resources - Technology Integration (Textbooks, LMS tools, virtual labs, interactive digital platforms)
+8. Life Skills (Critical thinking, communication, problem solving, collaboration)
+
+3. Page Break for Page 2 (Mandatory):
+<div class="page-break" style="page-break-after: always; break-after: page; margin: 28px 0; border-top: 1px dashed #cbd5e1; text-align: center; color: #94a3b8; font-size: 11px; padding-top: 4px;">--- Page 2 (Lesson Steps) ---</div>
+
+4. Heading for Page 2:
+<h3 style="font-size: 1.15rem; font-weight: 800; color: #0f172a; margin: 18px 0 10px 0;">Lesson Steps:</h3>
+
+5. Lesson Steps Table (Page 2):
+- 4 Columns: Headers with dark background #1e293b and white bold text:
+(Activity | Duration | Description | Assessment Strategies)
+- Activity column cells have petrol teal background #13748e with white bold text #ffffff across the 5 phases:
+1. Starter / Hook Activity (Duration, engaging hook & motivation, assessment method)
+2. Direct Instruction (Duration, structured concept explanation & modeling, assessment method)
+3. Guided Practice (Duration, collaborative practice & teacher facilitation, assessment method)
+4. Independent Practice (Duration, student self-directed mastery tasks, assessment method)
+5. Exit Ticket (Duration, closing formative check question, assessment method)
+- Followed by the Assessment row in the same table:
+Activity cell (#13748e petrol teal background with white bold text): "Assessment (Homework / Quizzes / Formative Assessment)"
+With detailed duration, description, and formative assessment methods.
+
+6. Page Break for Page 3 (Mandatory):
+<div class="page-break" style="page-break-after: always; break-after: page; margin: 28px 0; border-top: 1px dashed #cbd5e1; text-align: center; color: #94a3b8; font-size: 11px; padding-top: 4px;">--- Page 3 (Differentiation & Reflection) ---</div>
+
+7. Differentiation & Teacher Notes Table (Page 3 - 2 Rows):
+- 2 Columns: Left header column with petrol teal background #13748e and white bold text (~22% width), right column white #ffffff:
+- Row 1: "Differentiation": Structured accommodations and extensions (Support for struggling learners, core mastery tasks, enrichment for gifted/advanced learners, and multi-modal learning styles).
+- Row 2: "Teacher's Personal Notes for the Lesson": Professional pedagogical reflection (Anticipated strengths, potential pacing or comprehension bottlenecks and mitigations, and recommendations for future instruction).
+
+Output standard HTML tags with matching inline styling.`;
+      }
 
       case 'worksheet': {
         const ws = settings.worksheetSettings || {};
@@ -814,12 +946,13 @@ Strict rule: Use the attached content below as the primary reference for this ge
 
     const text = response.text || '';
     const htmlContent = extractHtml(text);
-    const institutionHeader = getInstitutionHeader(settings);
+    const institutionHeader = getInstitutionHeader(settings, outputType);
 
     const direction = isAr ? 'rtl' : 'ltr';
     const alignment = isAr ? 'right' : 'left';
+    const extraClass = outputType === 'lesson-plan' ? ' sahlah-lesson-plan' : '';
 
-    const fullHtml = `<div dir="${direction}" lang="${settings.contentLanguage || 'ar'}" style="direction: ${direction}; text-align: ${alignment}; font-family: inherit;">${institutionHeader}${htmlContent}</div>`;
+    const fullHtml = `<div class="rte-content${extraClass}" dir="${direction}" lang="${settings.contentLanguage || 'ar'}" style="direction: ${direction}; text-align: ${alignment}; font-family: inherit;">${institutionHeader}${htmlContent}</div>`;
 
     const titlePrefix =
       outputType === 'worksheet'

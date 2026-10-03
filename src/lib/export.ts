@@ -138,11 +138,29 @@ function buildPrintCSS(isAr: boolean): string {
       font-size: 10pt;
     }
     th {
-      background: #e2e8f0 !important;
+      background: #e2e8f0;
       font-weight: 700;
       color: #0f172a;
     }
-    tr:nth-child(even) { background: #f8fafc; }
+    .sahlah-lesson-plan table {
+      width: 100% !important;
+      border-collapse: collapse !important;
+      margin-bottom: 20px !important;
+      border: 1px solid #94a3b8 !important;
+    }
+    .sahlah-lesson-plan th,
+    .sahlah-lesson-plan td {
+      border: 1px solid #94a3b8 !important;
+      padding: 7px 10px !important;
+      font-size: 9.5pt !important;
+      line-height: 1.5 !important;
+    }
+    .sahlah-lesson-header {
+      margin-bottom: 16px !important;
+      padding-bottom: 10px !important;
+      border-bottom: 2px solid #e2e8f0 !important;
+      text-align: center !important;
+    }
     strong { font-weight: 700; }
     blockquote {
       ${blockquoteBorder}
@@ -182,8 +200,13 @@ export function printContent(
   }
 
   // Ensure official header banner with dual logos is included
-  const hasExistingHeader = htmlContent.includes('official-school-header') || htmlContent.includes('FURQAN_LOGO');
+  const hasExistingHeader =
+    htmlContent.includes('official-school-header') ||
+    htmlContent.includes('FURQAN_LOGO') ||
+    htmlContent.includes('sahlah-lesson-header') ||
+    htmlContent.includes('sahlah-lesson-plan');
   const banner = hasExistingHeader ? '' : buildOfficialHeaderBanner(settings, isAr);
+  const isLessonPlan = htmlContent.includes('sahlah-lesson-header') || htmlContent.includes('sahlah-lesson-plan');
 
   win.document.write(`<!DOCTYPE html>
 <html dir="${dir}" lang="${lang}">
@@ -196,7 +219,7 @@ export function printContent(
 </head>
 <body>
   ${banner}
-  <h1>${escapeHtml(title)}</h1>
+  ${isLessonPlan ? '' : `<h1>${escapeHtml(title)}</h1>`}
   ${htmlContent}
 </body>
 </html>`);

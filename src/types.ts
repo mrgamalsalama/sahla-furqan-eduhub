@@ -153,6 +153,8 @@ export interface LessonSettings {
   lmsTarget?: LmsTarget;
   selectedSubCriteria?: string[];
   teacherPrompt?: string; // Optional custom instructions from teacher: توجيهات ومتطلبات خاصة بالمعلم يلتزم بها الذكاء الاصطناعي بدقة
+  weekNumber?: string; // e.g. الأسبوع الأول / Week 1
+  lessonDate?: string; // e.g. تاريخ الدرس
 }
 
 export interface FrameworkSubCriterion {

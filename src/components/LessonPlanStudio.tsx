@@ -151,6 +151,35 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
           </div>
         </div>
 
+        {/* Template metadata: Week & Date */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              {isAr ? 'الأسبوع الدراسي (الترويسة الرسمية):' : 'School Week (Official Header):'}
+            </label>
+            <input
+              type="text"
+              value={settings.weekNumber || ''}
+              onChange={(e) => setSettings({ ...settings, weekNumber: e.target.value })}
+              placeholder={isAr ? 'الأسبوع الأول (أو الأسبوع الثاني...)' : 'Week 1 (or Week 2...)'}
+              className="w-full text-xs px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              {isAr ? 'تاريخ الدرس:' : 'Lesson Date:'}
+            </label>
+            <input
+              type="text"
+              value={settings.lessonDate || ''}
+              onChange={(e) => setSettings({ ...settings, lessonDate: e.target.value })}
+              placeholder={isAr ? new Date().toLocaleDateString('ar-EG', { year: 'numeric', month: '2-digit', day: '2-digit' }) : new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+              className="w-full text-xs px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">

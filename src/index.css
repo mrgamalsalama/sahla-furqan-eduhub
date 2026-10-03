@@ -180,3 +180,45 @@
 ::-webkit-scrollbar-track { background: #f1f5f9; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* تنسيقات نموذج خطة الدرس المعتمدة لأكاديمية سهلة ومدارس الفرقان */
+.sahlah-lesson-plan {
+  width: 100%;
+  color: #0f172a;
+}
+
+.sahlah-lesson-header {
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 14px;
+  margin-bottom: 20px;
+}
+
+.sahlah-lesson-plan table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+  border: 1px solid #94a3b8 !important;
+}
+
+.sahlah-lesson-plan th,
+.sahlah-lesson-plan td {
+  border: 1px solid #94a3b8 !important;
+  padding: 8px 12px;
+  vertical-align: middle;
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+/* فواصل الصفحات في المعاينة والطباعة */
+.page-break {
+  page-break-after: always;
+  break-after: page;
+  margin: 28px 0;
+  border-top: 1px dashed #cbd5e1;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 11px;
+  padding-top: 6px;
+  user-select: none;
+}
+
