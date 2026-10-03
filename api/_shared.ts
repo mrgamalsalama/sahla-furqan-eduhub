@@ -1,7 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import fs from 'node:fs';
 import path from 'node:path';
-import { SAHLAH_LOGO, FURQAN_LOGO } from '../src/lib/logos';
+import { SAHLAH_LOGO, FURQAN_LOGO } from './logos.js';
 
 // Clean Institution Headers
 function getInstitutionHeader(settings: any, outputType?: string): string {
