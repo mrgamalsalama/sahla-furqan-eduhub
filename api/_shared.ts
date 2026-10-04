@@ -222,6 +222,17 @@ export function extractHtml(text: string): string {
   cleaned = cleaned.replace(/^```xml\s*/i, '');
   cleaned = cleaned.replace(/^```\s*/i, '');
   cleaned = cleaned.replace(/```$/i, '');
+  cleaned = cleaned.trim();
+
+  // Strip conversational chat preambles like "بصفتي معلمك الخبير...", "يسرني أن أقدم لك...", etc.
+  cleaned = cleaned.replace(
+    /^(?:بصفتي|يسرني|أهلاً|مرحباً|إليك|أقدم لك|بالتأكيد|عزيزي المعلم|مرحباً بك)[\s\S]*?(?:---|###|<h[1-6]|<table|<div|<p\b)/i,
+    (match) => {
+      const tagMatch = match.match(/(<h[1-6]|<table|<div|<p\b[\s\S]*)$/i);
+      return tagMatch ? tagMatch[1] : '';
+    }
+  );
+
   return cleaned.trim();
 }
 
@@ -714,42 +725,110 @@ ${isAutoPilot ? '- نِظَامُ الطَّيَّارِ الْآلِيِّ (AI 
 
       case 'quiz': {
         const lmsXmlDirective = getLmsXmlSchemaDirective(lmsTarget, true);
-        return `${ctx}
-الْمَطْلُوبُ: تَوْلِيدُ "اخْتِبَارٍ قَصِيرٍ شَامِلٍ (QTI)" بِاللُّغَةِ الْعَرَبِيَّةِ وَمَشْكُولٍ بِالْكَامِلِ (100%) عَلَى شَكْلِ HTML.
+        const subj = settings.subject || 'اللُّغَةُ الْعَرَبِيَّةُ';
+        const grd = settings.grade || 'الصَّفُّ السَّادِسُ';
+        const title = settings.lessonTitle || 'اخْتِبَارٌ قَصِيرٌ شَامِلٌ';
 
-قَوَاعِدُ الِاخْتِبَارِ:
-- عَدَدُ الْأَسْئِلَةِ: 10 أَسْئِلَةِ اخْتِيَارٍ مِنْ مُتَعَدِّدٍ فَقَطْ.
-- كُلُّ سُؤَالٍ يَتَضَمَّنُ 4 خِيَارَاتٍ مُحَدَّدَةً بِوُضُوحٍ (أ، ب، ج، د).
-- نَمُوذَجُ الْإِجَابَةِ الْمُعَلَّلِ (Answer Key & Rationale).
-- فِي نِهَايَةِ الْمُخْرَجِ تَمَاماً: كُودُ QTI XML الصَّالِحُ لِجَمِيعِ الْأَسْئِلَةِ الْعَشَرَةِ دَاخِلَ الْوَسْمِ (مَعَ كِتَابَةِ نَصِّ كُلِّ سُؤَالٍ كَامِلاً وَعَدَمِ تَرْكِهِ فَارِغاً أَبَداً):
+        return `${ctx}
+الْمَطْلُوبُ حَصْرِيّاً: تَوْلِيدُ "اخْتِبَارٍ قَصِيرٍ شَامِلٍ (QTI)" مَشْكُولٍ كَامِلاً 100% بِاللُّغَةِ الْعَرَبِيَّةِ عَلَى شَكْلِ HTML مُنَسَّقٍ جَاهِزٍ.
+قَاعِدَةٌ ذَهَبِيَّةٌ إِلْزَامِيَّةٌ: مَمْنُوعٌ تَمَاماً أَيُّ كَلَامٍ حِوَارِيٍّ أَوْ مُقَدِّمَاتٍ شَخْصِيَّةٍ قَبْلَ الِاخْتِبَارِ (مَمْنُوعٌ: "بصفتي معلمك الخبير..." أَوْ "يسرني أن أقدم لك...")، وَمَمْنُوعٌ اسْتِخْدَامُ رُمُوزِ مَارْكْدَاوْن (\`\`\` أَوْ ### أَوْ **). ابْدَأْ فَوْراً بِوُسُومِ HTML التَّالِيَةِ:
+
+1. عُنْوَانُ الِاخْتِبَارِ فِي الْبِدَايَةِ:
+<h1 style="color:#0369a1; text-align:center; font-size:22px; font-weight:800; margin-bottom:20px;">اخْتِبَارٌ قَصِيرٌ شَامِلٌ (${subj} - ${grd})</h1>
+
+2. الشَّكْلُ الْأَوَّلُ: جَدْوَلُ الْأَسْئِلَةِ (اخْتِيَارٌ مِنْ مُتَعَدِّدٍ)
+يَجِبُ عَرْضُ جَمِيعِ الْأَسْئِلَةِ الْعَشَرَةِ (10 أَسْئِلَة) فِي جَدْوَلِ HTML أَنِيقٍ وَمُنَظَّمٍ يَتَكَوَّنُ مِنْ 6 أَعْمِدَةٍ بِالضَّبْطِ (رَقْمُ السُّؤَالِ | السُّؤَالُ | أ | ب | ج | د):
+<h3 style="color:#0f172a; margin-bottom:12px; font-weight:bold;">أَوَّلاً: جَدْوَلُ الْأَسْئِلَةِ (اخْتِيَارٌ مِنْ مُتَعَدِّدٍ)</h3>
+<table dir="rtl" border="1" style="width:100%; border-collapse:collapse; margin-bottom:28px; text-align:center; font-size:14px; border:1px solid #cbd5e1;">
+  <thead>
+    <tr style="background:#f8fafc; color:#0f172a; font-weight:bold;">
+      <th style="border:1px solid #cbd5e1; padding:10px; width:70px;">رَقْمُ السُّؤَالِ</th>
+      <th style="border:1px solid #cbd5e1; padding:10px; text-align:right;">السُّؤَالُ</th>
+      <th style="border:1px solid #cbd5e1; padding:10px; width:120px;">أ</th>
+      <th style="border:1px solid #cbd5e1; padding:10px; width:120px;">ب</th>
+      <th style="border:1px solid #cbd5e1; padding:10px; width:120px;">ج</th>
+      <th style="border:1px solid #cbd5e1; padding:10px; width:120px;">د</th>
+    </tr>
+  </thead>
+  <tbody>
+    <!-- ضَعْ كُلَّ سُؤَالٍ فِي صَفٍّ مُنْفَصِلٍ مَعَ خِيَارَاتِهِ الْأَرْبَعَةِ أ، ب، ج، د مُوَزَّعَةً فِي خَلَايَاهَا: -->
+    <tr>
+      <td style="border:1px solid #cbd5e1; padding:8px; font-weight:bold;">1</td>
+      <td style="border:1px solid #cbd5e1; padding:8px; text-align:right;">نَصُّ السُّؤَالِ الْأَوَّلِ مَشْكُولاً كَامِلاً؟</td>
+      <td style="border:1px solid #cbd5e1; padding:8px;">الْخِيَارُ أ</td>
+      <td style="border:1px solid #cbd5e1; padding:8px;">الْخِيَارُ ب</td>
+      <td style="border:1px solid #cbd5e1; padding:8px;">الْخِيَارُ ج</td>
+      <td style="border:1px solid #cbd5e1; padding:8px;">الْخِيَارُ د</td>
+    </tr>
+    <!-- كَرِّرْ هَذَا الصَّفَّ لِجَمِيعِ الْأَسْئِلَةِ حَتَّى السُّؤَالِ 10 كَامِلَةً -->
+  </tbody>
+</table>
+
+3. الشَّكْلُ الثَّانِي: نَمُوذَجُ الْإِجَابَةِ وَالتَّعْلِيلِ
+يَجِبُ عَرْضُ قَائِمَةٍ نُقَطِيَّةٍ أَنِيقَةٍ بِجَمِيعِ الْإِجَابَاتِ مَعَ التَّعْلِيلِ التَّرْبَوِيِّ وَاللُّغَوِيِّ الدَّقِيقِ:
+<div style="margin-top:24px;">
+  <h3 style="color:#0284c7; margin-bottom:12px; font-weight:bold;">ثَانِياً: نَمُوذَجُ الْإِجَابَةِ وَالتَّعْلِيلِ</h3>
+  <ul style="list-style-type:disc; padding-right:24px; line-height:2.2; font-size:14px; color:#1e293b;">
+    <li><strong>1 - (أ) [نَصُّ الْخِيَارِ]:</strong> [التَّعْلِيلُ التَّرْبَوِيُّ وَاللُّغَوِيُّ الدَّقِيقُ لِسَبَبِ صِحَّةِ الْخِيَارِ].</li>
+    <!-- كَرِّرْ لِجَمِيعِ الْأَسْئِلَةِ حَتَّى السُّؤَالِ 10 -->
+  </ul>
+</div>
+
+4. كُودُ QTI XML الصَّالِحُ لِجَمِيعِ الْأَسْئِلَةِ دَاخِلَ الْوَسْمِ الْمَخْفِيِّ فِي النِّهَايَةِ:
 ${lmsXmlDirective}
 <div id="qti-xml-payload" style="display:none;">
 <!-- كُودُ QTI XML لِلْأَسْئِلَةِ مِنْ Q_01 إِلَى Q_10 كَامِلاً مَعَ نُصُوصِ الْأَسْئِلَةِ وَالْخِيَارَاتِ -->
-</div>
-
-اسْتَخْدِمْ وُسُومَ HTML فَقَطْ: <h1>, <h2>, <h3>, <p>, <table>, <tr>, <th>, <td>, <ul>, <li>, <strong>, <ol>, <div>.`;
+</div>`;
       }
 
       case 'qti-exam': {
         const lmsXmlDirective = getLmsXmlSchemaDirective(lmsTarget, true);
-        return `${ctx}
-الْمَطْلُوبُ: تَوْلِيدُ "امْتِحَانِ اخْتِيَارٍ مِنْ مُتَعَدِّدٍ شَامِلٍ (50 سُؤَال QTI)" بِاللُّغَةِ الْعَرَبِيَّةِ وَمَشْكُولٍ بِالْكَامِلِ (100%) عَلَى شَكْلِ HTML.
+        const subj = settings.subject || 'اللُّغَةُ الْعَرَبِيَّةُ';
+        const grd = settings.grade || 'الصَّفُّ السَّادِسُ';
 
-قَوَاعِدُ الِامْتِحَانِ الشَّامِلِ:
-- 50 سُؤَالَ اخْتِيَارٍ مِنْ مُتَعَدِّدٍ فَقَطْ (4 بَدَائِلَ لِكُلِّ سُؤَالٍ: أ، ب، ج، د).
-- التَّوْزِيعُ الْمَعْرِفِيُّ الْمُحْكَمُ حَسَبَ هَرَمِ بِلُومَ:
-  * 15 سُؤَالاً: التَّذَكُّرُ وَالْفَهْمُ (Q01 - Q15).
-  * 20 سُؤَالاً: التَّطْبِيقُ وَالتَّحْلِيلُ (Q16 - Q35).
-  * 15 سُؤَالاً: التَّقْوِيمُ وَالِابْتِكَارُ وَالتَّفْكِيرُ الْعُلْيَا (Q36 - Q50).
-- مَصْفُوفَةُ نَوَاتِجِ التَّعَلُّمِ وَجَدْوَلُ الْمُوَاصَفَاتِ.
-- نَمُوذَجُ الْإِجَابَةِ الْمُعْتَمَدُ لِجَمِيعِ الْأَسْئِلَةِ الْخَمْسِينَ.
-- فِي نِهَايَةِ الْمُخْرَجِ تَمَاماً: كُودُ QTI XML الْكَامِلُ لِلْـ 50 سُؤَالاً دَاخِلَ:
+        return `${ctx}
+الْمَطْلُوبُ حَصْرِيّاً: تَوْلِيدُ "امْتِحَانِ اخْتِيَارٍ مِنْ مُتَعَدِّدٍ شَامِلٍ (50 سُؤَال QTI)" بِاللُّغَةِ الْعَرَبِيَّةِ وَمَشْكُولٍ بِالْكَامِلِ (100%) عَلَى شَكْلِ HTML، بِدُونِ أَيِّ مُقَدِّمَاتٍ حِوَارِيَّةٍ أَوْ رُمُوزِ مَارْكْدَاوْن.
+
+1. عُنْوَانُ الِامْتِحَانِ:
+<h1 style="color:#0369a1; text-align:center; font-size:22px; font-weight:800; margin-bottom:20px;">امْتِحَانُ بِلُومَ الشَّامِلُ (${subj} - ${grd})</h1>
+
+2. الشَّكْلُ الْأَوَّلُ: جَدْوَلُ الْأَسْئِلَةِ (50 سُؤَالَ اخْتِيَارٍ مِنْ مُتَعَدِّدٍ)
+جَدْوَلُ HTML أَنِيقٌ بـ 6 أَعْمِدَةٍ (رَقْمُ السُّؤَالِ | السُّؤَالُ | أ | ب | ج | د) لِجَمِيعِ الْـ 50 سُؤَالاً مُوَزَّعَةً حَسَبَ هَرَمِ بِلُومَ:
+- 15 سُؤَالاً: التَّذَكُّرُ وَالْفَهْمُ (1 - 15).
+- 20 سُؤَالاً: التَّطْبِيقُ وَالتَّحْلِيلُ (16 - 35).
+- 15 سُؤَالاً: التَّقْوِيمُ وَالِابْتِكَارُ (36 - 50).
+<h3 style="color:#0f172a; margin-bottom:12px; font-weight:bold;">أَوَّلاً: جَدْوَلُ الْأَسْئِلَةِ (اخْتِيَارٌ مِنْ مُتَعَدِّدٍ)</h3>
+<table dir="rtl" border="1" style="width:100%; border-collapse:collapse; margin-bottom:28px; text-align:center; font-size:14px; border:1px solid #cbd5e1;">
+  <thead>
+    <tr style="background:#f8fafc; color:#0f172a; font-weight:bold;">
+      <th style="border:1px solid #cbd5e1; padding:8px; width:65px;">رَقْمُ السُّؤَالِ</th>
+      <th style="border:1px solid #cbd5e1; padding:8px; text-align:right;">السُّؤَالُ</th>
+      <th style="border:1px solid #cbd5e1; padding:8px; width:110px;">أ</th>
+      <th style="border:1px solid #cbd5e1; padding:8px; width:110px;">ب</th>
+      <th style="border:1px solid #cbd5e1; padding:8px; width:110px;">ج</th>
+      <th style="border:1px solid #cbd5e1; padding:8px; width:110px;">د</th>
+    </tr>
+  </thead>
+  <tbody>
+    <!-- صُفُوفُ جَمِيعِ الْأَسْئِلَةِ مِنْ 1 حَتَّى 50 -->
+  </tbody>
+</table>
+
+3. الشَّكْلُ الثَّانِي: نَمُوذَجُ الْإِجَابَةِ وَالتَّعْلِيلِ
+<div style="margin-top:24px;">
+  <h3 style="color:#0284c7; margin-bottom:12px; font-weight:bold;">ثَانِياً: نَمُوذَجُ الْإِجَابَةِ وَالتَّعْلِيلِ</h3>
+  <ul style="list-style-type:disc; padding-right:24px; line-height:2.2; font-size:14px; color:#1e293b;">
+    <!-- جَمِيعُ الْإِجَابَاتِ مِنْ 1 حَتَّى 50 مَعَ التَّعْلِيلِ -->
+  </ul>
+</div>
+
+4. مَصْفُوفَةُ نَوَاتِجِ التَّعَلُّمِ وَجَدْوَلُ الْمُوَاصَفَاتِ فِي جَدْوَلٍ مُنَسَّقٍ.
+
+5. كُودُ QTI XML لِلْـ 50 سُؤَالاً دَاخِلَ:
 ${lmsXmlDirective}
 <div id="qti-xml-payload" style="display:none;">
 <!-- كُودُ QTI XML الصَّالِحُ لِجَمِيعِ الْأَسْئِلَةِ مِنْ Q_01 إِلَى Q_50 مَعَ نُصُوصِ الْأَسْئِلَةِ الْكَامِلَةِ -->
-</div>
-
-اسْتَخْدِمْ وُسُومَ HTML فَقَطْ: <h1>, <h2>, <h3>, <p>, <table>, <tr>, <th>, <td>, <ul>, <li>, <strong>, <ol>, <div>.`;
+</div>`;
       }
 
       default:
@@ -867,13 +946,63 @@ Task: Generate a comprehensive "Slide Deck" in English as HTML for ${slideCount}
 Enclose each slide inside <div class="slide" data-slide-index="N"> with title, content cards, and teacher notes.`;
       }
 
-      case 'quiz':
+      case 'quiz': {
+        const lmsXmlDirective = getLmsXmlSchemaDirective(lmsTarget, false);
         return `${ctx}
-Task: Generate a "Short Quiz" with 10 multiple-choice questions in English as HTML with Answer Key and QTI XML payload inside <div id="qti-xml-payload" style="display:none;"><![CDATA[...]]></div>.`;
+Task: Generate a "Short Assessment Quiz (10 MCQs)" in English formatted as clean, professional HTML.
+Do NOT output conversational preamble or markdown syntax. Start directly with:
 
-      case 'qti-exam':
+1. Title:
+<h1 style="color:#0369a1; text-align:center; font-size:22px; font-weight:800; margin-bottom:20px;">Short Assessment Quiz (${settings.subject || 'Subject'} - ${settings.grade || 'Grade'})</h1>
+
+2. Format 1: Questions Table (Multiple Choice)
+Provide all 10 questions in a clean HTML table with 6 columns (Q#, Question, A, B, C, D):
+<h3 style="color:#0f172a; margin-bottom:12px; font-weight:bold;">1. Questions Table (Multiple Choice)</h3>
+<table border="1" style="width:100%; border-collapse:collapse; margin-bottom:28px; text-align:center; font-size:14px; border:1px solid #cbd5e1;">
+  <thead>
+    <tr style="background:#f8fafc; color:#0f172a; font-weight:bold;">
+      <th style="border:1px solid #cbd5e1; padding:10px; width:60px;">Q#</th>
+      <th style="border:1px solid #cbd5e1; padding:10px; text-align:left;">Question</th>
+      <th style="border:1px solid #cbd5e1; padding:10px; width:120px;">A</th>
+      <th style="border:1px solid #cbd5e1; padding:10px; width:120px;">B</th>
+      <th style="border:1px solid #cbd5e1; padding:10px; width:120px;">C</th>
+      <th style="border:1px solid #cbd5e1; padding:10px; width:120px;">D</th>
+    </tr>
+  </thead>
+  <tbody>
+    <!-- All 10 rows for questions 1 through 10 with choices in their respective cells -->
+  </tbody>
+</table>
+
+3. Format 2: Answer Key & Pedagogical Rationale
+<div style="margin-top:24px;">
+  <h3 style="color:#0284c7; margin-bottom:12px; font-weight:bold;">2. Answer Key & Rationale</h3>
+  <ul style="list-style-type:disc; padding-left:24px; line-height:2.2; font-size:14px; color:#1e293b;">
+    <!-- 1 - (A) [Option text]: [Rationale] -->
+  </ul>
+</div>
+
+4. QTI XML Payload at the end:
+${lmsXmlDirective}
+<div id="qti-xml-payload" style="display:none;">
+<!-- Full QTI XML for questions Q_01 through Q_10 -->
+</div>`;
+      }
+
+      case 'qti-exam': {
+        const lmsXmlDirective = getLmsXmlSchemaDirective(lmsTarget, false);
         return `${ctx}
-Task: Generate a comprehensive "50-Question Bloom Exam (QTI)" in English with full QTI XML payload inside <div id="qti-xml-payload" style="display:none;"><![CDATA[...]]></div>.`;
+Task: Generate a comprehensive "50-Question Bloom Exam (QTI)" in English formatted as clean HTML.
+1. Title: <h1 style="color:#0369a1; text-align:center; font-size:22px; font-weight:800; margin-bottom:20px;">Comprehensive Bloom Assessment (${settings.subject || 'Subject'} - ${settings.grade || 'Grade'})</h1>
+2. Questions Table with 6 columns (Q#, Question, A, B, C, D) for all 50 questions.
+3. Answer Key & Rationale list for questions 1 through 50.
+4. Bloom Specification Matrix table.
+5. QTI XML Payload at the end:
+${lmsXmlDirective}
+<div id="qti-xml-payload" style="display:none;">
+<!-- Full QTI XML for all 50 questions -->
+</div>`;
+      }
 
       default:
         return ctx;

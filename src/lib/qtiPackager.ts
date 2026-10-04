@@ -94,12 +94,13 @@ export function splitQuestionsAndAnswerKey(html: string): { questionsHtml: strin
 }
 
 /**
- * Extracts correct answer keys from Answer Key Table.
+ * Extracts correct answer keys from Answer Key Table or List.
  */
 export function extractAnswerKeys(answerKeyHtml: string): Record<number, string> {
   const keys: Record<number, string> = {};
   if (!answerKeyHtml) return keys;
 
+  // 1. Check for table rows e.g. <tr><td>1</td><td>أ</td></tr>
   const trMatches = Array.from(answerKeyHtml.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi));
   for (const trM of trMatches) {
     const tdMatches = Array.from(trM[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi));
@@ -116,6 +117,20 @@ export function extractAnswerKeys(answerKeyHtml: string): Record<number, string>
     }
   }
 
+  // 2. Check for bullet list format e.g. 1 - (أ) مدرسة: لأنها... or 1. (ب)
+  const listMatches = Array.from(
+    answerKeyHtml.matchAll(
+      /(?:^|\n|<[^>]+>)\s*(?:[\*\#\-\s]*)(?:س\s*|السؤال\s*)?(\d+)[\s:\-ـ\.]*[\(（]?\s*([أ-دA-D])\s*[\)）]/gi
+    )
+  );
+  for (const lm of listMatches) {
+    const qNum = parseInt(lm[1], 10);
+    if (!isNaN(qNum)) {
+      keys[qNum] = lm[2];
+    }
+  }
+
+  // 3. Fallback: match any line with question number and letter
   if (Object.keys(keys).length === 0) {
     const lines = answerKeyHtml
       .replace(/<[^>]+>/g, '\n')
@@ -124,7 +139,7 @@ export function extractAnswerKeys(answerKeyHtml: string): Record<number, string>
       .filter(Boolean);
 
     for (const line of lines) {
-      const match = line.match(/(?:س\s*|السؤال\s*)?(\d+)[\s:\-ـ\.]*([أ-دA-D])/i);
+      const match = line.match(/(?:س\s*|السؤال\s*)?(\d+)[\s:\-ـ\.]*[\(（]?\s*([أ-دA-D])/i);
       if (match) {
         const qNum = parseInt(match[1], 10);
         if (!isNaN(qNum)) {
@@ -147,17 +162,168 @@ export function mapLetterToChoiceId(letter: string): string {
 }
 
 /**
- * Extracts questions from clean HTML questions section.
+ * Extracts questions from an HTML Table format (Format 1: جدول الأسئلة)
+ * Column layout: [رقم السؤال | السؤال | أ | ب | ج | د]
+ */
+export function extractQuestionsFromHtmlTable(
+  html: string,
+  answerKeys: Record<number, string>
+): NormalizedQuestion[] {
+  const questions: NormalizedQuestion[] = [];
+  if (!html.includes('<table')) return questions;
+
+  const tableMatches = Array.from(html.matchAll(/<table[^>]*>([\s\S]*?)<\/table>/gi));
+  for (const tableMatch of tableMatches) {
+    const tableContent = tableMatch[1];
+    const trMatches = Array.from(tableContent.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi));
+    if (trMatches.length < 2) continue;
+
+    for (let rIdx = 0; rIdx < trMatches.length; rIdx++) {
+      const rowContent = trMatches[rIdx][1];
+      // Skip table header
+      if (
+        rowContent.includes('<th') ||
+        (rIdx === 0 && (rowContent.includes('السؤال') || rowContent.includes('Question')))
+      ) {
+        continue;
+      }
+
+      const cellMatches = Array.from(rowContent.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi));
+      if (cellMatches.length >= 5) {
+        let qNum = questions.length + 1;
+        let promptText = '';
+        let optA = '';
+        let optB = '';
+        let optC = '';
+        let optD = '';
+
+        if (cellMatches.length >= 6) {
+          const numCell = cleanText(cellMatches[0][1]).replace(/[^0-9]/g, '');
+          if (numCell) {
+            const parsed = parseInt(numCell, 10);
+            if (!isNaN(parsed)) qNum = parsed;
+          }
+          promptText = cleanText(cellMatches[1][1]);
+          optA = cleanText(cellMatches[2][1]);
+          optB = cleanText(cellMatches[3][1]);
+          optC = cleanText(cellMatches[4][1]);
+          optD = cleanText(cellMatches[5][1]);
+        } else if (cellMatches.length === 5) {
+          promptText = cleanText(cellMatches[0][1]);
+          const numMatch = promptText.match(/^(\d+)[\.\-\)]\s*(.*)$/);
+          if (numMatch) {
+            qNum = parseInt(numMatch[1], 10);
+            promptText = numMatch[2];
+          }
+          optA = cleanText(cellMatches[1][1]);
+          optB = cleanText(cellMatches[2][1]);
+          optC = cleanText(cellMatches[3][1]);
+          optD = cleanText(cellMatches[4][1]);
+        }
+
+        const cleanOptionPrefix = (txt: string) =>
+          txt.replace(/^[أ-دA-D][\)\.\-:]\s*/, '').trim();
+
+        optA = cleanOptionPrefix(optA);
+        optB = cleanOptionPrefix(optB);
+        optC = cleanOptionPrefix(optC);
+        optD = cleanOptionPrefix(optD);
+
+        if (promptText && optA && optB) {
+          const correctLetter = answerKeys[qNum] || answerKeys[questions.length + 1] || 'أ';
+          questions.push({
+            id: `Q_${qNum}`,
+            title: `السؤال ${qNum}`,
+            prompt: promptText,
+            options: [
+              { id: 'choice_1', text: optA || 'الخيار أ' },
+              { id: 'choice_2', text: optB || 'الخيار ب' },
+              { id: 'choice_3', text: optC || 'الخيار ج' },
+              { id: 'choice_4', text: optD || 'الخيار د' },
+            ].filter((o) => Boolean(o.text)),
+            correctId: mapLetterToChoiceId(correctLetter),
+            points: 1,
+          });
+        }
+      }
+    }
+  }
+
+  return questions;
+}
+
+/**
+ * Extracts questions from inline pipe-separated or inline formatted text:
+ * Example: 1. نص السؤال؟ أ) خيار 1 | ب) خيار 2 | ج) خيار 3 | د) خيار 4
+ */
+export function extractQuestionsFromInlineText(
+  plainText: string,
+  answerKeys: Record<number, string>
+): NormalizedQuestion[] {
+  const questions: NormalizedQuestion[] = [];
+  // Pattern matching question stem followed by inline options
+  const qBlocks = plainText.split(
+    /(?:^|\n)\s*(?:[\*\#\-\s]*)(?:س\s*|السؤال\s*)?(\d+)[\.\-\:\)]\s*/gi
+  );
+
+  if (qBlocks.length < 3) return questions;
+
+  for (let i = 1; i < qBlocks.length; i += 2) {
+    const qNum = parseInt(qBlocks[i], 10);
+    const content = qBlocks[i + 1] || '';
+
+    // Check if content has inline choices like أ) ... ب) ... or |
+    const optMatch = content.match(
+      /^(.*?)(?:[\s\|\;\،]*)[\(（]?أ[\)）\.\-:]\s*(.*?)(?:[\s\|\;\،]*)[\(（]?ب[\)）\.\-:]\s*(.*?)(?:[\s\|\;\،]*)[\(（]?ج[\)）\.\-:]\s*(.*?)(?:[\s\|\;\،]*)[\(（]?د[\)）\.\-:]\s*([^\n]*)/i
+    );
+
+    if (optMatch) {
+      const prompt = cleanText(optMatch[1]);
+      const optA = cleanText(optMatch[2]);
+      const optB = cleanText(optMatch[3]);
+      const optC = cleanText(optMatch[4]);
+      const optD = cleanText(optMatch[5]);
+
+      if (prompt && optA && optB) {
+        const correctLetter = answerKeys[qNum] || answerKeys[questions.length + 1] || 'أ';
+        questions.push({
+          id: `Q_${qNum}`,
+          title: `السؤال ${qNum}`,
+          prompt,
+          options: [
+            { id: 'choice_1', text: optA },
+            { id: 'choice_2', text: optB },
+            { id: 'choice_3', text: optC || 'الخيار ج' },
+            { id: 'choice_4', text: optD || 'الخيار د' },
+          ],
+          correctId: mapLetterToChoiceId(correctLetter),
+          points: 1,
+        });
+      }
+    }
+  }
+
+  return questions;
+}
+
+/**
+ * Universal HTML Questions Extractor
  */
 export function extractQuestionsFromHtml(rawHtml: string): NormalizedQuestion[] {
-  const questions: NormalizedQuestion[] = [];
-  if (!rawHtml) return questions;
+  if (!rawHtml) return [];
 
   // Clean out any embedded XML divs first
   const sanitizedHtml = rawHtml.replace(/<div id="qti-xml-payload"[^>]*>[\s\S]*?<\/div>/gi, '');
   const { questionsHtml, answerKeyHtml } = splitQuestionsAndAnswerKey(sanitizedHtml);
-  const answerKeys = extractAnswerKeys(answerKeyHtml);
+  const answerKeys = extractAnswerKeys(answerKeyHtml || sanitizedHtml);
 
+  // Strategy 1: Extract from HTML Tables (Image 2 format)
+  const tableQuestions = extractQuestionsFromHtmlTable(questionsHtml, answerKeys);
+  if (tableQuestions.length >= 2) {
+    return tableQuestions;
+  }
+
+  // Clean HTML to text for string parsing
   const plainText = questionsHtml
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n')
@@ -167,11 +333,19 @@ export function extractQuestionsFromHtml(rawHtml: string): NormalizedQuestion[] 
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ');
 
+  // Strategy 2: Extract from Inline Pipe or Parentheses format (Image 1 format)
+  const inlineQuestions = extractQuestionsFromInlineText(plainText, answerKeys);
+  if (inlineQuestions.length >= 2) {
+    return inlineQuestions;
+  }
+
+  // Strategy 3: Standard multi-line list parser
   const lines = plainText
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean);
 
+  const questions: NormalizedQuestion[] = [];
   let currentQ: { prompt: string; options: Array<{ id: string; text: string }> } | null = null;
   const optRegex = /^([أ-دA-D])\s*[\)\.\-:]\s*(.*)$/i;
 
@@ -380,16 +554,29 @@ export function extractAndNormalizeQuestions(rawPayload: string, fallbackTitle: 
   const rawHtmlQuestions = extractQuestionsFromHtml(htmlString);
   const htmlQuestions = deduplicateQuestions(rawHtmlQuestions);
 
-  // Scenario 1: XML questions exist and have non-empty prompts
+  // CRITICAL FIX: If HTML parser extracted more questions than XML parser
+  // (e.g. Gemini truncated the hidden XML payload to 1 question while HTML table has all 10 questions),
+  // ALWAYS prioritize the complete set of questions from HTML!
+  if (htmlQuestions.length > xmlQuestions.length && htmlQuestions.length > 0) {
+    return htmlQuestions;
+  }
+
+  // Scenario 1: XML questions exist, match or exceed HTML count, and have non-empty prompts
   const xmlHasValidPrompts =
     xmlQuestions.length > 0 &&
+    xmlQuestions.length >= htmlQuestions.length &&
     xmlQuestions.every((q) => q.prompt && q.prompt.length >= 5 && q.options.length >= 2);
 
   if (xmlHasValidPrompts) {
     return xmlQuestions;
   }
 
-  // Scenario 2: XML has choices, but prompt is empty/short
+  // Scenario 2: Rely on HTML questions if available
+  if (htmlQuestions.length > 0) {
+    return htmlQuestions;
+  }
+
+  // Scenario 3: XML has choices, but prompt is empty/short
   if (xmlQuestions.length > 0 && xmlQuestions.some((q) => q.options.length >= 2)) {
     return xmlQuestions.map((xmlQ, idx) => {
       const htmlQ = htmlQuestions[idx];
@@ -408,11 +595,6 @@ export function extractAndNormalizeQuestions(rawPayload: string, fallbackTitle: 
         correctId,
       };
     });
-  }
-
-  // Scenario 3: Rely on HTML questions
-  if (htmlQuestions.length > 0) {
-    return htmlQuestions;
   }
 
   return [
