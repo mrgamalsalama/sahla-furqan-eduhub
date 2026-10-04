@@ -199,14 +199,24 @@ export function printContent(
     return;
   }
 
-  // Ensure official header banner with dual logos is included
-  const hasExistingHeader =
-    htmlContent.includes('official-school-header') ||
-    htmlContent.includes('FURQAN_LOGO') ||
+  // Ensure official header banner is not duplicated if already present
+  const isLessonPlan =
     htmlContent.includes('sahlah-lesson-header') ||
-    htmlContent.includes('sahlah-lesson-plan');
+    htmlContent.includes('sahlah-lesson-plan') ||
+    htmlContent.includes('خطة الدرس الأسبوعية');
+
+  const hasExistingHeader =
+    isLessonPlan ||
+    htmlContent.includes('official-school-header') ||
+    htmlContent.includes('FURQAN_LOGO');
+
   const banner = hasExistingHeader ? '' : buildOfficialHeaderBanner(settings, isAr);
-  const isLessonPlan = htmlContent.includes('sahlah-lesson-header') || htmlContent.includes('sahlah-lesson-plan');
+
+  // Clean visible page-break text like "--- صفحة 2 ---"
+  const sanitizedContent = htmlContent
+    .replace(/<div class="page-break"[^>]*>[\s\S]*?<\/div>/gi, '<div class="page-break"></div>')
+    .replace(/---\s*صَفْحَةُ?\s*\d+[^<]*---/gi, '')
+    .replace(/---\s*Page\s*\d+[^<]*---/gi, '');
 
   win.document.write(`<!DOCTYPE html>
 <html dir="${dir}" lang="${lang}">
@@ -220,7 +230,7 @@ export function printContent(
 <body>
   ${banner}
   ${isLessonPlan ? '' : `<h1>${escapeHtml(title)}</h1>`}
-  ${htmlContent}
+  ${sanitizedContent}
 </body>
 </html>`);
   win.document.close();
@@ -248,29 +258,48 @@ export function exportToWord(
   const isAr = uiLang === 'ar';
   const dir = isAr ? 'rtl' : 'ltr';
   const textAlign = isAr ? 'right' : 'left';
-  const listPadding = isAr ? 'padding-right: 24pt;' : 'padding-left: 24pt;';
+  const listPadding = isAr ? 'padding-right: 20pt;' : 'padding-left: 20pt;';
   const blockquoteBorder = isAr
     ? 'border-right: 4px solid #1e3a8a;'
     : 'border-left: 4px solid #1e3a8a;';
 
-  const hasExistingHeader = htmlContent.includes('official-school-header') || htmlContent.includes('FURQAN_LOGO');
+  const isLessonPlan =
+    htmlContent.includes('sahlah-lesson-header') ||
+    htmlContent.includes('sahlah-lesson-plan') ||
+    htmlContent.includes('خطة الدرس الأسبوعية');
+
+  const hasExistingHeader =
+    isLessonPlan ||
+    htmlContent.includes('official-school-header') ||
+    htmlContent.includes('FURQAN_LOGO');
+
   const banner = hasExistingHeader ? '' : buildOfficialHeaderBanner(settings, isAr);
 
+  // Clean visible text from page breaks and convert to genuine Word page break
+  const sanitizedContent = htmlContent
+    .replace(
+      /<div class="page-break"[^>]*>[\s\S]*?<\/div>/gi,
+      '<br clear="all" style="mso-special-character:line-break;page-break-before:always;" />'
+    )
+    .replace(/---\s*صَفْحَةُ?\s*\d+[^<]*---/gi, '')
+    .replace(/---\s*Page\s*\d+[^<]*---/gi, '');
+
   const styles = `
-    body { font-family: 'Cairo', 'Arial', sans-serif; direction: ${dir}; font-size: 13pt; line-height: 1.8; color: #000; }
-    h1 { font-size: 20pt; font-weight: bold; text-align: center; color: #1e3a8a; margin: 0 0 12pt; }
-    h2 { font-size: 16pt; font-weight: bold; color: #1e40af; margin: 12pt 0 6pt; }
-    h3 { font-size: 14pt; font-weight: bold; color: #1d4ed8; margin: 10pt 0 6pt; }
-    p { margin: 6pt 0; }
-    ul { list-style: disc; ${listPadding} margin: 6pt 0; }
-    ol { list-style: decimal; ${listPadding} margin: 6pt 0; }
-    li { margin: 3pt 0; }
-    table { width: 100%; border: 1px solid #334155; border-collapse: collapse; margin: 12pt 0; }
-    th { border: 1px solid #334155; border-collapse: collapse; padding: 6pt 8pt; text-align: ${textAlign}; background: #e2e8f0; font-weight: bold; font-size: 11pt; }
-    td { border: 1px solid #334155; border-collapse: collapse; padding: 6pt 8pt; text-align: ${textAlign}; font-size: 11pt; }
-    tr:nth-child(even) { background: #f8fafc; }
+    body { font-family: 'Cairo', 'Traditional Arabic', 'Segoe UI', Tahoma, sans-serif; direction: ${dir}; font-size: 11pt; line-height: 1.6; color: #000; }
+    h1 { font-size: 18pt; font-weight: bold; text-align: center; color: #1e3a8a; margin: 0 0 10pt; }
+    h2 { font-size: 14pt; font-weight: bold; color: #1e40af; margin: 10pt 0 4pt; }
+    h3 { font-size: 12pt; font-weight: bold; color: #0f172a; margin: 8pt 0 4pt; }
+    p { margin: 4pt 0; }
+    ul { list-style: disc; ${listPadding} margin: 4pt 0; }
+    ol { list-style: decimal; ${listPadding} margin: 4pt 0; }
+    li { margin: 2pt 0; }
+    table { width: 100%; border: 1px solid #94a3b8; border-collapse: collapse; margin: 10pt 0; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    tr { page-break-inside: avoid; }
+    th { border: 1px solid #94a3b8; border-collapse: collapse; padding: 6pt 8pt; text-align: ${textAlign}; background: #1e293b; color: #ffffff; font-weight: bold; font-size: 10pt; }
+    td { border: 1px solid #94a3b8; border-collapse: collapse; padding: 6pt 8pt; text-align: ${textAlign}; font-size: 10pt; }
     strong { font-weight: bold; }
-    blockquote { ${blockquoteBorder} padding: 6pt 12pt; margin: 9pt 0; background: #f0f9ff; }
+    blockquote { ${blockquoteBorder} padding: 6pt 10pt; margin: 8pt 0; background: #f0f9ff; }
+    .sahlah-lesson-header { text-align: center; margin-bottom: 16pt; }
   `;
 
   const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
@@ -293,8 +322,8 @@ export function exportToWord(
 </head>
 <body dir="${dir}">
   ${banner}
-  <h1>${escapeHtml(title)}</h1>
-  ${htmlContent}
+  ${isLessonPlan ? '' : `<h1>${escapeHtml(title)}</h1>`}
+  ${sanitizedContent}
 </body>
 </html>`;
 
