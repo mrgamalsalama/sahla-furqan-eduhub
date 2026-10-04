@@ -1121,77 +1121,45 @@ Strict rule: Use the attached content below as the primary reference for this ge
 export async function executeConvertQti(req: any, res: any) {
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-    const { rawText = '', lmsTarget = 'sahlah_cypher', title = '', subject = '', grade = '' } = body || {};
+    const { rawText = '', lmsTarget = 'sahlah_cypher', title = 'اختبار مستورد', subject = '', grade = '' } = body || {};
 
     if (!rawText.trim()) {
       return res.status(400).json({ error: 'يرجى لصق نص الأسئلة المراد تحويلها.' });
     }
 
-    const testTitle = title || `اخْتِبَارٌ قَصِيرٌ شَامِلٌ - QTI`.trim();
     const lmsDirective = getLmsXmlSchemaDirective(lmsTarget, true);
 
-    const prompt = `أَنْتَ مُهَنْدِسُ اخْتِبَارَاتٍ وَأَنْظِمَةٍ تَعْلِيمِيَّةٍ خَبِيرٌ فِي مَعَايِيرِ IMS QTI لِمَنَصَّاتِ LMS (أَكَادِيمِيَّةُ سَهْلَةَ Cypher، وَمَدَارِسُ الْفُرْقَانِ Canvas).
-أَمَامَكَ نَصٌّ لِأَسْئِلَةٍ كَتَبَهَا أَوْ نَسَخَهَا الْمُعَلِّمُ:
+    const prompt = `أنت مهندس اختبارات وأنظمة تعليمية خبير في معايير IMS QTI لمنصات LMS (أكاديمية سهلة Cypher، ومدارس الفرقان Canvas).
+أمامك نص غير منظم لأسئلة كتبها أو نسخها المعلم:
 
 """
 ${rawText}
 """
 
-الْمَطْلُوبُ بِدِقَّةٍ وَاحْتِرَافِيَّةٍ تَرْبَوِيَّةٍ عَالِيَةٍ:
-تَحْلِيلُ وَاسْتِخْرَاجُ جَمِيعِ الْأَسْئِلَةِ الْوَارِدَةِ فِي النَّصِّ بِدُونِ نَقْصٍ أَوْ اقْتِطَاعٍ، مَعَ ضَبْطِهَا وَتَشْكِيلِهَا بِنِسْبَةِ 100%.
-قَاعِدَةٌ ذَهَبِيَّةٌ إِلْزَامِيَّةٌ: مَمْنُوعٌ تَمَاماً أَيُّ كَلَامٍ حِوَارِيٍّ أَوْ مُقَدِّمَاتٍ شَخْصِيَّةٍ قَبْلَ الِاخْتِبَارِ (مَمْنُوعٌ: "بصفتي..." أَوْ "يسرني...")، وَمَمْنُوعٌ اسْتِخْدَامُ رُمُوزِ مَارْكْدَاوْن (\`\`\` أَوْ ### أَوْ **).
+المطلوب بدقة:
+1. تحليل واستخراج كل سؤال بدقة:
+   - نص السؤال كاملاً مع تشكيله تشكيلاً تاماً بنسبة 100%.
+   - الخيارات الأربعة (أ، ب، ج، د / A, B, C, D) مشكولة تماماً.
+   - تحديد الإجابة الصحيحة الصريحة بدقة.
+   - تحديد درجة السؤال (Default 1 mark).
+   - كتابة تعليل تربوي موجز لسبب صحة الخيار.
 
-أَخْرِجِ الْمُخْرَجَيْنِ التَّالِيَيْنِ بِالضَّبْطِ كَمَا فِي نَمُوذَجِ بَنْكِ الِاخْتِبَارَاتِ:
-
-1. عُنْوَانُ الِاخْتِبَارِ فِي الْبِدَايَةِ:
-<h1 style="color:#0369a1; text-align:center; font-size:22px; font-weight:800; margin-bottom:20px;">${testTitle}</h1>
-
-2. الشَّكْلُ الْأَوَّلُ: جَدْوَلُ الْأَسْئِلَةِ (اخْتِيَارٌ مِنْ مُتَعَدِّدٍ)
-يَجِبُ عَرْضُ جَمِيعِ الْأَسْئِلَةِ كَامِلَةً فِي جَدْوَلِ HTML أَنِيقٍ وَمُنَظَّمٍ يَتَكَوَّنُ مِنْ 6 أَعْمِدَةٍ بِالضَّبْطِ (رَقْمُ السُّؤَالِ | السُّؤَالُ | أ | ب | ج | د):
-<h3 style="color:#0f172a; margin-bottom:12px; font-weight:bold;">أَوَّلاً: جَدْوَلُ الْأَسْئِلَةِ (اخْتِيَارٌ مِنْ مُتَعَدِّدٍ)</h3>
-<table dir="rtl" border="1" style="width:100%; border-collapse:collapse; margin-bottom:28px; text-align:center; font-size:14px; border:1px solid #cbd5e1;">
-  <thead>
-    <tr style="background:#f8fafc; color:#0f172a; font-weight:bold;">
-      <th style="border:1px solid #cbd5e1; padding:10px; width:70px;">رَقْمُ السُّؤَالِ</th>
-      <th style="border:1px solid #cbd5e1; padding:10px; text-align:right;">السُّؤَالُ</th>
-      <th style="border:1px solid #cbd5e1; padding:10px; width:120px;">أ</th>
-      <th style="border:1px solid #cbd5e1; padding:10px; width:120px;">ب</th>
-      <th style="border:1px solid #cbd5e1; padding:10px; width:120px;">ج</th>
-      <th style="border:1px solid #cbd5e1; padding:10px; width:120px;">د</th>
-    </tr>
-  </thead>
-  <tbody>
-    <!-- ضَعْ كُلَّ سُؤَالٍ فِي صَفٍّ مُنْفَصِلٍ مَعَ خِيَارَاتِهِ الْأَرْبَعَةِ أ، ب، ج، د مُوَزَّعَةً فِي خَلَايَاهَا: -->
-    <tr>
-      <td style="border:1px solid #cbd5e1; padding:8px; font-weight:bold;">1</td>
-      <td style="border:1px solid #cbd5e1; padding:8px; text-align:right;">نَصُّ السُّؤَالِ مَشْكُولاً كَامِلاً</td>
-      <td style="border:1px solid #cbd5e1; padding:8px;">الْخِيَارُ أ</td>
-      <td style="border:1px solid #cbd5e1; padding:8px;">الْخِيَارُ ب</td>
-      <td style="border:1px solid #cbd5e1; padding:8px;">الْخِيَارُ ج</td>
-      <td style="border:1px solid #cbd5e1; padding:8px;">الْخِيَارُ د</td>
-    </tr>
-    <!-- كَرِّرْ هَذَا الصَّفَّ لِجَمِيعِ الْأَسْئِلَةِ الْمَوْجُودَةِ فِي النَّصِّ بِدُونِ اسْتِثْنَاءِ أَيِّ سُؤَالٍ -->
-  </tbody>
-</table>
-
-3. الشَّكْلُ الثَّانِي: نَمُوذَجُ الْإِجَابَةِ وَالتَّعْلِيلِ
-يَجِبُ عَرْضُ قَائِمَةٍ نُقَطِيَّةٍ أَنِيقَةٍ بِجَمِيعِ الْإِجَابَاتِ الصَّحِيحَةِ مَعَ التَّعْلِيلِ التَّرْبَوِيِّ وَاللُّغَوِيِّ الدَّقِيقِ:
-<div style="margin-top:24px;">
-  <h3 style="color:#0284c7; margin-bottom:12px; font-weight:bold;">ثَانِياً: مِفْتَاحُ الْإِجَابَاتِ الصَّحِيحَةِ وَالتَّعْلِيلُ التَّرْبَوِيُّ</h3>
-  <ol dir="rtl" style="text-align:right; font-size:14px; line-height:2.2; color:#1e293b; padding-right:24px;">
-    <li><strong>(حرف الخيار الصحيح) نص الخيار:</strong> التعليل التربوي واللغوي الدقيق لسبب صحة هذا الخيار دون غيره.</li>
-  </ol>
-</div>
+2. إخراج المخرجين معاً:
+   المخرج الأول: جدول HTML منسق وأنيق لمعاينة الأسئلة ومراجعتها (نص السؤال، الخيارات مع تمييز الإجابة الصحيحة بلون أخضر، التعليل، والدرجة).
+   المخرج الثاني: كود QTI XML صالح تماماً ومطابق لمعايير منصة المستهدفة (${lmsTarget})، مشكول بنسبة 100% ومغلف داخل:
+   <div id="qti-xml-payload" style="display:none;"><![CDATA[
+   <!-- كود XML الصالح هنا -->
+   ]]></div>
 
 ${lmsDirective}
 
-أَخْرِجْ كُودَ HTML فَقَطْ بِدُونِ أَسْوَارِ مَارْكْدَاوْن (\`\`\`html).`;
+أخرج كود HTML فقط بدون أسوار markdown (\`\`\`html).`;
 
     const response = await callGemini(prompt);
     const text = response.text || '';
     const cleanedHtml = extractHtml(text);
 
-    // Extract XML payload if generated
+    // Extract XML payload
     let qtiXml = '';
     const xmlMatch = cleanedHtml.match(/<div id="qti-xml-payload"[^>]*>([\s\S]*?)<\/div>/i);
     if (xmlMatch && xmlMatch[1]) {
@@ -1201,7 +1169,7 @@ ${lmsDirective}
     return res.status(200).json({
       previewHtml: cleanedHtml,
       qtiXml: qtiXml || '<!-- تم تضمين الأسئلة في المعاينة أعلاه -->',
-      title: testTitle,
+      title: title || `اختبار QTI - ${subject} ${grade}`.trim(),
     });
   } catch (error: any) {
     console.error('executeConvertQti error:', error);

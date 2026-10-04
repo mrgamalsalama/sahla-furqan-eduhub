@@ -6,7 +6,7 @@ import {
 import type { UILang } from '@/lib/i18n';
 import type { LmsTarget } from '@/types';
 import { convertRawTextToQti } from '@/lib/gemini';
-import { createAndDownloadQtiZip, extractAndNormalizeQuestions, generateStandardQtiXml } from '@/lib/qtiPackager';
+import { createAndDownloadQtiZip } from '@/lib/qtiPackager';
 
 interface QtiConverterPageProps {
   uiLang: UILang;
@@ -44,18 +44,6 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
   const [activeTab, setActiveTab] = useState<'preview' | 'xml'>('preview');
   const [copied, setCopied] = useState(false);
 
-  function handleSelectLms(target: LmsTarget) {
-    setLmsTarget(target);
-    if (result) {
-      const combinedPayload = `${result.previewHtml || ''}\n<div id="qti-xml-payload" style="display:none;"><![CDATA[${result.qtiXml || ''}]]></div>\n<div id="raw-source-text" style="display:none;">${rawText}</div>`;
-      const questions = extractAndNormalizeQuestions(combinedPayload, result.title || title);
-      if (questions.length > 0) {
-        const updatedXml = generateStandardQtiXml(questions, result.title || title || 'Assessment_QTI', target);
-        setResult((prev) => (prev ? { ...prev, qtiXml: updatedXml } : null));
-      }
-    }
-  }
-
   async function handleConvert() {
     if (!rawText.trim()) {
       setError(isAr ? 'يرجى كتابة أو لصق نص الأسئلة أولاً.' : 'Please paste question text first.');
@@ -70,21 +58,7 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
         lmsTarget,
         title: title.trim() || undefined,
       });
-
-      // Extract all questions using our comprehensive parser from previewHtml and rawText
-      const combinedPayload = `${res.previewHtml || ''}\n<div id="qti-xml-payload" style="display:none;"><![CDATA[${res.qtiXml || ''}]]></div>\n<div id="raw-source-text" style="display:none;">${rawText}</div>`;
-      const questions = extractAndNormalizeQuestions(combinedPayload, res.title || title);
-
-      // Generate standard QTI XML for ALL extracted questions so XML tab and downloads are 100% complete
-      let fullXml = res.qtiXml;
-      if (questions.length > 0) {
-        fullXml = generateStandardQtiXml(questions, res.title || title || 'Assessment_QTI', lmsTarget);
-      }
-
-      setResult({
-        ...res,
-        qtiXml: fullXml,
-      });
+      setResult(res);
       setActiveTab('preview');
     } catch (err: any) {
       setError(err?.message || (isAr ? 'حدث خطأ أثناء تحويل الأسئلة.' : 'Conversion failed.'));
@@ -101,11 +75,11 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
   }
 
   async function handleDownloadZip() {
-    if (!result?.qtiXml && !result?.previewHtml && !rawText) return;
-    const payload = `${result?.previewHtml || ''}\n<div id="qti-xml-payload" style="display:none;"><![CDATA[${result?.qtiXml || ''}]]></div>\n<div id="raw-source-text" style="display:none;">${rawText}</div>`;
+    if (!result?.qtiXml && !result?.previewHtml) return;
+    const payload = result?.qtiXml || result?.previewHtml || '';
 
     await createAndDownloadQtiZip({
-      title: title || result?.title || 'Assessment_QTI',
+      title: title || 'Assessment_QTI',
       xmlPayload: payload,
       target: lmsTarget,
     });
@@ -117,7 +91,7 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    const filename = `${(title || result?.title || 'assessment').replace(/\s+/g, '_')}_${lmsTarget}.xml`;
+    const filename = `${(title || 'assessment').replace(/\s+/g, '_')}_${lmsTarget}.xml`;
     a.download = filename;
     document.body.appendChild(a);
     a.click();
@@ -160,7 +134,7 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
                 <div className="grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
-                    onClick={() => handleSelectLms('sahlah_cypher')}
+                    onClick={() => setLmsTarget('sahlah_cypher')}
                     className={`p-3.5 text-start rounded-xl border text-xs font-medium transition-all ${
                       lmsTarget === 'sahlah_cypher'
                         ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/50 text-blue-950 font-bold shadow-sm'
@@ -173,7 +147,7 @@ export default function QtiConverterPage({ uiLang }: QtiConverterPageProps) {
 
                   <button
                     type="button"
-                    onClick={() => handleSelectLms('furqan_canvas')}
+                    onClick={() => setLmsTarget('furqan_canvas')}
                     className={`p-3.5 text-start rounded-xl border text-xs font-medium transition-all ${
                       lmsTarget === 'furqan_canvas'
                         ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/50 text-blue-950 font-bold shadow-sm'
