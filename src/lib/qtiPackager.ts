@@ -130,7 +130,26 @@ export function extractAnswerKeys(answerKeyHtml: string): Record<number, string>
     }
   }
 
-  // 3. Fallback: match any line with question number and letter
+  // 3. Check for <ol> list items where index is implicit or explicit
+  const olMatches = Array.from(answerKeyHtml.matchAll(/<ol[^>]*>([\s\S]*?)<\/ol>/gi));
+  for (const olM of olMatches) {
+    const liMatches = Array.from(olM[1].matchAll(/<li[^>]*>([\s\S]*?)<\/li>/gi));
+    liMatches.forEach((liM, idx) => {
+      const qNum = idx + 1;
+      const liText = liM[1].replace(/<[^>]+>/g, ' ').trim();
+      const explicitNumMatch = liText.match(/^(?:س\s*|السؤال\s*)?(\d+)[\s:\-ـ\.]*[\(（]?\s*([أ-دA-D])/i);
+      if (explicitNumMatch) {
+        keys[parseInt(explicitNumMatch[1], 10)] = explicitNumMatch[2];
+      } else {
+        const letterMatch = liText.match(/[\(（]\s*([أ-دA-D])\s*[\)）]/i);
+        if (letterMatch) {
+          keys[qNum] = letterMatch[1];
+        }
+      }
+    });
+  }
+
+  // 4. Fallback: match any line with question number and letter
   if (Object.keys(keys).length === 0) {
     const lines = answerKeyHtml
       .replace(/<[^>]+>/g, '\n')
@@ -162,8 +181,86 @@ export function mapLetterToChoiceId(letter: string): string {
 }
 
 /**
+ * Helper to extract multiple choices and detect correct choice from a single cell or text block.
+ * Handles:
+ * - Line-by-line options (e.g. أ) خيار ... ب) خيار ... (صحيحة))
+ * - Inline options (e.g. أ) ... ب) ... ج) ... د) ...)
+ * - Green colored text or tags indicating correct answer
+ */
+function extractChoicesFromCellOrText(content: string): {
+  choices: Array<{ id: string; text: string }>;
+  correctLetter?: string;
+} {
+  const choices: Array<{ id: string; text: string }> = [];
+  let correctLetter: string | undefined;
+
+  const cleanLines = content
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  // 1. Try line-by-line first
+  const optLineRegex = /^[\(（]?([أ-دA-D1-4])[\)）\.\-:]\s*(.*)$/i;
+  for (const line of cleanLines) {
+    const m = line.match(optLineRegex);
+    if (m) {
+      const letter = m[1];
+      let txt = m[2].trim();
+      const isCorrect =
+        /\(صحيحة\)|\(الصح\)|✓|✔|correct|صحيح/i.test(line) ||
+        /color\s*:\s*(?:green|#16a34a|#15803d|#22c55e|#059669)/i.test(content && line);
+      if (isCorrect && !correctLetter) {
+        correctLetter = letter;
+      }
+      txt = txt.replace(/\(صحيحة\)|\(الصح\)|✓|✔/gi, '').trim();
+      choices.push({
+        id: `choice_${choices.length + 1}`,
+        text: cleanText(txt),
+      });
+    }
+  }
+
+  // 2. If line-by-line didn't find at least 2 choices, try inline regex
+  if (choices.length < 2) {
+    const inlineText = cleanLines.join(' ');
+    const inlineRegex = /[\(（]?([أ-دA-D])[\)）\.\-:]\s*([^أ-دA-D\(（]+)/gi;
+    const matches = Array.from(inlineText.matchAll(inlineRegex));
+    if (matches.length >= 2) {
+      choices.length = 0;
+      for (const m of matches) {
+        const letter = m[1];
+        let txt = m[2].trim();
+        const isCorrect =
+          /\(صحيحة\)|\(الصح\)|✓|✔|correct|صحيح/i.test(txt) ||
+          /color\s*:\s*(?:green|#16a34a|#15803d|#22c55e|#059669)/i.test(content);
+        if (isCorrect && !correctLetter) {
+          correctLetter = letter;
+        }
+        txt = txt.replace(/\(صحيحة\)|\(الصح\)|✓|✔/gi, '').trim();
+        choices.push({
+          id: `choice_${choices.length + 1}`,
+          text: cleanText(txt),
+        });
+      }
+    }
+  }
+
+  return { choices, correctLetter };
+}
+
+/**
  * Extracts questions from an HTML Table format (Format 1: جدول الأسئلة)
- * Column layout: [رقم السؤال | السؤال | أ | ب | ج | د]
+ * Supports:
+ * - 6 columns: [رقم السؤال | السؤال | أ | ب | ج | د]
+ * - 5 columns with bundled options in cell 2: [رقم السؤال | نص السؤال | الخيارات | التعليل | الدرجة]
+ * - 4 columns with bundled options: [رقم السؤال | نص السؤال | الخيارات | التعليل]
+ * - 5 columns without number: [السؤال | أ | ب | ج | د]
  */
 export function extractQuestionsFromHtmlTable(
   html: string,
@@ -189,62 +286,100 @@ export function extractQuestionsFromHtmlTable(
       }
 
       const cellMatches = Array.from(rowContent.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi));
-      if (cellMatches.length >= 5) {
-        let qNum = questions.length + 1;
-        let promptText = '';
-        let optA = '';
-        let optB = '';
-        let optC = '';
-        let optD = '';
+      if (cellMatches.length < 2) continue;
 
-        if (cellMatches.length >= 6) {
-          const numCell = cleanText(cellMatches[0][1]).replace(/[^0-9]/g, '');
-          if (numCell) {
-            const parsed = parseInt(numCell, 10);
-            if (!isNaN(parsed)) qNum = parsed;
-          }
-          promptText = cleanText(cellMatches[1][1]);
-          optA = cleanText(cellMatches[2][1]);
-          optB = cleanText(cellMatches[3][1]);
-          optC = cleanText(cellMatches[4][1]);
-          optD = cleanText(cellMatches[5][1]);
-        } else if (cellMatches.length === 5) {
+      // Check if any cell has bundled choices:
+      let bundledCellIdx = -1;
+      let bundledData: { choices: Array<{ id: string; text: string }>; correctLetter?: string } = {
+        choices: [],
+      };
+
+      for (let cIdx = 0; cIdx < cellMatches.length; cIdx++) {
+        const testRes = extractChoicesFromCellOrText(cellMatches[cIdx][1]);
+        if (testRes.choices.length >= 2) {
+          bundledCellIdx = cIdx;
+          bundledData = testRes;
+          break;
+        }
+      }
+
+      let qNum = questions.length + 1;
+      let promptText = '';
+      let choices: Array<{ id: string; text: string }> = [];
+      let correctLetter = '';
+
+      if (bundledCellIdx >= 1) {
+        // Bundled choices found in a cell!
+        if (bundledCellIdx === 1) {
+          // cell 0 is prompt (or contains number + prompt)
           promptText = cleanText(cellMatches[0][1]);
           const numMatch = promptText.match(/^(\d+)[\.\-\)]\s*(.*)$/);
           if (numMatch) {
             qNum = parseInt(numMatch[1], 10);
             promptText = numMatch[2];
           }
-          optA = cleanText(cellMatches[1][1]);
-          optB = cleanText(cellMatches[2][1]);
-          optC = cleanText(cellMatches[3][1]);
-          optD = cleanText(cellMatches[4][1]);
+        } else if (bundledCellIdx >= 2) {
+          // cell 0 is number, cell 1 is prompt
+          const numCell = cleanText(cellMatches[0][1]).replace(/[^0-9]/g, '');
+          if (numCell) {
+            const parsed = parseInt(numCell, 10);
+            if (!isNaN(parsed)) qNum = parsed;
+          }
+          promptText = cleanText(cellMatches[1][1]);
         }
-
-        const cleanOptionPrefix = (txt: string) =>
-          txt.replace(/^[أ-دA-D][\)\.\-:]\s*/, '').trim();
-
-        optA = cleanOptionPrefix(optA);
-        optB = cleanOptionPrefix(optB);
-        optC = cleanOptionPrefix(optC);
-        optD = cleanOptionPrefix(optD);
-
-        if (promptText && optA && optB) {
-          const correctLetter = answerKeys[qNum] || answerKeys[questions.length + 1] || 'أ';
-          questions.push({
-            id: `Q_${qNum}`,
-            title: `السؤال ${qNum}`,
-            prompt: promptText,
-            options: [
-              { id: 'choice_1', text: optA || 'الخيار أ' },
-              { id: 'choice_2', text: optB || 'الخيار ب' },
-              { id: 'choice_3', text: optC || 'الخيار ج' },
-              { id: 'choice_4', text: optD || 'الخيار د' },
-            ].filter((o) => Boolean(o.text)),
-            correctId: mapLetterToChoiceId(correctLetter),
-            points: 1,
-          });
+        choices = bundledData.choices;
+        correctLetter = bundledData.correctLetter || answerKeys[qNum] || 'أ';
+      } else if (cellMatches.length >= 6) {
+        // Standard 6 columns: [Num, Prompt, A, B, C, D]
+        const numCell = cleanText(cellMatches[0][1]).replace(/[^0-9]/g, '');
+        if (numCell) {
+          const parsed = parseInt(numCell, 10);
+          if (!isNaN(parsed)) qNum = parsed;
         }
+        promptText = cleanText(cellMatches[1][1]);
+        const cleanOptionPrefix = (txt: string) => txt.replace(/^[أ-دA-D][\)\.\-:]\s*/, '').trim();
+        const optA = cleanOptionPrefix(cleanText(cellMatches[2][1]));
+        const optB = cleanOptionPrefix(cleanText(cellMatches[3][1]));
+        const optC = cleanOptionPrefix(cleanText(cellMatches[4][1]));
+        const optD = cleanOptionPrefix(cleanText(cellMatches[5][1]));
+        choices = [
+          { id: 'choice_1', text: optA || 'الخيار أ' },
+          { id: 'choice_2', text: optB || 'الخيار ب' },
+          { id: 'choice_3', text: optC || 'الخيار ج' },
+          { id: 'choice_4', text: optD || 'الخيار د' },
+        ].filter((o) => Boolean(o.text));
+        correctLetter = answerKeys[qNum] || 'أ';
+      } else if (cellMatches.length === 5) {
+        // 5 columns: Prompt, A, B, C, D
+        promptText = cleanText(cellMatches[0][1]);
+        const numMatch = promptText.match(/^(\d+)[\.\-\)]\s*(.*)$/);
+        if (numMatch) {
+          qNum = parseInt(numMatch[1], 10);
+          promptText = numMatch[2];
+        }
+        const cleanOptionPrefix = (txt: string) => txt.replace(/^[أ-دA-D][\)\.\-:]\s*/, '').trim();
+        const optA = cleanOptionPrefix(cleanText(cellMatches[1][1]));
+        const optB = cleanOptionPrefix(cleanText(cellMatches[2][1]));
+        const optC = cleanOptionPrefix(cleanText(cellMatches[3][1]));
+        const optD = cleanOptionPrefix(cleanText(cellMatches[4][1]));
+        choices = [
+          { id: 'choice_1', text: optA || 'الخيار أ' },
+          { id: 'choice_2', text: optB || 'الخيار ب' },
+          { id: 'choice_3', text: optC || 'الخيار ج' },
+          { id: 'choice_4', text: optD || 'الخيار د' },
+        ].filter((o) => Boolean(o.text));
+        correctLetter = answerKeys[qNum] || 'أ';
+      }
+
+      if (promptText && choices.length >= 2) {
+        questions.push({
+          id: `Q_${qNum}`,
+          title: `السؤال ${qNum}`,
+          prompt: promptText,
+          options: choices,
+          correctId: mapLetterToChoiceId(correctLetter || 'أ'),
+          points: 1,
+        });
       }
     }
   }
@@ -539,11 +674,18 @@ function deduplicateQuestions(list: NormalizedQuestion[]): NormalizedQuestion[] 
 export function extractAndNormalizeQuestions(rawPayload: string, fallbackTitle: string = 'الامتحان'): NormalizedQuestion[] {
   let xmlString = '';
   let htmlString = rawPayload;
+  let sourceText = '';
 
-  const xmlMatch = rawPayload.match(/<div id="qti-xml-payload"[^>]*>([\s\S]*?)<\/div>/i);
+  const sourceMatch = rawPayload.match(/<div id="raw-source-text"[^>]*>([\s\S]*?)<\/div>/i);
+  if (sourceMatch && sourceMatch[1]) {
+    sourceText = sourceMatch[1];
+    htmlString = htmlString.replace(/<div id="raw-source-text"[^>]*>[\s\S]*?<\/div>/gi, '');
+  }
+
+  const xmlMatch = htmlString.match(/<div id="qti-xml-payload"[^>]*>([\s\S]*?)<\/div>/i);
   if (xmlMatch && xmlMatch[1]) {
     xmlString = xmlMatch[1];
-    htmlString = rawPayload.replace(/<div id="qti-xml-payload"[^>]*>[\s\S]*?<\/div>/gi, '');
+    htmlString = htmlString.replace(/<div id="qti-xml-payload"[^>]*>[\s\S]*?<\/div>/gi, '');
   } else if (rawPayload.includes('<questestinterop') || rawPayload.includes('<assessmentItem')) {
     xmlString = rawPayload;
     htmlString = '';
@@ -553,22 +695,19 @@ export function extractAndNormalizeQuestions(rawPayload: string, fallbackTitle: 
   const xmlQuestions = deduplicateQuestions(rawXmlQuestions);
   const rawHtmlQuestions = extractQuestionsFromHtml(htmlString);
   const htmlQuestions = deduplicateQuestions(rawHtmlQuestions);
+  const rawTextQuestions = sourceText ? deduplicateQuestions(extractQuestionsFromHtml(sourceText)) : [];
 
-  // CRITICAL FIX: If HTML parser extracted more questions than XML parser
-  // (e.g. Gemini truncated the hidden XML payload to 1 question while HTML table has all 10 questions),
-  // ALWAYS prioritize the complete set of questions from HTML!
-  if (htmlQuestions.length > xmlQuestions.length && htmlQuestions.length > 0) {
-    return htmlQuestions;
-  }
+  // Find candidate list that has the most valid questions
+  const candidates = [
+    { name: 'html', list: htmlQuestions },
+    { name: 'xml', list: xmlQuestions },
+    { name: 'text', list: rawTextQuestions },
+  ].filter((c) => c.list.length > 0 && c.list.every((q) => q.prompt && q.options.length >= 2));
 
-  // Scenario 1: XML questions exist, match or exceed HTML count, and have non-empty prompts
-  const xmlHasValidPrompts =
-    xmlQuestions.length > 0 &&
-    xmlQuestions.length >= htmlQuestions.length &&
-    xmlQuestions.every((q) => q.prompt && q.prompt.length >= 5 && q.options.length >= 2);
+  candidates.sort((a, b) => b.list.length - a.list.length);
 
-  if (xmlHasValidPrompts) {
-    return xmlQuestions;
+  if (candidates.length > 0 && candidates[0].list.length > 0) {
+    return candidates[0].list;
   }
 
   // Scenario 2: Rely on HTML questions if available
@@ -579,7 +718,7 @@ export function extractAndNormalizeQuestions(rawPayload: string, fallbackTitle: 
   // Scenario 3: XML has choices, but prompt is empty/short
   if (xmlQuestions.length > 0 && xmlQuestions.some((q) => q.options.length >= 2)) {
     return xmlQuestions.map((xmlQ, idx) => {
-      const htmlQ = htmlQuestions[idx];
+      const htmlQ = htmlQuestions[idx] || rawTextQuestions[idx];
       const validPrompt =
         (xmlQ.prompt && xmlQ.prompt.length >= 5 ? xmlQ.prompt : '') ||
         (htmlQ?.prompt && htmlQ.prompt.length >= 5 ? htmlQ.prompt : '') ||
@@ -618,7 +757,7 @@ export function extractAndNormalizeQuestions(rawPayload: string, fallbackTitle: 
  * Builds Sahlah Academy CYPHER Learning QTI 1.2 XML string.
  * Strictly adheres to official working template (`qti_va_1791024284.zip`).
  */
-function buildSahlahCypherXml(questions: NormalizedQuestion[], testTitle: string, bankIdent: string): string {
+export function buildSahlahCypherXml(questions: NormalizedQuestion[], testTitle: string, bankIdent: string): string {
   let itemsXml = '';
 
   questions.forEach((q, idx) => {
@@ -672,7 +811,7 @@ ${itemsXml}    </section>
 /**
  * Builds Al-Furqan International School QTI 2.1 XML string.
  */
-function buildFurqanQti21Xml(questions: NormalizedQuestion[], testTitle: string, testIdent: string): string {
+export function buildFurqanQti21Xml(questions: NormalizedQuestion[], testTitle: string, testIdent: string): string {
   const items21 = questions.map((q, idx) => {
     const qIdent = q.id || `Q_${idx + 1}`;
     const simpleChoices = q.options
@@ -710,6 +849,23 @@ ${items21.join('\n\n')}
     </assessmentSection>
   </testPart>
 </assessmentTest>`;
+}
+
+/**
+ * Generates standard QTI XML string for any list of questions.
+ */
+export function generateStandardQtiXml(
+  questions: NormalizedQuestion[],
+  testTitle: string,
+  target: LmsTarget = 'sahlah_cypher'
+): string {
+  const safeTitle = (testTitle || 'Assessment').replace(/[\\/:*?"<>|]/g, '_');
+  const bankIdent = `QuestionBank_${Date.now()}`;
+  if (target === 'sahlah_cypher') {
+    return buildSahlahCypherXml(questions, safeTitle, bankIdent);
+  } else {
+    return buildFurqanQti21Xml(questions, safeTitle, bankIdent);
+  }
 }
 
 /**
