@@ -207,3 +207,43 @@ export async function convertRawTextToQti(payload: {
 
   return response.json();
 }
+
+/**
+ * Academic Smart Translation of generated educational HTML content via Gemini.
+ * Strictly preserves HTML structures (<table>, <ul>, <ol>, <p>, options, styles)
+ * and translates human-readable academic text between Arabic and English.
+ */
+export async function translateGeneratedContent(
+  htmlContent: string,
+  targetLang: 'ar' | 'en'
+): Promise<string> {
+  if (!htmlContent || !htmlContent.trim()) {
+    throw new Error('محتوى النص المراد ترجمته فارغ.');
+  }
+
+  const response = await fetch('/api/translate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      htmlContent,
+      targetLang,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(
+      errorData.error ||
+        (targetLang === 'ar'
+          ? 'تعذر ترجمة المحتوى إلى العربية حالياً، يرجى المحاولة مرة أخرى.'
+          : 'Could not translate content to English, please try again.')
+    );
+  }
+
+  const data = await response.json();
+  if (!data?.translatedHtml) {
+    throw new Error('لم يتم استلام محتوى مترجم صالح من الخادم.');
+  }
+
+  return data.translatedHtml;
+}

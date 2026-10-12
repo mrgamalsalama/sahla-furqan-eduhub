@@ -99,6 +99,7 @@ export function getApiKey(): string | undefined {
 }
 
 const CANDIDATE_MODELS = [
+  'gemini-2.5-flash',
   'gemini-3.1-flash-lite',
   'gemini-flash-latest',
   'gemini-3.8-flash',
@@ -1304,6 +1305,74 @@ Return clean HTML only without markdown fences.`;
     return res.status(200).json({ html });
   } catch (error: any) {
     console.error('executeGrade error:', error);
+    const { status, message } = formatApiError(error);
+    return res.status(status).json({ error: message, details: error?.message });
+  }
+}
+
+/**
+ * Academic Smart Translation of generated educational HTML content.
+ * Strict conditions:
+ * - Translates academic text between Arabic and English.
+ * - 100% preserves HTML tag structure (<table>, <ul>, <ol>, <p>, <span>, classes, attributes).
+ * - No markdown wrapping fences.
+ * - Handles correct dir (rtl for ar, ltr for en) on the root container.
+ */
+export async function executeTranslate(req: any, res: any) {
+  try {
+    const body = req.body || {};
+    const { htmlContent, targetLang = 'en' } = body;
+
+    if (!htmlContent || typeof htmlContent !== 'string' || !htmlContent.trim()) {
+      return res.status(400).json({ error: 'محتوى HTML للترجمة مطلوب وغير موجود.' });
+    }
+
+    const isTargetAr = targetLang === 'ar';
+    const targetDir = isTargetAr ? 'rtl' : 'ltr';
+
+    const systemPrompt = isTargetAr
+      ? `أَنْتَ مُتَرْجِمٌ أَكَادِيمِيٌّ وَتَرْبَوِيٌّ مُتَخَصِّصٌ فِي تَرْجَمَةِ الْمَنَاهِجِ وَالْمَوَادِّ التَّعْلِيمِيَّةِ وَالِاخْتِبَارَاتِ وَالْخُطَطِ الدِّرَاسِيَّةِ.
+مَهَمَّتُكَ: تَرْجَمَةُ مُحْتَوَى كُودِ الـ HTML التَّالِي بِدِقَّةٍ أَكَادِيمِيَّةٍ عَالِيَةٍ إِلَى اللُّغَةِ الْعَرَبِيَّةِ الْمُعَاصِرَةِ مَعَ ضَبْطِ الْمُصْطَلَحَاتِ التَّرْبَوِيَّةِ.
+
+شُرُوطٌ صَارِمَةٌ جِدّاً:
+1. الْحِفَاظُ التَّامُّ وَالْمُطْلَقُ عَلَى جَمِيعِ وُسُومِ الـ HTML بِلَا اسْتِثْنَاءٍ (الجداول <table>، <thead>، <tbody>، <tr>، <th>، <td>، والقوائم <ul>، <ol>، <li>، والفقرات <p>، والعناوين <h1>، <h2>، <h3>، والخيارات والأنماط style، والفئات class، والمعرّفات id).
+2. لَا تُغَيِّرْ أَيَّ مَسَارَاتٍ أَوْ خَصَائِصَ تَقْنِيَّةٍ (attributes).
+3. ضَعْ اتِّجَاهَ الْحَاوِيَةِ الرَّئِيسِيَّةِ dir="rtl" وَاضْبِطْ الْمُحَاذَاةَ لِلْيَمِينِ text-align: right حَيْثُمَا كَانَ مُنَاسِباً.
+4. تَرْجِمْ فَقَطْ النُّصُوصَ الظَّاهِرَةَ لِلْقَارِئِ وَعَنَاوِينَ الْأَسْئِلَةِ وَالْخِيَارَاتِ وَالْجَدَاوِلِ.
+5. مَمْنُوعٌ مَنْعاً بَاتّاً إِضَافَةُ أَيِّ كُتَلِ مَارْكْدَاوْنِ (مِثْل \`\`\`html أَوْ \`\`\`). أَخْرِجْ كُودَ HTML النَّقِيَّ فَقَطْ بِدَايَةً مِنْ أَوَّلِ حَرْفٍ.`
+      : `You are an expert academic and educational translator specializing in K-12 curricula, lesson plans, rubrics, presentations, worksheets, and assessment banks.
+Your task: Translate the provided educational HTML content accurately into standard academic English.
+
+STRICT REQUIREMENTS:
+1. STRICTLY PRESERVE all HTML tag structures, elements, and attributes without alteration (<table>, <thead>, <tbody>, <tr>, <th>, <td>, <ul>, <ol>, <li>, <p>, <h1>-<h6>, <div>, <span>, style, class, id).
+2. Do NOT change technical attributes, IDs, or structural markup.
+3. Update top container attributes to dir="ltr" and text-align: left where appropriate for English readability.
+4. Translate ONLY the visible human-readable academic text, headings, prompts, options, table contents, and questions.
+5. ABSOLUTELY NO markdown code blocks or fences (no \`\`\`html or \`\`\`). Return pure, valid HTML only starting from the very first character.`;
+
+    const userMessage = `Here is the HTML code to translate to ${isTargetAr ? 'Arabic' : 'English'}:\n\n${htmlContent}`;
+
+    const response = await callGemini([
+      { text: systemPrompt },
+      { text: userMessage },
+    ]);
+
+    let translatedHtml = extractHtml(response.text || '');
+
+    // Cleanup any lingering markdown fences if any
+    translatedHtml = translatedHtml
+      .replace(/^```html\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+
+    return res.status(200).json({
+      success: true,
+      translatedHtml,
+      targetLang,
+    });
+  } catch (error: any) {
+    console.error('executeTranslate error:', error);
     const { status, message } = formatApiError(error);
     return res.status(status).json({ error: message, details: error?.message });
   }

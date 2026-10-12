@@ -12,6 +12,7 @@ import { parseHtmlToGammaSlides, exportGammaSlidesToPptx } from '@/lib/gammaPptx
 import { saveLesson, getLessonSettings, uid } from '@/lib/storage';
 import { createAndDownloadQtiZip } from '@/lib/qtiPackager';
 import { saveCloudResource } from '@/lib/supabase';
+import TranslateContentButton from '@/components/TranslateContentButton';
 import type { User } from '@supabase/supabase-js';
 import type { UILang } from '@/lib/i18n';
 import { t } from '@/lib/i18n';
@@ -172,6 +173,18 @@ export default function EditorPage({
       isContentArabic ? 'ar' : 'en',
       currentSettings
     );
+  }
+
+  function handleTranslationComplete(translatedHtml: string, targetLang: 'ar' | 'en') {
+    if (editorRef.current) {
+      editorRef.current.innerHTML = translatedHtml;
+      const newDir: 'rtl' | 'ltr' = targetLang === 'ar' ? 'rtl' : 'ltr';
+      setActiveDir(newDir);
+      editorRef.current.dir = newDir;
+      editorRef.current.style.textAlign = newDir === 'rtl' ? 'right' : 'left';
+      setActiveFont(targetLang === 'ar' ? 'Cairo, sans-serif' : 'Arial, Helvetica, sans-serif');
+      editorRef.current.focus();
+    }
   }
 
   async function handleDownloadQtiZip(target: 'sahlah_cypher' | 'furqan_canvas' | 'canvas_lms') {
@@ -763,6 +776,13 @@ ${manifestResources}  </resources>
           <FileText className="w-4 h-4" />
           {s.exportPDF}
         </button>
+
+        {/* زر الترجمة الذكية للغة الأخرى */}
+        <TranslateContentButton
+          getHtmlContent={() => editorRef.current?.innerHTML || initialHtml || ''}
+          onTranslationComplete={handleTranslationComplete}
+          uiLang={uiLang}
+        />
 
         {/* تصدير بوربوينت */}
         {(outputType === 'slides' || title?.includes('عرض') || currentTitle?.includes('عرض')) && (
