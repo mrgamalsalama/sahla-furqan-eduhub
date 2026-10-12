@@ -111,7 +111,7 @@ export type TermType = 'term-1' | 'term-2' | 'term-3';
 export type ContentLang = 'ar' | 'en';
 export type InstitutionId = 'sahlah' | 'furqan' | 'both';
 
-export type LmsTarget = 'sahlah_cypher' | 'furqan_canvas';
+export type LmsTarget = 'sahlah_cypher' | 'furqan_canvas' | 'canvas_lms';
 
 export type WorksheetTheme = 'classic' | 'modern' | 'minimal' | 'custom';
 export interface WorksheetSettings {

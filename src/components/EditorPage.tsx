@@ -174,7 +174,7 @@ export default function EditorPage({
     );
   }
 
-  async function handleDownloadQtiZip(target: 'sahlah_cypher' | 'furqan_canvas') {
+  async function handleDownloadQtiZip(target: 'sahlah_cypher' | 'furqan_canvas' | 'canvas_lms') {
     const rawHtml = editorRef.current?.innerHTML || initialContent || '';
     await createAndDownloadQtiZip({
       title: currentTitle || 'Assessment_QTI',
@@ -799,6 +799,13 @@ ${manifestResources}  </resources>
               title="مدرسة الفرقان العالمية - QTI v2.1 ZIP"
             >
               <span>{isAr ? 'الفرقان العالمية QTI v2.1 zip' : 'Furqan QTI v2.1 ZIP'}</span>
+            </button>
+            <button
+              onClick={() => handleDownloadQtiZip('canvas_lms')}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition flex items-center gap-1"
+              title="منصة كانفاس التعليمية - Canvas LMS QTI ZIP"
+            >
+              <span>{isAr ? 'منصة كانفاس Canvas QTI zip' : 'Canvas LMS QTI ZIP'}</span>
             </button>
           </div>
         )}

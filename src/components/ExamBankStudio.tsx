@@ -396,31 +396,44 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
           <label className="block text-xs font-bold text-slate-700 mb-2">
             {isAr ? 'منصة إدارة التعلم المستهدفة لحزمة QTI ZIP:' : 'Target LMS Engine:'}
           </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <button
               type="button"
               onClick={() => setSettings({ ...settings, lmsTarget: 'sahlah_cypher' })}
-              className={`p-4 rounded-2xl border text-start transition-all ${
+              className={`p-3.5 rounded-2xl border text-start transition-all ${
                 (settings.lmsTarget || 'sahlah_cypher') === 'sahlah_cypher'
                   ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/50 text-blue-950 font-bold shadow-xs'
                   : 'border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50/30 text-slate-700 shadow-2xs'
               }`}
             >
-              <div className="font-bold text-xs mb-0.5 text-blue-950">أكاديمية سهلة الدولية (QTI v1.2 ZIP)</div>
-              <div className="text-[11px] text-slate-600">حزمة معيارية QTI v1.2 متوافقة مع منصة أكاديمية سهلة (Cypher LMS)</div>
+              <div className="font-bold text-xs mb-0.5 text-blue-950">أكاديمية سهلة الدولية</div>
+              <div className="text-[11px] text-slate-600">حزمة معيارية QTI v1.2 (منصة Cypher)</div>
             </button>
 
             <button
               type="button"
               onClick={() => setSettings({ ...settings, lmsTarget: 'furqan_canvas' })}
-              className={`p-4 rounded-2xl border text-start transition-all ${
+              className={`p-3.5 rounded-2xl border text-start transition-all ${
                 settings.lmsTarget === 'furqan_canvas'
                   ? 'border-blue-600 ring-2 ring-blue-600 bg-blue-50/50 text-blue-950 font-bold shadow-xs'
                   : 'border-slate-200 bg-white hover:border-blue-500 hover:bg-blue-50/30 text-slate-700 shadow-2xs'
               }`}
             >
-              <div className="font-bold text-xs mb-0.5 text-blue-950">مدرسة الفرقان العالمية (QTI v2.1 ZIP)</div>
-              <div className="text-[11px] text-slate-600">حزمة معيارية QTI v2.1 متوافقة مع منصة مدرسة الفرقان (Canvas / LMS)</div>
+              <div className="font-bold text-xs mb-0.5 text-blue-950">مدرسة الفرقان العالمية</div>
+              <div className="text-[11px] text-teal-700 font-bold">حزمة معيارية معتمدة QTI v2.1 ZIP</div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSettings({ ...settings, lmsTarget: 'canvas_lms' })}
+              className={`p-3.5 rounded-2xl border text-start transition-all ${
+                settings.lmsTarget === 'canvas_lms'
+                  ? 'border-indigo-600 ring-2 ring-indigo-600 bg-indigo-50/50 text-indigo-950 font-bold shadow-xs'
+                  : 'border-slate-200 bg-white hover:border-indigo-500 hover:bg-indigo-50/30 text-slate-700 shadow-2xs'
+              }`}
+            >
+              <div className="font-bold text-xs mb-0.5 text-indigo-950">منصة كانفاس التعليمية</div>
+              <div className="text-[11px] text-slate-600">حزمة بنك أسئلة Canvas LMS QTI ZIP</div>
             </button>
           </div>
         </div>
