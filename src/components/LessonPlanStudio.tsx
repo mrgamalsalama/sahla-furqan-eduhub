@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  ClipboardList, Sparkles, Loader2, AlertCircle
+  ClipboardList, Sparkles, Loader2, AlertCircle, Mic
 } from 'lucide-react';
 import type { LessonSettings, OutputType, UploadedFile, GenerationResult } from '@/types';
 import {
@@ -11,6 +11,7 @@ import { getLessonSettings, saveLessonSettings } from '@/lib/storage';
 import { generateContent } from '@/lib/gemini';
 import type { UILang } from '@/lib/i18n';
 import SourceMaterialUpload from './SourceMaterialUpload';
+import VoiceToLessonModal from './VoiceToLessonModal';
 
 interface LessonPlanStudioProps {
   onOpenResult: (result: GenerationResult, outputType: OutputType) => void;
@@ -23,6 +24,7 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<UploadedFile[]>([]);
+  const [voiceModalOpen, setVoiceModalOpen] = useState(false);
 
   const grades = isAr ? GRADES_AR : GRADES_EN;
   const durations = isAr ? DURATIONS_AR : DURATIONS_EN;
@@ -68,6 +70,18 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
             ? 'توليد خطة الدرس الرسمية المطابقة لنموذج الاعتماد الأكاديمي مع جداول الترويسة، الأساسيات، مراحل الدرس الخمس، التمايز، والتقييم مع التشكيل التام بنسبة 100%.'
             : 'Generate official lesson plans featuring header tables, 5-phase lesson flow, differentiation, and assessment matrices.'}
         </p>
+
+        {/* Voice-to-Lesson Quick Action Banner */}
+        <div className="mt-5 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setVoiceModalOpen(true)}
+            className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-300 to-orange-400 hover:from-amber-300 hover:to-orange-300 text-blue-950 font-black text-xs sm:text-sm flex items-center gap-2.5 shadow-md hover:shadow-xl hover:scale-105 transition-all"
+          >
+            <Mic className="w-5 h-5 text-blue-950" />
+            <span>{isAr ? '🎤 هل لديك أفكار سريعة؟ تحدث بصوتك وسننشئ الخطة فوراً (Voice-to-Lesson)' : '🎤 Speak Your Lesson Ideas (Voice-to-Lesson)'}</span>
+          </button>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
@@ -276,6 +290,14 @@ export default function LessonPlanStudio({ onOpenResult, uiLang }: LessonPlanStu
           )}
         </button>
       </form>
+
+      {/* Voice-to-Lesson Modal */}
+      <VoiceToLessonModal
+        isOpen={voiceModalOpen}
+        onClose={() => setVoiceModalOpen(false)}
+        onOpenResult={onOpenResult}
+        uiLang={uiLang}
+      />
     </div>
   );
 }

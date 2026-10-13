@@ -3,7 +3,17 @@ import cors from 'cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
-import { executeGenerate, executeAdvisor, executeRubric, executeGrade, executeConvertQti, executeTranslate } from './api/_shared.js';
+import {
+  executeGenerate,
+  executeAdvisor,
+  executeRubric,
+  executeGrade,
+  executeConvertQti,
+  executeTranslate,
+  executeVoiceToLesson,
+  executeDifferentiate,
+  executeAddDokQuestion,
+} from './api/_shared.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,6 +31,9 @@ app.post('/api/advisor', executeAdvisor);
 app.post('/api/rubric', executeRubric);
 app.post('/api/grade', executeGrade);
 app.post('/api/translate', executeTranslate);
+app.post('/api/voice-to-lesson', executeVoiceToLesson);
+app.post('/api/differentiate', executeDifferentiate);
+app.post('/api/add-dok-question', executeAddDokQuestion);
 
 // Dev / Local Server with Vite
 async function startServer() {

@@ -837,6 +837,51 @@ ${lmsXmlDirective}
 </div>`;
       }
 
+      case 'performance-task': {
+        const perf = settings.performanceTaskSettings || {};
+        const pTopic = perf.projectTopic || settings.lessonTitle || 'مشروع وتحدي تعليمي معاصر';
+        const pDuration = perf.duration || 'أسبوعان';
+        const pTeam = perf.teamFormat === 'individual' ? 'فردي (عمل مستقل ومسؤولية ذاتية)' : 'مجموعات طلابية متكاملة (3-4 طلاب)';
+        const pType = perf.deliverableType || 'نموذج أولي وحملة متكاملة';
+        const gGoal = perf.graspsGoal || 'حل مشكلة واقعية محفزة وتقديم حلول مبتكرة قابلة للتطبيق ومبنية على التفكير العلمي';
+        const gRole = perf.graspsRole || 'فريق استشاري وخبراء ومبتكرون يمثلون دوراً مهنياً أصيلاً محاكياً لسوق العمل';
+        const gAudience = perf.graspsAudience || 'لجنة التحكيم المدرسية، أولياء الأمور، والمجتمع المحلي والخبراء المعنيون';
+        const gSituation = perf.graspsSituation || 'مواجهة تحدٍ وأزمة واقعية معاصرة تتطلب دمج المفاهيم والبحث والتقصي وابتكار حلول عملية';
+        const gProduct = perf.graspsProduct || 'منتج نهائي متكامل (نموذج عمل، حملة توعوية، تقرير استشاري أو محاكاة رقمية) مع ملف توثيق';
+        const gStandards = perf.graspsStandards || 'معايير الإتقان الأكاديمي، جودة المنتج، مهارات العرض والإلقاء، والتفكير الناقد والعمل الجماعي';
+
+        return `${ctx}
+الْمَطْلُوبُ: تَوْلِيدُ "مُهِمَّةٍ أَدَائِيَّةٍ وَمَشْرُوعِ تَعَلُّمٍ قَائِمٍ عَلَى الْمَشَارِيعِ (PBL)" احْتِرَافِيٍّ كَامِلٍ لِأَكَادِيمِيَّةِ سَهْلَةَ الدَّوْلِيَّةِ وَمَدَارِسِ الْفُرْقَانِ، مَشْكُولاً بِالْكَامِلِ (100%) ومُصَمَّماً بِمَعَايِيرِ التَّعَلُّمِ الْأَصِيلِ.
+
+قَوَاعِدُ الصِّيَاغَةِ:
+- ابْدَأْ فَوْراً بِكُودِ الـ HTML الْمُنَسَّقِ دُونَ أَيِّ كُتَلِ مَارْكْدَاوْن (\`\`\` أَوْ ###).
+- اسْتَخْدِمْ نِظَامَ الْجَدَاوِلِ وَالْأَلْوَانِ الْأَكَادِيمِيَّةِ الرَّسْمِيَّةِ (#1e3a8a، #0f172a، #0d9488، #f8fafc).
+
+الْهَيْكَلُ التَّرْبَوِيُّ لِلْمُهِمَّةِ الْأَدَائِيَّةِ الْمُعْتَمَدَةِ:
+1. جَدْوَلُ بَيَانَاتِ الْمَشْرُوعِ وَالتَّرْوِيسَةِ:
+   - عُنْوَانُ الْمَشْرُوعِ: ${pTopic}
+   - الصَّفُّ: ${settings.grade} | الْمَادَّةُ: ${settings.subject}
+   - مُدَّةُ الْمَشْرُوعِ: ${pDuration} | نَمَطُ الْعَمَلِ: ${pTeam}
+   - نَوْعُ الْمُخْرَجِ: ${pType}
+2. إِطَارُ GRASPS الْعَالَمِيُّ لِلْمَهَامِّ الْأَدَائِيَّةِ فِي جَدْوَلٍ احْتِرَافِيٍّ مُمَيَّزٍ:
+   - G (الْهَدَفُ - Goal): ${gGoal}
+   - R (الدَّوْرُ - Role): ${gRole}
+   - A (الْجُمْهُورُ الْمُسْتَهْدَفُ - Audience): ${gAudience}
+   - S (السِّيَاقُ وَالسِّينَارْيُو الْوَاقِعِيُّ - Situation): ${gSituation}
+   - P (الْمُنْتَجُ وَالْأَدَاءُ النِّهَائِيُّ - Product/Performance): ${gProduct}
+   - S (الْمَعَايِيرُ وَسُلَّمُ التَّقْيِيمِ - Standards): ${gStandards}
+3. مَرَاحِلُ وَخَارِطَةُ طَرِيقِ التَّسْلِيمِ (Project Milestones) فِي جَدْوَلٍ زَمَنِيٍّ مُنَسَّقٍ:
+   - الْمَرْحَلَةُ الْأُولَى: إِطْلَاقُ التَّحَدِّي وَبِنَاءُ الْفَرِيقِ وَمِيثَاقُ الْعَمَلِ (يَوْم 1-3).
+   - الْمَرْحَلَةُ الثَّانِيَةُ: الْبَحْثُ وَجَمْعُ الْبَيَانَاتِ وَالتَّخْطِيطُ (يَوْم 4-7).
+   - الْمَرْحَلَةُ الثَّالِثَةُ: التَّطْبِيقُ وَبِنَاءُ النَّمُوذَجِ الْأَوَّلِيِّ وَالْمُرَاجَعَةُ التَّحْسِينِيَّةُ (يَوْم 8-11).
+   - الْمَرْحَلَةُ الرَّابِعَةُ: الْمَعْرِضُ الْخِتَامِيُّ وَالْعَرْضُ التَّقْدِيمِيُّ وَالتَّقْيِيمُ (يَوْم 12-14).
+4. أَدْوَارُ الْفَرِيقِ وَمِيثَاقُ الْمَسْؤُولِيَّةِ (قائد المشروع، باحث المحتوى، المصمم الإبداعي، مدقق الجودة والتقديم).
+5. سُلَّمُ التَّقْيِيمِ التَّحْلِيلِيُّ الشَّامِلُ (Analytical Rubric 4-Levels):
+   - جَدْوَلٌ رَسْمِيٌّ يُقَيِّمُ 4 مَحَاوِرَ: (1. عُمْقُ الْمُحْتَوَى وَالْحَلُّ الْعِلْمِيُّ، 2. التَّفْكِيرُ النَّاقِدُ وَالْإِبْدَاعُ، 3. مَهَارَاتُ الْعَرْضِ وَالتَّوَاصُلِ، 4. الْعَمَلُ الْجَمَاعِيُّ وَالِالْتِزَامُ).
+   - مُسْتَوَيَاتُ الدَّرَجَاتِ: (مُتَفَوِّقٌ 4 دَرَجَاتٍ، مُتَقَدِّمٌ 3 دَرَجَاتٍ، مُتَمَكِّنٌ دَرَجَتَانِ، نَامٍ/بِحَاجَةِ دَعْمٍ دَرَجَةٌ وَاحِدَةٌ).
+6. بَطَاقَةُ التَّقْيِيمِ الذَّاتِيِّ وَتَقْيِيمِ الْأَقْرَانِ (Self & Peer Assessment Form).`;
+      }
+
       default:
         return ctx;
     }
@@ -1008,6 +1053,43 @@ ${lmsXmlDirective}
 </div>`;
       }
 
+      case 'performance-task': {
+        const perf = settings.performanceTaskSettings || {};
+        const pTopic = perf.projectTopic || settings.lessonTitle || 'Real-World Project & Inquiry Challenge';
+        const pDuration = perf.duration || '2 Weeks';
+        const pTeam = perf.teamFormat === 'individual' ? 'Individual Task' : 'Collaborative Student Teams (3-4 students)';
+        const pType = perf.deliverableType || 'Working Prototype, Campaign & Showcase';
+        const gGoal = perf.graspsGoal || 'Solve an authentic community challenge and propose evidence-based solutions';
+        const gRole = perf.graspsRole || 'Advisory Taskforce / Lead Industry Specialists';
+        const gAudience = perf.graspsAudience || 'Evaluation Committee, Stakeholders and Community';
+        const gSituation = perf.graspsSituation || 'Confronting an authentic real-world problem requiring inquiry, application and innovation';
+        const gProduct = perf.graspsProduct || 'Comprehensive tangible deliverable, digital presentation, and reflective documentation';
+        const gStandards = perf.graspsStandards || 'Academic mastery, product craftsmanship, presentation impact, and collaborative teamwork';
+
+        return `${ctx}
+TASK: Generate a complete, rigorous "Project-Based Learning (PBL) & Performance Task" in English aligned with Sahlah Academy and Al-Furqan International School standards.
+
+STRUCTURE & FORMATTING GUIDELINES:
+- Output pure, semantic HTML directly without markdown code fences (\`\`\`html).
+- Employ polished academic tables with official deep slate/navy (#1e293b, #0f172a, #0d9488) styling.
+
+COMPREHENSIVE PBL STRUCTURE:
+1. Project Information Table (Project Title: ${pTopic}, Grade: ${settings.grade}, Subject: ${settings.subject}, Duration: ${pDuration}, Format: ${pTeam}, Deliverable: ${pType}).
+2. Authentic GRASPS Framework Table:
+   - G (Goal): ${gGoal}
+   - R (Role): ${gRole}
+   - A (Audience): ${gAudience}
+   - S (Situation): ${gSituation}
+   - P (Product/Performance): ${gProduct}
+   - S (Standards & Criteria): ${gStandards}
+3. Project Milestones & Roadmap Table (Phase 1: Project Launch & Team Charter, Phase 2: In-depth Research & Data Collection, Phase 3: Prototyping & Formative Critique, Phase 4: Final Exhibition & Defenses).
+4. Team Roles & Cooperative Accountability Charter.
+5. Analytical Rubric (4-Level Comprehensive Rubric):
+   - 4 Criteria: 1. Content Rigor & Solution Quality, 2. Critical Thinking & Innovation, 3. Oral Defense & Communication, 4. Collaboration & Project Management.
+   - 4 Performance Bands: Advanced (4 pts), Proficient (3 pts), Basic (2 pts), Developing (1 pt).
+6. Self and Peer Assessment Sheet.`;
+      }
+
       default:
         return ctx;
     }
@@ -1098,6 +1180,8 @@ Strict rule: Use the attached content below as the primary reference for this ge
         ? (isAr ? 'امْتِحَانُ بِلُومَ الشَّامِلُ' : 'Comprehensive Bloom Exam')
         : outputType === 'standardized-test'
         ? (isAr ? 'اخْتِبَارٌ مِعْيَارِيٌّ / تَشْخِيصِيٌّ' : 'Benchmark Assessment')
+        : outputType === 'performance-task'
+        ? (isAr ? 'مُهِمَّةٌ أَدَائِيَّةٌ وَمَشْرُوعُ PBL' : 'Performance Task & PBL Project')
         : (isAr ? 'خُطَّةُ دَرْسٍ مُعْتَمَدَةٌ' : 'Approved Lesson Plan');
 
     const title = settings.lessonTitle
@@ -1373,6 +1457,262 @@ STRICT REQUIREMENTS:
     });
   } catch (error: any) {
     console.error('executeTranslate error:', error);
+    const { status, message } = formatApiError(error);
+    return res.status(status).json({ error: message, details: error?.message });
+  }
+}
+
+/**
+ * Voice-to-Lesson Handler:
+ * Parses spoken teacher ideas (e.g. "أريد خطة لدرس عن الانقسام الميتوزي للصف التاسع...")
+ * extracts curriculum metadata, and optionally generates the complete official lesson plan immediately.
+ */
+export async function executeVoiceToLesson(req: any, res: any) {
+  try {
+    const body = req.body || {};
+    const {
+      voiceTranscript,
+      autoGenerate = true,
+      targetSubject,
+      targetGrade,
+      institution = 'sahlah',
+      contentLanguage = 'ar',
+    } = body;
+
+    if (!voiceTranscript || typeof voiceTranscript !== 'string' || !voiceTranscript.trim()) {
+      return res.status(400).json({ error: 'النص الصوتي المفرغ غير موجود أو فارغ.' });
+    }
+
+    const isAr = contentLanguage === 'ar';
+
+    // 1. Parsing prompt with structured JSON extraction
+    const parserPrompt = `You are an educational NLP parser for K-12 teacher instructions.
+Analyze the teacher's spoken idea/transcript and extract the educational metadata into a strict JSON object:
+Spoken text: "${voiceTranscript}"
+
+Respond with ONLY valid JSON with keys:
+{
+  "subject": "Inferred subject in ${isAr ? 'Arabic' : 'English'} (e.g. العلوم / Science / الرياضيات / اللغة العربية)",
+  "grade": "Inferred grade (e.g. الصف التاسع / Grade 9)",
+  "lessonTitle": "Precise lesson title (e.g. الانقسام الميتوزي / Mitosis)",
+  "duration": "Inferred or default duration (e.g. 50 دقيقة / 50 min)",
+  "keyActivities": "Extracted specific activities (e.g. نشاط مجموعات مدته 10 دقائق)",
+  "labExperiment": "Extracted lab experiment or null if none (e.g. تجربة مجهرية لفحص خلايا البصل)",
+  "assessmentNotes": "Extracted quiz requirements (e.g. اختبار قصير من 5 أسئلة)",
+  "pedagogicalGoal": "Core educational goal derived from the spoken prompt"
+}`;
+
+    const parseResponse = await callGemini([
+      { text: 'You are an educational parser that outputs pure JSON only without formatting markdown fences.' },
+      { text: parserPrompt },
+    ]);
+
+    let parsed: any = {};
+    try {
+      const cleanJson = (parseResponse.text || '')
+        .replace(/```json/gi, '')
+        .replace(/```/g, '')
+        .trim();
+      parsed = JSON.parse(cleanJson);
+    } catch {
+      parsed = {
+        subject: targetSubject || (isAr ? 'العلوم' : 'Science'),
+        grade: targetGrade || (isAr ? 'الصف التاسع' : 'Grade 9'),
+        lessonTitle: voiceTranscript.slice(0, 40),
+        duration: isAr ? '50 دقيقة' : '50 min',
+        keyActivities: voiceTranscript,
+      };
+    }
+
+    // Override with explicit inputs if provided
+    if (targetSubject) parsed.subject = targetSubject;
+    if (targetGrade) parsed.grade = targetGrade;
+
+    // If autoGenerate is false, return the extracted parameters immediately
+    if (!autoGenerate) {
+      return res.status(200).json({ success: true, parsed });
+    }
+
+    // Otherwise, generate the complete official lesson plan right away
+    const settings = {
+      subject: parsed.subject || (isAr ? 'العلوم' : 'Science'),
+      grade: parsed.grade || (isAr ? 'الصف التاسع' : 'Grade 9'),
+      duration: parsed.duration || (isAr ? '50 دقيقة' : '50 min'),
+      studentLevel: isAr ? 'مستويات متفاوتة' : 'Mixed levels',
+      teacherName: isAr ? 'المعلم الفاضل' : 'Master Teacher',
+      lessonTitle: parsed.lessonTitle || (isAr ? 'خطة الدرس النموذجية' : 'Sample Lesson'),
+      contentLanguage,
+      institution,
+      teacherPrompt: `توجيهات صوتية مباشرة من المعلم:
+- الأنشطة المحددة: ${parsed.keyActivities || 'نشاط تعاوني'}
+- التجارب المعملية: ${parsed.labExperiment || 'تطبيق عملي مناسب'}
+- التقويم والملاحظات: ${parsed.assessmentNotes || 'اختبار قصير متدرج'}
+- النص الصوتي الكامل للمعلم: "${voiceTranscript}"`,
+    };
+
+    const prompt = buildBasePrompt(settings, 'lesson-plan');
+    const genResponse = await callGemini(prompt);
+    const htmlContent = extractHtml(genResponse.text || '');
+    const institutionHeader = getInstitutionHeader(settings, 'lesson-plan');
+    const direction = isAr ? 'rtl' : 'ltr';
+    const alignment = isAr ? 'right' : 'left';
+
+    const fullHtml = `<div class="rte-content sahlah-lesson-plan" dir="${direction}" lang="${contentLanguage}" style="direction: ${direction}; text-align: ${alignment}; font-family: inherit;">${institutionHeader}${htmlContent}</div>`;
+    const title = `${isAr ? 'خطة درس صوتية معتمدة' : 'Voice-Generated Lesson Plan'} - ${parsed.lessonTitle || settings.lessonTitle}`;
+
+    return res.status(200).json({
+      success: true,
+      parsed,
+      contentHtml: fullHtml,
+      title,
+    });
+  } catch (error: any) {
+    console.error('executeVoiceToLesson error:', error);
+    const { status, message } = formatApiError(error);
+    return res.status(status).json({ error: message, details: error?.message });
+  }
+}
+
+/**
+ * Differentiated Learning & SEN Adaptor Handler:
+ * Adapts existing educational HTML content for SEN / Easy-Read, Gifted / Talented,
+ * or Visual Graphic Organizers while preserving strict HTML structure.
+ */
+export async function executeDifferentiate(req: any, res: any) {
+  try {
+    const body = req.body || {};
+    const {
+      htmlContent,
+      mode = 'easy-read', // 'easy-read' | 'gifted' | 'visual-organizer'
+      targetLang = 'ar',
+    } = body;
+
+    if (!htmlContent || typeof htmlContent !== 'string' || !htmlContent.trim()) {
+      return res.status(400).json({ error: 'محتوى HTML المطلوب تكييفه غير موجود.' });
+    }
+
+    const isAr = targetLang === 'ar';
+    const modeInstructions: Record<string, string> = {
+      'easy-read': isAr
+        ? `الْمَسَارُ: تَبْسِيطُ الْقِرَاءَةِ وَدَعْمُ صُعُوبَاتِ التَّعَلُّمِ (Easy-Read & Dyslexia / SEN Support):
+1. أَعِدْ صِيَاغَةَ الْفِقَرَاتِ الطَّوِيلَةِ إِلَى جُمَلٍ وَاضِحَةٍ وَمُبَاشِرَةٍ وَمُتَسَلْسِلَةٍ نَقَاطِيّاً.
+2. ضَعْ كُلَّ مَفْهُومٍ صَعْبٍ مَعَ تَعْرِيفٍ مُبَسَّطٍ دَاخِلَ بَطَاقَةٍ صَغِيرَةٍ (Vocabulary Box) بِخَلْفِيَّةٍ هَادِئَةٍ #f0fdf4.
+3. زَوِّدْ كُلَّ سُؤَالٍ أَوْ نَشَاطٍ بِتَلْمِيحٍ مُسَاعِدٍ (Scaffolding Hint) يَبْدَأُ بِـ: 💡 تَلْمِيحٌ مُسَاعِدٌ لِلْحَلِّ.
+4. فِي الْأَسْئِلَةِ، بَسِّطْ الْخِيَارَاتِ لِتَكُونَ 3 خِيَارَاتٍ وَاضِحَةً دُونَ تَشْتِيتٍ، وَأَبْرِزْ الْكَلِمَاتِ الْمِفْتَاحِيَّةَ بِالْخَطِّ الْعَرِيضِ.
+5. حَافِظْ عَلَى الْأَهْدَافِ الْأَسَاسِيَّةِ لِلدَّرْسِ مَعَ خَفْضِ الْعِبْءِ الْمَعْرِفِيِّ وَصُعُوبَاتِ الْقِرَاءَةِ.`
+        : `MODE: Easy-Read & SEN/Dyslexia Support:
+1. Simplify complex syntactic structures into concise, bulleted steps.
+2. Scaffold difficult concepts with a supportive "Word Bank / Concept Box" with calm background #f0fdf4.
+3. Provide helpful thinking hints (💡 Scaffolding Hint) alongside assessment tasks.
+4. Reduce cognitive clutter in questions (highlight key operative words in bold).
+5. Retain core instructional rigor while eliminating decoding barriers.`,
+
+      gifted: isAr
+        ? `الْمَسَارُ: الْإِثْرَاءُ وَالتَّحَدِّي لِلْمَوْهُوبِينَ وَالْمُتَفَوِّقِينَ (Gifted & Talented Enrichment):
+1. ارْفَعْ سَقْفَ التَّحَدِّي الْمَعْرِفِيِّ إِلَى مُسْتَوَيَاتِ بِلُومَ الْعُلْيَا (التحليل، التقييم، والابتكار - DOK 3 & DOK 4).
+2. حَوِّلْ الْأَسْئِلَةَ النَّمَطِيَّةَ إِلَى مَهَامِّ اسْتِقْصَاءٍ مَفْتُوحَةِ النِّهَايَةِ (Open-ended Inquiry Challenges).
+3. ارْبِطْ الْمَفَاهِيمَ بِسِيَاقَاتٍ عِلْمِيَّةٍ أَوْ وَاقِعِيَّةٍ مُعَاصِرَةٍ وَمُعْضِلَاتٍ أَخْلَاقِيَّةٍ أَوْ بِيئِيَّةٍ أَوْ تِقْنِيَّةٍ.
+4. أَضِفْ قِسْماً مُمَيَّزاً بِعُنْوَانِ: 🌟 "تَحَدِّي الْمُبْتَكِرِينَ الصِّغَارِ / تَعَمُّقٌ إِثْرَائِيٌّ" يَتَطَلَّبُ بِنَاءَ فَرَضِيَّاتٍ وَابْتِكَارَ حُلُولٍ غَيْرِ مَأْلُوفَةٍ.`
+        : `MODE: Gifted & Talented Enrichment:
+1. Elevate cognitive depth to higher-order Bloom levels (Analysis, Evaluation, Creation - DOK 3 & 4).
+2. Replace routine recall with open-ended inquiry, authentic dilemma analysis, and synthesis.
+3. Add a dedicated section: 🌟 "Advanced Innovator Challenge" requiring student hypothesis formulation and creative design.`,
+
+      'visual-organizer': isAr
+        ? `الْمَسَارُ: الْمُنَظَّمَاتُ الْبَصَرِيَّةُ وَالْمُخَطَّطَاتُ الذِّهْنِيَّةُ (Visual Graphic Organizers):
+1. حَوِّلْ النُّصُوصَ السَّرْدِيَّةَ إِلَى جَدَاوِلَ بَصَرِيَّةٍ مُقَارِنَةٍ (Comparison Tables) مَعَ أَعْمِدَةٍ وَاضِحَةٍ وَتَدَرُّجَاتٍ لَوْنِيَّةٍ.
+2. صَمِّمْ مَصْفُوفَةَ تَفْكِيرٍ بَصَرِيَّةً كَامِلَةً (مِثْل: مُخَطَّط KWL: مَاذَا أَعْرِفُ؟ مَاذَا أُرِيدُ أَنْ أَعْرِفَ؟ مَاذَا تَعَلَّمْتُ؟).
+3. صَمِّمْ مُخَطَّطَ تَدَفُّقٍ إِجْرَائِيٍّ (Flowchart Sequence) أَوْ جَدْوَلَ مُقَارَنَةِ فِينْ (Venn Diagram Matrix) لِلْمَفَاهِيمِ الْمُتَقَاطِعَةِ.
+4. اسْتَخْدِمْ الصُّنَادِيقَ وَالْأَيْقُونَاتِ الْبَصَرِيَّةَ لِتَيْسِيرِ الْفَهْمِ الْبَصَرِيِّ السَّرِيعِ.`
+        : `MODE: Visual Graphic Organizers & Concept Scaffolds:
+1. Transform narrative passages into structured visual comparison tables and matrices.
+2. Embed active graphic organizers (e.g. KWL Matrix: Know / Want to Know / Learned, Venn Comparison, Step Flowchart).
+3. Use high-contrast table styling, clean iconography, and fillable visual blanks.`,
+    };
+
+    const chosenInstruction = modeInstructions[mode] || modeInstructions['easy-read'];
+
+    const systemPrompt = `You are a master educational inclusion and curriculum adaptation specialist.
+TASK: Adapt the provided educational HTML content according to the requested differentiation pathway.
+
+${chosenInstruction}
+
+STRICT HTML RULES:
+1. STRICTLY PRESERVE essential HTML table structures, headings, and clean semantics.
+2. Return PURE, VALID HTML without markdown fences (\`\`\`html or \`\`\`).
+3. Set appropriate dir="${isAr ? 'rtl' : 'ltr'}" and academic fonts.
+4. Ensure the output is ready to render directly inside a rich text editor.`;
+
+    const response = await callGemini([
+      { text: systemPrompt },
+      { text: `Here is the HTML content to adapt:\n\n${htmlContent}` },
+    ]);
+
+    let adaptedHtml = extractHtml(response.text || '');
+    adaptedHtml = adaptedHtml
+      .replace(/^```html\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+
+    return res.status(200).json({
+      success: true,
+      adaptedHtml,
+      mode,
+    });
+  } catch (error: any) {
+    console.error('executeDifferentiate error:', error);
+    const { status, message } = formatApiError(error);
+    return res.status(status).json({ error: message, details: error?.message });
+  }
+}
+
+/**
+ * Add Higher-Order Bloom / DOK Question:
+ * Injects a DOK 3 / DOK 4 critical question with scoring rubric into current content.
+ */
+export async function executeAddDokQuestion(req: any, res: any) {
+  try {
+    const body = req.body || {};
+    const { currentHtml = '', dokLevel = 3, bloomType = 'analysis', lang = 'ar' } = body;
+
+    const isAr = lang === 'ar';
+    const levelLabel =
+      dokLevel === 4
+        ? (isAr ? 'DOK 4: تفكير موسع وابتكار وتصميم حلول' : 'DOK 4: Extended Thinking & Innovation')
+        : (isAr ? 'DOK 3: تفكير استراتيجي وتبرير ونقد تحليلي' : 'DOK 3: Strategic & Critical Thinking');
+
+    const prompt = `You are an educational assessment expert specializing in Bloom's Revised Taxonomy and Webb's Depth of Knowledge (DOK).
+Based on the following lesson/assessment content, generate ONE exceptional, high-rigor ${levelLabel} question.
+
+Content snippet:
+${currentHtml.slice(0, 1500)}
+
+Requirements:
+1. Pure HTML snippet (no \`\`\` fences).
+2. Styled in an elegant callout box with a distinctive border (#0284c7 or #7c3aed), soft background (#f0f9ff or #faf5ff), and padding.
+3. Include:
+   - Level Badge: [${levelLabel}]
+   - Question Stem (Problem-based, scenario-driven, requires justification and evidence)
+   - Exemplary Model Answer (الإجابة النموذجية ومعايير التصحيح)
+   - Scoring Rubric Criteria (محاور توزيع الدرجات: 4 درجات).
+4. Language: ${isAr ? 'Arabic with 100% full diacritics' : 'English'}.`;
+
+    const response = await callGemini(prompt);
+    let questionHtml = extractHtml(response.text || '');
+    questionHtml = questionHtml
+      .replace(/^```html\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+
+    return res.status(200).json({
+      success: true,
+      questionHtml,
+      dokLevel,
+    });
+  } catch (error: any) {
+    console.error('executeAddDokQuestion error:', error);
     const { status, message } = formatApiError(error);
     return res.status(status).json({ error: message, details: error?.message });
   }

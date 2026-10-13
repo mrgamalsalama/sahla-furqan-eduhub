@@ -11,7 +11,7 @@ export interface ChatMessage {
  * - Omit multi-megabyte `base64` for Word (.docx), PowerPoint (.pptx), and Text files (since AI only reads `textContent`).
  * - Keeps base64 for compressed images and small PDFs.
  */
-export function prepareFilesForApi(files: UploadedFile[]): any[] {
+export function prepareFilesForApi(files: UploadedFile[]): Record<string, unknown>[] {
   if (!Array.isArray(files)) return [];
 
   return files.map((file) => {
@@ -246,4 +246,98 @@ export async function translateGeneratedContent(
   }
 
   return data.translatedHtml;
+}
+
+export interface VoiceToLessonPayload {
+  voiceTranscript: string;
+  autoGenerate?: boolean;
+  targetSubject?: string;
+  targetGrade?: string;
+  institution?: string;
+  contentLanguage?: 'ar' | 'en';
+}
+
+export interface VoiceToLessonResponse {
+  success: boolean;
+  parsed: {
+    subject?: string;
+    grade?: string;
+    lessonTitle?: string;
+    duration?: string;
+    keyActivities?: string;
+    labExperiment?: string;
+    assessmentNotes?: string;
+    pedagogicalGoal?: string;
+  };
+  contentHtml?: string;
+  title?: string;
+}
+
+/**
+ * 🎤 Voice-to-Lesson Client API
+ * Converts teacher voice transcript into structured lesson settings or directly generates full lesson.
+ */
+export async function parseAndGenerateVoiceToLesson(
+  payload: VoiceToLessonPayload
+): Promise<VoiceToLessonResponse> {
+  const response = await fetch('/api/voice-to-lesson', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'تعذر معالجة التسجيل الصوتي.');
+  }
+
+  return response.json();
+}
+
+/**
+ * ♿ Differentiated Learning Client API
+ * Adapts educational content for Easy-Read / SEN, Gifted & Talented, or Visual Organizers.
+ */
+export async function differentiateContent(payload: {
+  htmlContent: string;
+  mode: 'easy-read' | 'gifted' | 'visual-organizer';
+  targetLang?: 'ar' | 'en';
+}): Promise<string> {
+  const response = await fetch('/api/differentiate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'تعذر تكييف المحتوى للتمايز التعليمي.');
+  }
+
+  const data = await response.json();
+  return data.adaptedHtml;
+}
+
+/**
+ * 🧠 DOK & Bloom Question Generator Client API
+ * Injects high-rigor DOK 3 / DOK 4 critical question with rubric.
+ */
+export async function addDokQuestion(payload: {
+  currentHtml: string;
+  dokLevel: 3 | 4;
+  bloomType?: 'analysis' | 'evaluation' | 'creation';
+  lang?: 'ar' | 'en';
+}): Promise<{ questionHtml: string; dokLevel: number }> {
+  const response = await fetch('/api/add-dok-question', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'تعذر توليد سؤال التفكير الناقد.');
+  }
+
+  return response.json();
 }

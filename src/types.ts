@@ -8,6 +8,7 @@ export type View =
   | 'quiz-exam'
   | 'qti-converter'
   | 'grader-advisor'
+  | 'performance-task'
   | 'editor'
   | 'library'
   | 'community'
@@ -19,7 +20,8 @@ export type OutputType =
   | 'slides'
   | 'quiz'
   | 'qti-exam'
-  | 'standardized-test';
+  | 'standardized-test'
+  | 'performance-task';
 
 export type StandardFramework =
   | 'diagnostic_gap'
@@ -132,6 +134,19 @@ export interface PresentationSettings {
   customThemeDescription?: string;
 }
 
+export interface PerformanceTaskSettings {
+  projectTopic?: string;
+  duration?: string; // e.g. أسبوع، أسبوعان، شهر
+  teamFormat?: 'individual' | 'collaborative';
+  deliverableType?: 'prototype' | 'campaign' | 'advisory_report' | 'multimedia' | 'scientific_inquiry';
+  graspsGoal?: string;
+  graspsRole?: string;
+  graspsAudience?: string;
+  graspsSituation?: string;
+  graspsProduct?: string;
+  graspsStandards?: string;
+}
+
 export interface LessonSettings {
   subject: string;
   grade: string;
@@ -150,6 +165,7 @@ export interface LessonSettings {
   questionCount?: number;
   worksheetSettings?: WorksheetSettings;
   presentationSettings?: PresentationSettings;
+  performanceTaskSettings?: PerformanceTaskSettings;
   lmsTarget?: LmsTarget;
   selectedSubCriteria?: string[];
   teacherPrompt?: string; // Optional custom instructions from teacher: توجيهات ومتطلبات خاصة بالمعلم يلتزم بها الذكاء الاصطناعي بدقة
@@ -319,6 +335,7 @@ export const OUTPUT_LABELS_AR: Record<OutputType, string> = {
   'qti-exam': 'امتحان بلوم الشامل (50 سؤال QTI)',
   slides: 'استوديو العروض التقديمية',
   'standardized-test': 'اختبار معياري / تشخيصي (ABT / IB / تشخيص فجوات)',
+  'performance-task': 'المهمة الأدائية ومشاريع التعلم (PBL)',
 };
 
 export const OUTPUT_LABELS_EN: Record<OutputType, string> = {
@@ -328,6 +345,7 @@ export const OUTPUT_LABELS_EN: Record<OutputType, string> = {
   'qti-exam': 'Comprehensive Bloom Exam (50 MCQs)',
   slides: 'Presentation Studio',
   'standardized-test': 'Standardized / Diagnostic Test',
+  'performance-task': 'Performance Task & PBL Project',
 };
 
 export const INSTITUTIONS = {

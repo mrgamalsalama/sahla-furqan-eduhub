@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import {
   ClipboardList, Layers, Presentation, FileQuestion, FileCode2,
-  FileCheck2, Sparkles, ArrowLeft, ArrowRight, Globe
+  FileCheck2, Sparkles, ArrowLeft, ArrowRight, Globe, Mic, Compass, Wand2
 } from 'lucide-react';
-import type { View } from '@/types';
+import type { View, GenerationResult, OutputType } from '@/types';
 import { INSTITUTIONS } from '@/types';
 import type { UILang } from '@/lib/i18n';
+import VoiceToLessonModal from '@/components/VoiceToLessonModal';
 
 interface HomePageProps {
   onOpenResult?: (result: GenerationResult, outputType: OutputType) => void;
@@ -12,9 +14,10 @@ interface HomePageProps {
   onNavigate?: (view: View) => void;
 }
 
-export default function HomePage({ uiLang, onNavigate }: HomePageProps) {
+export default function HomePage({ onOpenResult, uiLang, onNavigate }: HomePageProps) {
   const isAr = uiLang === 'ar';
   const Arrow = isAr ? ArrowLeft : ArrowRight;
+  const [voiceModalOpen, setVoiceModalOpen] = useState(false);
 
   const studios: {
     id: View;
@@ -34,6 +37,17 @@ export default function HomePage({ uiLang, onNavigate }: HomePageProps) {
         : 'Generate comprehensive official lesson plans with 5-phase structure and differentiation.',
       icon: ClipboardList,
       color: 'from-blue-600 to-indigo-700',
+    },
+    {
+      id: 'performance-task',
+      title: isAr ? 'استوديو المهام الأدائية ومشاريع الطلاب (PBL)' : 'Performance Tasks & PBL Studio',
+      subtitle: isAr ? 'إطار GRASPS وسلالم التقييم Rubrics' : 'GRASPS Framework & 4-Level Rubrics',
+      description: isAr
+        ? 'تصميم مشاريع التعلم القائم على المشاريع بسيناريو واقعي محفز (GRASPS)، مراحل وخارطة تسليم، ومصفوفة تقييم شاملة للمنتج والعرض والعمل الجماعي.'
+        : 'Design authentic project-based learning with real-world scenarios, milestones, and 4-level analytical rubrics.',
+      icon: Compass,
+      color: 'from-indigo-600 to-purple-800',
+      badge: isAr ? 'جديد PBL 🧩' : 'New PBL 🧩',
     },
     {
       id: 'worksheet',
@@ -104,7 +118,7 @@ export default function HomePage({ uiLang, onNavigate }: HomePageProps) {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-8 animate-fade-in">
       {/* Official Hub Hero */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 text-white p-6 sm:p-10 mb-10 shadow-xl border border-blue-800/40">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 text-white p-6 sm:p-10 mb-8 shadow-xl border border-blue-800/40">
         <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="max-w-2xl text-center md:text-start">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-blue-200 text-xs font-bold mb-4">
@@ -114,11 +128,23 @@ export default function HomePage({ uiLang, onNavigate }: HomePageProps) {
             <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight leading-tight mb-3">
               {isAr ? 'مرحباً بك في مركز إعداد الدروس والاختبارات الذكية' : 'Teacher Innovation & Preparation Hub'}
             </h1>
-            <p className="text-sm sm:text-base text-blue-100/90 leading-relaxed font-medium">
+            <p className="text-sm sm:text-base text-blue-100/90 leading-relaxed font-medium mb-6">
               {isAr
-                ? 'استوديوهات مستقلة ومخصصة لمساعدة المعلم في إعداد خطط الدروس، وتصميم أوراق العمل بهرم بلوم، والعروض التقديمية، وتوليد حزم الاختبارات القياسية (QTI ZIP) مع شعارات المدارس الرسمية والتشكيل التام 100%.'
-                : 'Dedicated standalone teacher workspaces for lesson plans, worksheets, presentations, exam banks, and LMS QTI packaging.'}
+                ? 'استوديوهات مستقلة ومخصصة لمساعدة المعلم في إعداد خطط الدروس، والمهام الأدائية (PBL)، وتصميم أوراق العمل بهرم بلوم، والعروض التقديمية، وتوليد حزم الاختبارات القياسية (QTI ZIP) مع شعارات المدارس الرسمية والتشكيل التام 100%.'
+                : 'Dedicated standalone teacher workspaces for lesson plans, performance tasks, worksheets, presentations, exam banks, and LMS QTI packaging.'}
             </p>
+
+            {/* Quick Action: Voice-to-Lesson Button */}
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
+              <button
+                type="button"
+                onClick={() => setVoiceModalOpen(true)}
+                className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-400 hover:from-amber-300 hover:to-orange-300 text-blue-950 font-black text-xs sm:text-sm flex items-center gap-2.5 shadow-lg hover:shadow-xl hover:scale-105 transition-all"
+              >
+                <Mic className="w-5 h-5 text-blue-950" />
+                <span>{isAr ? '🎤 تحويل فكرتك الصوتية لخطة درس فوراً (Voice-to-Lesson)' : '🎤 Voice-to-Lesson Plan (Fast AI)'}</span>
+              </button>
+            </div>
           </div>
 
           {/* School Logos Emblem */}
@@ -186,6 +212,14 @@ export default function HomePage({ uiLang, onNavigate }: HomePageProps) {
           })}
         </div>
       </div>
+
+      {/* 🎤 Voice-to-Lesson Modal */}
+      <VoiceToLessonModal
+        isOpen={voiceModalOpen}
+        onClose={() => setVoiceModalOpen(false)}
+        onOpenResult={onOpenResult}
+        uiLang={uiLang}
+      />
     </div>
   );
 }

@@ -3,7 +3,8 @@ import {
   Bold, Italic, Underline, List, ListOrdered, Table as TableIcon,
   Printer, Copy, FileText, FileType2, Save, ArrowRight, ArrowLeft, Check,
   Type, Heading1, Heading2, Heading3, Quote, Undo, Redo, Presentation,
-  AlignRight, AlignCenter, AlignLeft, AlignJustify, Package, Cloud
+  AlignRight, AlignCenter, AlignLeft, AlignJustify, Package, Cloud,
+  Gamepad2, Brain, Accessibility
 } from 'lucide-react';
 import type { OutputType, LessonSettings, SavedLesson } from '@/types';
 import { OUTPUT_LABELS_AR, OUTPUT_LABELS_EN } from '@/types';
@@ -13,6 +14,9 @@ import { saveLesson, getLessonSettings, uid } from '@/lib/storage';
 import { createAndDownloadQtiZip } from '@/lib/qtiPackager';
 import { saveCloudResource } from '@/lib/supabase';
 import TranslateContentButton from '@/components/TranslateContentButton';
+import InteractiveActivitiesModal from '@/components/InteractiveActivitiesModal';
+import DokBloomAnalyzerModal from '@/components/DokBloomAnalyzerModal';
+import DifferentiatedLearningModal from '@/components/DifferentiatedLearningModal';
 import type { User } from '@supabase/supabase-js';
 import type { UILang } from '@/lib/i18n';
 import { t } from '@/lib/i18n';
@@ -183,6 +187,37 @@ export default function EditorPage({
       editorRef.current.dir = newDir;
       editorRef.current.style.textAlign = newDir === 'rtl' ? 'right' : 'left';
       setActiveFont(targetLang === 'ar' ? 'Cairo, sans-serif' : 'Arial, Helvetica, sans-serif');
+      editorRef.current.focus();
+    }
+  }
+
+  // Modals for Advanced Educational Features
+  const [interactiveModalOpen, setInteractiveModalOpen] = useState(false);
+  const [dokAnalyzerModalOpen, setDokAnalyzerModalOpen] = useState(false);
+  const [differentiationModalOpen, setDifferentiationModalOpen] = useState(false);
+
+  function handleInjectDokQuestion(questionHtml: string) {
+    if (editorRef.current) {
+      editorRef.current.innerHTML += `<div style="margin-top: 24px;">${questionHtml}</div>`;
+      setSaved(false);
+    }
+  }
+
+  function handleApplyDifferentiatedContent(newHtml: string, mode: 'replace' | 'append') {
+    if (editorRef.current) {
+      if (mode === 'replace') {
+        editorRef.current.innerHTML = newHtml;
+      } else {
+        const appendixHeader = isAr
+          ? `<div style="margin-top: 36px; padding-top: 24px; border-top: 3px dashed #0d9488;">
+              <h2 style="color: #0f766e; text-align: center; font-size: 1.25rem; font-weight: 800; margin-bottom: 16px;">🎯 مُلْحَقُ تَمَايُزِ التَّعْلِيمِ وَالْمُوَاءَمَةِ الطُّلَّابِيَّةِ</h2>
+            </div>`
+          : `<div style="margin-top: 36px; padding-top: 24px; border-top: 3px dashed #0d9488;">
+              <h2 style="color: #0f766e; text-align: center; font-size: 1.25rem; font-weight: 800; margin-bottom: 16px;">🎯 Differentiated Learning & Scaffolding Appendix</h2>
+            </div>`;
+        editorRef.current.innerHTML += `${appendixHeader}${newHtml}`;
+      }
+      setSaved(false);
       editorRef.current.focus();
     }
   }
@@ -784,6 +819,39 @@ ${manifestResources}  </resources>
           uiLang={uiLang}
         />
 
+        {/* 🎮 الأنشطة التفاعلية والبطاقات وتصدير كاهوت وكويزيز */}
+        <button
+          type="button"
+          onClick={() => setInteractiveModalOpen(true)}
+          className="btn-secondary text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border-indigo-300 flex items-center gap-1.5 font-bold"
+          title={isAr ? 'عرض بطاقات السبورة التفاعلية وتصدير إلى Kahoot و Quizizz' : 'Interactive Flashcards & Kahoot/Quizizz Exporter'}
+        >
+          <Gamepad2 className="w-4 h-4 text-indigo-600" />
+          <span>{isAr ? '🎮 الأنشطة والبطاقات (Kahoot)' : '🎮 Flashcards & Kahoot'}</span>
+        </button>
+
+        {/* 🧠 محلل هرم بلوم ومستويات عمق المعرفة (Webb DOK) */}
+        <button
+          type="button"
+          onClick={() => setDokAnalyzerModalOpen(true)}
+          className="btn-secondary text-purple-700 bg-purple-50 hover:bg-purple-100 border-purple-300 flex items-center gap-1.5 font-bold"
+          title={isAr ? 'تحليل نسب أسئلة بلوم وعمق المعرفة واقتراح أسئلة تفكير ناقد' : 'Analyze Bloom & Webb DOK Cognitive Rigor'}
+        >
+          <Brain className="w-4 h-4 text-purple-600" />
+          <span>{isAr ? '🧠 تحليل بلوم وعمق المعرفة (DOK)' : '🧠 DOK & Bloom Rigor'}</span>
+        </button>
+
+        {/* ♿ تكييف التمايز وصعوبات التعلم (SEN & Gifted Adaptor) */}
+        <button
+          type="button"
+          onClick={() => setDifferentiationModalOpen(true)}
+          className="btn-secondary text-teal-800 bg-teal-50 hover:bg-teal-100 border-teal-300 flex items-center gap-1.5 font-bold"
+          title={isAr ? 'تكييف المحتوى لتمايز التعليم: تبسيط القراءة، إثراء للموهوبين، ومنظمات بصرية' : 'Adapt content for Differentiated Learning & SEN'}
+        >
+          <Accessibility className="w-4 h-4 text-teal-600" />
+          <span>{isAr ? '♿ تكييف التمايز والاحتياجات' : '♿ Differentiation & SEN'}</span>
+        </button>
+
         {/* تصدير بوربوينت */}
         {(outputType === 'slides' || title?.includes('عرض') || currentTitle?.includes('عرض')) && (
           <button
@@ -844,6 +912,33 @@ ${manifestResources}  </resources>
           data-placeholder={s.editorPlaceholder}
         />
       </div>
+
+      {/* 🎮 Interactive Activities & Kahoot Exporter Modal */}
+      <InteractiveActivitiesModal
+        isOpen={interactiveModalOpen}
+        onClose={() => setInteractiveModalOpen(false)}
+        htmlContent={editorRef.current?.innerHTML || initialHtml || ''}
+        uiLang={uiLang}
+        lessonTitle={currentTitle || title}
+      />
+
+      {/* 🧠 DOK & Bloom Cognitive Levels Analyzer Modal */}
+      <DokBloomAnalyzerModal
+        isOpen={dokAnalyzerModalOpen}
+        onClose={() => setDokAnalyzerModalOpen(false)}
+        htmlContent={editorRef.current?.innerHTML || initialHtml || ''}
+        uiLang={uiLang}
+        onInjectQuestion={handleInjectDokQuestion}
+      />
+
+      {/* ♿ Differentiated Learning & SEN Adaptor Modal */}
+      <DifferentiatedLearningModal
+        isOpen={differentiationModalOpen}
+        onClose={() => setDifferentiationModalOpen(false)}
+        htmlContent={editorRef.current?.innerHTML || initialHtml || ''}
+        uiLang={uiLang}
+        onApplyAdaptedContent={handleApplyDifferentiatedContent}
+      />
     </div>
   );
 }

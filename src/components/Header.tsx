@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   Home, ClipboardList, Layers, Presentation, FileQuestion, FileCode2,
-  FileCheck2, Library, Languages, Globe, LogOut, ChevronDown, LogIn
+  FileCheck2, Library, Languages, Globe, LogOut, ChevronDown, LogIn, Compass
 } from 'lucide-react';
 import type { View } from '@/types';
 import type { UILang } from '@/lib/i18n';
@@ -49,6 +49,7 @@ export default function Header({
   const navItems: { view: View; label: string; icon: typeof Home }[] = [
     { view: 'home', label: isAr ? 'الرئيسية' : 'Dashboard', icon: Home },
     { view: 'lesson-plan', label: isAr ? 'خطط الدروس' : 'Lesson Plans', icon: ClipboardList },
+    { view: 'performance-task', label: isAr ? 'المهمة الأدائية (PBL)' : 'PBL Projects', icon: Compass },
     { view: 'worksheet', label: isAr ? 'أوراق العمل' : 'Worksheets', icon: Layers },
     { view: 'slides', label: isAr ? 'العروض التقديمية' : 'Slides Deck', icon: Presentation },
     { view: 'quiz-exam', label: isAr ? 'بنك الاختبارات' : 'Exam Bank', icon: FileQuestion },

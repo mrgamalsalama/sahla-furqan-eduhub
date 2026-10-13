@@ -12,6 +12,7 @@ import ExamBankStudio from '@/components/ExamBankStudio';
 import QtiConverterPage from '@/components/QtiConverterPage';
 import GraderAdvisorStudio from '@/components/GraderAdvisorStudio';
 import BenchmarkPage from '@/components/BenchmarkPage';
+import PerformanceTaskStudio from '@/components/PerformanceTaskStudio';
 import type { View, OutputType, GenerationResult, SavedLesson } from '@/types';
 import { getUILang, saveUILang } from '@/lib/i18n';
 import type { UILang } from '@/lib/i18n';
@@ -67,6 +68,7 @@ export default function App() {
           'quiz-exam',
           'qti-converter',
           'grader-advisor',
+          'performance-task',
           'editor',
           'library',
           'community',
@@ -191,6 +193,13 @@ export default function App() {
         {view === 'grader-advisor' && (
           <GraderAdvisorStudio
             onBack={handleBack}
+            onOpenResult={handleOpenResult}
+            uiLang={uiLang}
+          />
+        )}
+
+        {view === 'performance-task' && (
+          <PerformanceTaskStudio
             onOpenResult={handleOpenResult}
             uiLang={uiLang}
           />
