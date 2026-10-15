@@ -37,7 +37,7 @@ const CELL_MARGINS = {
   right: 140,
 };
 
-export async function exportWeeklyStatementToDocx(docData: WeeklyStatementDocument): Promise<void> {
+export async function generateWeeklyStatementDocxBlob(docData: WeeklyStatementDocument): Promise<Blob> {
   const tableRows: TableRow[] = [];
 
   // 1. Table Header Row
@@ -494,7 +494,11 @@ export async function exportWeeklyStatementToDocx(docData: WeeklyStatementDocume
     ],
   });
 
-  const blob = await Packer.toBlob(doc);
+  return await Packer.toBlob(doc);
+}
+
+export async function exportWeeklyStatementToDocx(docData: WeeklyStatementDocument): Promise<void> {
+  const blob = await generateWeeklyStatementDocxBlob(docData);
   const shiftSuffix = docData.shift === 'us' ? 'US_Shift' : 'MENA_Shift';
   const cleanFileName = `Weekly_Statement_${docData.grade.replace(/\s+/g, '_')}_${shiftSuffix}_${docData.weekRangeText.replace(/[\s,]+/g, '_')}.docx`;
   saveAs(blob, cleanFileName);

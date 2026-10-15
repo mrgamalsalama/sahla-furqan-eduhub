@@ -3,7 +3,8 @@ import {
   Calendar, Clock, CheckCircle2, AlertTriangle, FileText, Download,
   Printer, Copy, Edit3, ExternalLink, Sparkles, RefreshCw, Trash2, Plus,
   Layers, School, Check, X, Info, User,
-  ChevronRight, BookOpen, Eye, Lock, Unlock, History, ShieldCheck, Database, Code
+  ChevronRight, BookOpen, Eye, Lock, Unlock, History, ShieldCheck, Database, Code,
+  FolderArchive, KeyRound
 } from 'lucide-react';
 import type {
   WeeklyStatementDocument, WeeklySubjectDailyPlan, WeeklyQuizItem,
@@ -23,7 +24,8 @@ import {
 } from '@/lib/academicCalendar';
 import {
   getStoredTeacherProfile, saveTeacherProfile,
-  loadWeeklyStatement, saveWeeklyStatement, commitTeacherDayPlan
+  loadWeeklyStatement, saveWeeklyStatement, commitTeacherDayPlan,
+  clearAllWeeklyContent, RESET_WEEKLY_CONTENT_PIN
 } from '@/lib/weeklyStatementStorage';
 import {
   getTeachersForShift,
@@ -42,6 +44,7 @@ import {
   fetchAuditLogs,
   SQL_SCHEMA_STATEMENTS_TABLE,
 } from '@/lib/weeklyStatementSupabase';
+import { exportAllStagesBatchZip, type BatchExportProgress } from '@/lib/weeklyStatementBatchExport';
 import { isSupabaseConfigured } from '@/lib/supabase';
 
 interface WeeklyStatementStudioProps {
@@ -102,6 +105,18 @@ export default function WeeklyStatementStudio({
   const [isLoadingAudit, setIsLoadingAudit] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
   const [gradeSubjectStatuses, setGradeSubjectStatuses] = useState<Record<string, WeeklySubjectStatus>>({});
+
+  // ── Reset All Weekly Content (PIN: Sahlah2027) State ──
+  const [isResetWeekModalOpen, setIsResetWeekModalOpen] = useState(false);
+  const [resetPinInput, setResetPinInput] = useState('');
+  const [resetPinError, setResetPinError] = useState('');
+  const [showResetPinText, setShowResetPinText] = useState(false);
+  const [isResettingWeek, setIsResettingWeek] = useState(false);
+
+  // ── Batch Export All Stages (ZIP Word & PDF) State ──
+  const [isBatchExporting, setIsBatchExporting] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<BatchExportProgress | null>(null);
+  const [batchShiftChoice, setBatchShiftChoice] = useState<ShiftType | 'both'>('mena');
 
 
   // Sandboxed-safe Toast and Confirmation Modal states
@@ -691,6 +706,84 @@ export default function WeeklyStatementStudio({
     setIsUnlockModalOpen(true);
   }
 
+  // ── Reset All Weekly Content (PIN Protected: Sahlah2027) ──
+  function handleOpenResetWeekModal() {
+    setResetPinInput('');
+    setResetPinError('');
+    setShowResetPinText(false);
+    setIsResetWeekModalOpen(true);
+  }
+
+  async function handleConfirmResetWeek() {
+    if (resetPinInput.trim() !== RESET_WEEKLY_CONTENT_PIN) {
+      setResetPinError(
+        isAr
+          ? 'الرقم السري غير صحيح! يرجى إدخال الرقم السري المعتمد لإدارة المدرسة.'
+          : 'Incorrect PIN! Please enter the authorized administrator PIN.'
+      );
+      return;
+    }
+
+    setIsResettingWeek(true);
+    setResetPinError('');
+    try {
+      const cleared = clearAllWeeklyContent(docData);
+      setDocData(cleared);
+      saveWeeklyStatement(cleared, selectedWeekNumber);
+
+      // Reset subject status
+      setSubjectStatus({
+        subjectId: selectedSubjectId,
+        is_locked: false,
+        status: 'draft',
+      });
+      setGradeSubjectStatuses({});
+
+      setIsResetWeekModalOpen(false);
+      setResetPinInput('');
+      showToast(
+        isAr
+          ? '🧹 تم تفريغ محتوى الأسبوع كامل لجميع المواد بنجاح (المحتوى أصبح فارغاً وجاهزاً لإدخال المعلمين).'
+          : '🧹 All weekly content cleared for all subjects. Ready for teachers to input.',
+        'success'
+      );
+    } catch (err) {
+      console.error('Error clearing week content:', err);
+      showToast(isAr ? 'حدث خطأ أثناء تفريغ محتوى الأسبوع' : 'Error clearing weekly content', 'error');
+    } finally {
+      setIsResettingWeek(false);
+    }
+  }
+
+  // ── Batch Export All Stages as ZIP (Word & PDF in separate folders) ──
+  async function handleBatchExportAllStages(shiftChoice: ShiftType | 'both') {
+    setIsBatchExporting(true);
+    setBatchProgress({
+      current: 0,
+      total: GRADES_EN.length,
+      grade: 'بدء الحزمة',
+      statusText: isAr ? 'جاري تهيئة حزمة كافة المراحل...' : 'Initializing batch export...',
+    });
+
+    try {
+      await exportAllStagesBatchZip(selectedWeekNumber, shiftChoice, (p) => {
+        setBatchProgress(p);
+      });
+      showToast(
+        isAr
+          ? `🎉 تم تحميل حزمة كافة المراحل (${GRADES_EN.length} مرحلة) في ملف ZIP بنجاح، وكل مرحلة داخل مجلد منفصل يحتوي على Word و PDF!`
+          : `🎉 All stages ZIP downloaded successfully with separate Word & PDF per stage folder!`,
+        'success'
+      );
+    } catch (err) {
+      console.error('Error batch exporting all stages:', err);
+      showToast(isAr ? 'حدث خطأ أثناء تصدير حزمة المراحل' : 'Error exporting stages batch', 'error');
+    } finally {
+      setIsBatchExporting(false);
+      setBatchProgress(null);
+    }
+  }
+
   // -------------------------------------------------------------
   // Readiness & Tracker Analytics
   // -------------------------------------------------------------
@@ -1143,9 +1236,12 @@ export default function WeeklyStatementStudio({
               onChange={(e) => setSelectedGrade(e.target.value)}
               className="w-full rounded-xl border border-slate-300 py-2.5 px-3 text-xs sm:text-sm font-bold text-slate-800 focus:ring-2 focus:ring-teal-500 transition"
             >
-              {GRADES_EN.map((g) => (
-                <option key={g} value={g}>{g}</option>
-              ))}
+              {GRADES_EN.map((g) => {
+                const label = g === 'Kindergarten'
+                  ? (isAr ? 'مرحلة الروضة (Kindergarten)' : 'Kindergarten')
+                  : (isAr ? `${g.replace('Grade ', 'الصف ')} (${g})` : g);
+                return <option key={g} value={g}>{label}</option>;
+              })}
             </select>
           </div>
 
@@ -2057,6 +2153,16 @@ export default function WeeklyStatementStudio({
             <div className="flex items-center gap-3">
               <button
                 type="button"
+                onClick={handleOpenResetWeekModal}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition"
+                title={isAr ? 'تفريغ محتوى الأسبوع بالكامل (محمي برقم سري إداري)' : 'Reset All Week Content (PIN Protected)'}
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                <span>{isAr ? 'تفريغ محتوى الأسبوع' : 'Reset Week'}</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => handleOpenExportModal(selectedShift)}
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-sm"
               >
@@ -2167,6 +2273,26 @@ export default function WeeklyStatementStudio({
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>{isAr ? 'تصدير التقرير الأسبوعي' : 'Export Statement'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenExportModal(selectedShift)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-teal-800 hover:bg-teal-900 text-white font-black text-xs transition shadow-sm"
+                  title={isAr ? 'تحميل مجلد ZIP يحتوي كل المراحل منفصلة Word & PDF' : 'Download All Stages ZIP'}
+                >
+                  <FolderArchive className="w-3.5 h-3.5 text-amber-300" />
+                  <span>{isAr ? 'تصدير كافة المراحل (ZIP)' : 'All Stages (ZIP)'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleOpenResetWeekModal}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs transition"
+                  title={isAr ? 'تفريغ محتوى الأسبوع لكافة المواد (محمي برقم سري إداري)' : 'Empty All Subjects Content (PIN Protected)'}
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                  <span>{isAr ? 'تفريغ محتوى الأسبوع' : 'Empty Week (PIN)'}</span>
                 </button>
               </div>
 
@@ -2570,11 +2696,11 @@ export default function WeeklyStatementStudio({
       {/* DEDICATED SHIFT-FIRST EXPORT MODAL */}
       {/* ------------------------------------------------------------- */}
       {isExportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-3 sm:p-5 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden text-start">
             
-            {/* Modal Header */}
-            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-4">
+            {/* Modal Header - Sticky and always visible */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white sticky top-0 z-20">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-teal-100 text-teal-700 font-bold flex items-center justify-center shrink-0">
                   <Download className="w-5 h-5" />
@@ -2584,7 +2710,7 @@ export default function WeeklyStatementStudio({
                     {isAr ? 'تصدير التقرير الأسبوعي المعتمد' : 'Export Official Weekly Statement'}
                   </h3>
                   <p className="text-xs text-slate-500">
-                    {isAr ? 'يتم تصدير كل فترة في ملف مستقل تماماً مطابق لنموذج المدرسة' : 'Export separate, dedicated files for each shift'}
+                    {isAr ? 'تصدير المرحلة الحالية أو تحميل كافة المراحل (K-12) دفعة واحدة' : 'Export current grade or all stages (K-12) batch ZIP'}
                   </p>
                 </div>
               </div>
@@ -2592,11 +2718,16 @@ export default function WeeklyStatementStudio({
               <button
                 type="button"
                 onClick={() => setIsExportModalOpen(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+                className="p-2.5 rounded-2xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 transition shadow-2xs"
+                title={isAr ? 'إغلاق النافذة' : 'Close modal'}
+                aria-label="Close"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Scrollable Content Body */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1">
 
             {/* STEP 1: Select Shift First */}
             <div className="space-y-3">
@@ -2763,6 +2894,109 @@ export default function WeeklyStatementStudio({
                   ? 'يقوم بتنزيل ملف Word لفترة Mena وملف Word لفترة US كملفين منفصلين جاهزين للإرسال.'
                   : 'Downloads both MENA & US Word files independently in one click.'}
               </p>
+            </div>
+
+            {/* 👑 SPECIAL ADMINISTRATION EXPORT: ALL STAGES IN ONE ZIP WITH SEPARATE FOLDERS */}
+            <div className="pt-4 border-t-2 border-dashed border-teal-200 bg-teal-50/50 p-4 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-teal-900 font-black text-sm">
+                  <FolderArchive className="w-5 h-5 text-teal-700" />
+                  <span>
+                    {isAr
+                      ? '👑 خاص بمسئول الإدارة: تحميل المراحل كاملة دفعة واحدة (ZIP)'
+                      : '👑 Administration: Download All Stages (ZIP Batch)'}
+                  </span>
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-wider bg-teal-200 text-teal-900 px-2 py-0.5 rounded-full">
+                  13 {isAr ? 'مرحلة (من الروضة حتى G12)' : 'Stages (KG-G12)'}
+                </span>
+              </div>
+
+              <p className="text-xs text-teal-800 leading-relaxed">
+                {isAr
+                  ? 'يقوم بتصدير حزمة مضغوطة (ZIP) تضم كافة المراحل دفعة واحدة، بحيث يكون لكل مرحلة (Kindergarten, Grade 1..12) مجلدها الخاص المنفصل، ويحتوي داخله على ملف Word (.docx) وملف PDF معتمد.'
+                  : 'Exports a ZIP archive containing all 13 stages, organized in separate folders per stage with dedicated Word (.docx) and PDF files.'}
+              </p>
+
+              {/* Shift selector for Batch Export */}
+              <div className="flex items-center gap-2 text-xs">
+                <span className="font-bold text-slate-700">{isAr ? 'الفترة:' : 'Shift:'}</span>
+                <div className="inline-flex rounded-xl bg-white border border-teal-200 p-0.5 shadow-sm text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setBatchShiftChoice('mena')}
+                    className={`px-2.5 py-1 rounded-lg transition ${batchShiftChoice === 'mena' ? 'bg-teal-600 text-white' : 'text-slate-600 hover:text-slate-900'}`}
+                  >
+                    {isAr ? 'الشرق الأوسط MENA' : 'MENA'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBatchShiftChoice('us')}
+                    className={`px-2.5 py-1 rounded-lg transition ${batchShiftChoice === 'us' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:text-slate-900'}`}
+                  >
+                    {isAr ? 'أمريكا US' : 'US'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBatchShiftChoice('both')}
+                    className={`px-2.5 py-1 rounded-lg transition ${batchShiftChoice === 'both' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'}`}
+                  >
+                    {isAr ? 'الفترتان معاً' : 'Both Shifts'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Progress Display if Exporting */}
+              {isBatchExporting && batchProgress && (
+                <div className="p-3 bg-white rounded-xl border border-teal-200 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                    <span className="flex items-center gap-1.5">
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-teal-600" />
+                      <span>{batchProgress.statusText}</span>
+                    </span>
+                    <span className="text-teal-700">{batchProgress.current} / {batchProgress.total}</span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="bg-teal-600 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${Math.round((batchProgress.current / batchProgress.total) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Download Batch ZIP Button (K-12) */}
+              <button
+                type="button"
+                disabled={isBatchExporting}
+                onClick={() => handleBatchExportAllStages(batchShiftChoice)}
+                className="w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-2xl bg-gradient-to-r from-teal-700 to-emerald-800 hover:from-teal-800 hover:to-emerald-900 text-white font-black text-xs sm:text-sm shadow-lg transition disabled:opacity-50 border border-teal-600/30"
+              >
+                <FolderArchive className="w-5 h-5 text-amber-300 shrink-0" />
+                <span>
+                  {isBatchExporting
+                    ? (isAr ? 'جاري تجهيز حزمة المراحل كاملة (K-12)...' : 'Generating Batch ZIP...')
+                    : (isAr ? '📦 تحميل كافة المراحل (K to 12) دفعة واحدة (Word & PDF في مجلد منفصل لكل مرحلة)' : '📦 Download All Stages (K to 12) (Word & PDF in Separate Folders)')}
+                </span>
+              </button>
+            </div>
+
+            </div>
+
+            {/* Sticky Modal Footer with Clear Close Action */}
+            <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
+              <span className="text-xs font-bold text-slate-500">
+                {isAr ? `الصف الحالي: ${selectedGrade} - الأسبوع ${selectedWeekNumber}` : `Current: ${selectedGrade} - Week ${selectedWeekNumber}`}
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setIsExportModalOpen(false)}
+                className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-extrabold text-xs transition shadow-sm"
+              >
+                <X className="w-4 h-4" />
+                <span>{isAr ? 'إغلاق نافذة التصدير' : 'Close Export Modal'}</span>
+              </button>
             </div>
 
           </div>
@@ -3112,6 +3346,124 @@ export default function WeeklyStatementStudio({
               >
                 {isAr ? 'إغلاق' : 'Close'}
               </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* Reset All Weekly Content Modal (PIN: Sahlah2027) */}
+      {/* ------------------------------------------------------------- */}
+      {isResetWeekModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-rose-100 overflow-hidden text-start">
+            
+            {/* Header */}
+            <div className="bg-gradient-to-r from-rose-600 to-rose-700 p-5 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center text-white">
+                  <Trash2 className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base">
+                    {isAr ? 'تفريغ محتوى الأسبوع لجميع المواد' : 'Reset All Week Content'}
+                  </h3>
+                  <p className="text-xs text-rose-100">
+                    {isAr ? `للأسبوع ${selectedWeekNumber} - تقرير ${selectedGrade}` : `Week ${selectedWeekNumber} - ${selectedGrade}`}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsResetWeekModalOpen(false)}
+                className="p-1.5 rounded-xl text-rose-100 hover:text-white hover:bg-white/10 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-900 leading-relaxed">
+                <div className="font-black flex items-center gap-1.5 mb-1 text-rose-950">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{isAr ? 'إجراء إداري حساس:' : 'Administrative Action:'}</span>
+                </div>
+                {isAr
+                  ? 'سيتم مسح وتفريغ كافة الدروس والواجبات والكويزات المدخلة لجميع المواد في هذا الأسبوع، ليصبح المحتوى فارغاً تماماً كما يملؤه المعلم. سيتم الحفاظ على توزيع الجداول وأيام عدم وجود الحصص (No Session).'
+                  : 'This will completely wipe all lesson topics, homework, and quizzes for all subjects in this week, returning to empty state for teachers to fill. Timetable No-Session rules are preserved.'}
+              </div>
+
+              {/* PIN Input */}
+              <div className="space-y-2">
+                <label className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+                  <KeyRound className="w-4 h-4 text-teal-600" />
+                  <span>{isAr ? 'أدخل الرقم السري المعتمد للتأكيد:' : 'Enter Security PIN to Confirm:'}</span>
+                </label>
+
+                <div className="relative">
+                  <input
+                    type={showResetPinText ? 'text' : 'password'}
+                    value={resetPinInput}
+                    onChange={(e) => {
+                      setResetPinInput(e.target.value);
+                      if (resetPinError) setResetPinError('');
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleConfirmResetWeek();
+                    }}
+                    placeholder={isAr ? 'أدخل الرقم السري هنا...' : 'Enter PIN...'}
+                    className={`w-full px-4 py-3 rounded-2xl border-2 text-sm font-mono tracking-wider focus:outline-none transition ${
+                      resetPinError
+                        ? 'border-rose-500 bg-rose-50/50 focus:border-rose-600'
+                        : 'border-slate-200 focus:border-rose-500 bg-slate-50 focus:bg-white'
+                    }`}
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowResetPinText(!showResetPinText)}
+                    className="absolute inset-y-0 end-0 px-3.5 flex items-center text-slate-400 hover:text-slate-600"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {resetPinError && (
+                  <p className="text-xs font-bold text-rose-600 flex items-center gap-1 animate-fadeIn">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{resetPinError}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsResetWeekModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 transition"
+                >
+                  {isAr ? 'إلغاء' : 'Cancel'}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isResettingWeek || !resetPinInput.trim()}
+                  onClick={handleConfirmResetWeek}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs shadow-md transition disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>
+                    {isResettingWeek
+                      ? (isAr ? 'جاري التفريغ...' : 'Clearing...')
+                      : (isAr ? 'تأكيد تفريغ محتوى الأسبوع' : 'Confirm Empty Week')}
+                  </span>
+                </button>
+              </div>
+
             </div>
 
           </div>

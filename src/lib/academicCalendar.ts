@@ -38,8 +38,6 @@ export const ACADEMIC_CALENDAR_2026_2027: AcademicWeek[] = [
     labelEn: 'Week 2: Sept 21 – Sept 24, 2026',
     headerDate: 'September 21, 2026',
     rangeText: 'Sept 21-24, 2026',
-    isHoliday: true,
-    holidayName: 'اليوم الوطني',
   },
   {
     weekNumber: 3,

@@ -1,5 +1,5 @@
 import type { WeeklyStatementDocument, WeeklySubjectDailyPlan, WeeklyQuizItem, ShiftType, GenderCohort, NativeCohort } from '@/types';
-import { STANDARD_SUBJECTS, createOfficialSampleDocument, createEmptyDocument, getTimetableSessionStatus } from './weeklyStatementDefaults';
+import { STANDARD_SUBJECTS, createEmptyDocument, getTimetableSessionStatus } from './weeklyStatementDefaults';
 import { getAcademicWeekByNumber, ACADEMIC_YEAR } from './academicCalendar';
 
 const STATEMENT_STORAGE_PREFIX = 'sahlah_weekly_stmt_';
@@ -51,11 +51,12 @@ function getStorageKey(grade: string, weekNumber: number, shift: ShiftType): str
   return `${STATEMENT_STORAGE_PREFIX}${safeGrade}_w${weekNumber}_${shift}`;
 }
 
+export const RESET_WEEKLY_CONTENT_PIN = 'Sahlah2027';
+
 /**
  * Loads a statement document for a given grade, weekNumber, and shift.
- * If not present in localStorage:
- * - If Grade 1 / 11 and Week 8, loads the official verified sample.
- * - Otherwise creates a calibrated empty document according to the timetable schedule rules.
+ * Default is always an empty template populated with timetable No-Session rules
+ * so the teacher fills in their topics and assignments from scratch.
  */
 export function loadWeeklyStatement(grade: string, weekNumber: number, shift: ShiftType): WeeklyStatementDocument {
   const key = getStorageKey(grade, weekNumber, shift);
@@ -71,18 +72,7 @@ export function loadWeeklyStatement(grade: string, weekNumber: number, shift: Sh
 
   const week = getAcademicWeekByNumber(weekNumber);
 
-  // If Grade 1 or Grade 11 and Week 8, use the official verified sample
-  if ((grade === 'Grade 1' || grade === 'Grade 11') && weekNumber === 8) {
-    const doc = createOfficialSampleDocument(grade, shift);
-    doc.weekDateHeader = week.headerDate;
-    doc.weekRangeText = week.rangeText;
-    doc.term = week.term;
-    doc.schoolYear = ACADEMIC_YEAR;
-    saveWeeklyStatement(doc, weekNumber);
-    return doc;
-  }
-
-  // Otherwise create a fresh template populated with timetable No-Session rules
+  // Default is clean calibrated empty document with proper timetable No-Session rules
   const emptyDoc = createEmptyDocument(grade, shift);
   emptyDoc.weekDateHeader = week.headerDate;
   emptyDoc.weekRangeText = week.rangeText;
@@ -90,6 +80,42 @@ export function loadWeeklyStatement(grade: string, weekNumber: number, shift: Sh
   emptyDoc.schoolYear = ACADEMIC_YEAR;
   saveWeeklyStatement(emptyDoc, weekNumber);
   return emptyDoc;
+}
+
+/**
+ * Completely empties content of all days and quizzes for all subjects in a week,
+ * while preserving timetable No-Session rules.
+ */
+export function clearAllWeeklyContent(doc: WeeklyStatementDocument): WeeklyStatementDocument {
+  const clearedDays: { [day: number]: WeeklySubjectDailyPlan[] } = {};
+
+  for (const dayNum of [1, 2, 3, 4, 5]) {
+    const dayPlans = doc.days[dayNum] || [];
+    clearedDays[dayNum] = dayPlans.map((plan) => {
+      if (plan.isNoSession) {
+        return {
+          ...plan,
+          contentTopic: plan.noSessionNote || 'لا توجد حصة (No Session)',
+          homework: '',
+          optionalEnrichment: '',
+        };
+      }
+      return {
+        ...plan,
+        contentTopic: '',
+        homework: '',
+        optionalEnrichment: '',
+      };
+    });
+  }
+
+  return {
+    ...doc,
+    days: clearedDays,
+    quizzes: [],
+    subjectStatuses: {},
+    updatedAt: Date.now(),
+  };
 }
 
 /**
