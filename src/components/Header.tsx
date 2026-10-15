@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   Home, ClipboardList, Layers, Presentation, FileQuestion, FileCode2,
-  FileCheck2, Library, Languages, Globe, LogOut, ChevronDown, LogIn, Compass
+  FileCheck2, Library, Languages, Globe, LogOut, ChevronDown, LogIn, Compass,
+  CalendarDays
 } from 'lucide-react';
 import type { View } from '@/types';
 import type { UILang } from '@/lib/i18n';
@@ -48,6 +49,7 @@ export default function Header({
 
   const navItems: { view: View; label: string; icon: typeof Home }[] = [
     { view: 'home', label: isAr ? 'الرئيسية' : 'Dashboard', icon: Home },
+    { view: 'weekly-statement', label: isAr ? 'التقرير الأسبوعي' : 'Weekly Statement', icon: CalendarDays },
     { view: 'lesson-plan', label: isAr ? 'خطط الدروس' : 'Lesson Plans', icon: ClipboardList },
     { view: 'performance-task', label: isAr ? 'المهمة الأدائية (PBL)' : 'PBL Projects', icon: Compass },
     { view: 'worksheet', label: isAr ? 'أوراق العمل' : 'Worksheets', icon: Layers },

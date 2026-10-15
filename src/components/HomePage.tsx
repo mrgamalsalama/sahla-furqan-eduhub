@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import {
   ClipboardList, Layers, Presentation, FileQuestion, FileCode2,
-  FileCheck2, Sparkles, ArrowLeft, ArrowRight, Globe, Mic, Compass, Wand2
+  FileCheck2, Sparkles, ArrowLeft, ArrowRight, Globe, Mic, Compass, Wand2,
+  CalendarDays
 } from 'lucide-react';
 import type { View, GenerationResult, OutputType } from '@/types';
 import { INSTITUTIONS } from '@/types';
@@ -28,6 +29,17 @@ export default function HomePage({ onOpenResult, uiLang, onNavigate }: HomePageP
     color: string;
     badge?: string;
   }[] = [
+    {
+      id: 'weekly-statement',
+      title: isAr ? 'استوديو التقرير الأسبوعي المعتمد' : 'Weekly Statements Studio',
+      subtitle: isAr ? 'الخطة الأسبوعية وجداول PrimeTimetable' : 'Academic Projection & Timetable Sync',
+      description: isAr
+        ? 'إدخال الخطة الأسبوعية والواجبات لكل مادة، والتوزيع التلقائي المتوافق مع جداول الحصص (فترتي Mena و US)، مع التصدير الرسمي المطابق لـ Word و PDF بنسبة 100%.'
+        : 'Enter weekly plans, homework, and quizzes synced with PrimeTimetable with 100% official DOCX & PDF templates.',
+      icon: CalendarDays,
+      color: 'from-teal-700 via-teal-800 to-slate-900',
+      badge: isAr ? 'جديد رسمي 📑' : 'Official 📑',
+    },
     {
       id: 'lesson-plan',
       title: isAr ? 'استوديو خطط الدروس المعتمدة' : 'Lesson Plan Studio',

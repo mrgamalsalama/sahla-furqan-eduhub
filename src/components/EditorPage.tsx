@@ -465,7 +465,8 @@ ${manifestResources}  </resources>
       document.body.removeChild(link);
     } catch (err) {
       console.error('Export error details:', err);
-      alert('حدث خطأ أثناء تجميع ملف الفرقان، يرجى المحاولة مرة أخرى.');
+      setCloudSyncMsg(isAr ? 'حدث خطأ أثناء تجميع الملف، يرجى المحاولة مرة أخرى.' : 'Error generating QTI package, please try again.');
+      setTimeout(() => setCloudSyncMsg(null), 4000);
     }
   }
 

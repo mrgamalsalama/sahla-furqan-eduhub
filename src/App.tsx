@@ -13,6 +13,7 @@ import QtiConverterPage from '@/components/QtiConverterPage';
 import GraderAdvisorStudio from '@/components/GraderAdvisorStudio';
 import BenchmarkPage from '@/components/BenchmarkPage';
 import PerformanceTaskStudio from '@/components/PerformanceTaskStudio';
+import WeeklyStatementStudio from '@/components/WeeklyStatementStudio';
 import type { View, OutputType, GenerationResult, SavedLesson } from '@/types';
 import { getUILang, saveUILang } from '@/lib/i18n';
 import type { UILang } from '@/lib/i18n';
@@ -62,6 +63,7 @@ export default function App() {
         saved &&
         [
           'home',
+          'weekly-statement',
           'lesson-plan',
           'worksheet',
           'slides',
@@ -155,6 +157,13 @@ export default function App() {
             onOpenResult={handleOpenResult}
             uiLang={uiLang}
             onNavigate={setView}
+          />
+        )}
+
+        {view === 'weekly-statement' && (
+          <WeeklyStatementStudio
+            onOpenResult={handleOpenResult}
+            uiLang={uiLang}
           />
         )}
 

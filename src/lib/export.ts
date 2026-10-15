@@ -193,12 +193,6 @@ export function printContent(
   const lang = isAr ? 'ar' : 'en';
   const css = buildPrintCSS(isAr);
 
-  const win = window.open('', '_blank', 'width=900,height=750');
-  if (!win) {
-    alert(isAr ? 'يرجى السماح بالنوافذ المنبثقة لتمكين الطباعة وحفظ PDF.' : 'Please allow pop-up windows to enable printing.');
-    return;
-  }
-
   // Ensure official header banner is not duplicated if already present
   const isLessonPlan =
     htmlContent.includes('sahlah-lesson-header') ||
@@ -218,7 +212,7 @@ export function printContent(
     .replace(/---\s*صَفْحَةُ?\s*\d+[^<]*---/gi, '')
     .replace(/---\s*Page\s*\d+[^<]*---/gi, '');
 
-  win.document.write(`<!DOCTYPE html>
+  const fullHtml = `<!DOCTYPE html>
 <html dir="${dir}" lang="${lang}">
 <head>
   <meta charset="utf-8">
@@ -232,22 +226,61 @@ export function printContent(
   ${isLessonPlan ? '' : `<h1>${escapeHtml(title)}</h1>`}
   ${sanitizedContent}
 </body>
-</html>`);
-  win.document.close();
+</html>`;
 
-  win.onload = () => {
-    win.focus();
-    win.print();
-  };
+  try {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    iframe.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(iframe);
 
-  setTimeout(() => {
-    try {
+    const doc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (doc) {
+      doc.open();
+      doc.write(fullHtml);
+      doc.close();
+      setTimeout(() => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch (e) {
+          console.warn('Iframe print error', e);
+        }
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 4000);
+      }, 400);
+      return;
+    }
+  } catch (err) {
+    console.warn('Hidden iframe print error:', err);
+  }
+
+  const win = window.open('', '_blank', 'width=900,height=750');
+  if (win) {
+    win.document.open();
+    win.document.write(fullHtml);
+    win.document.close();
+    win.onload = () => {
       win.focus();
       win.print();
-    } catch {
-      // closed
-    }
-  }, 1000);
+    };
+    setTimeout(() => {
+      try {
+        win.focus();
+        win.print();
+      } catch {
+        // closed
+      }
+    }, 1000);
+  }
 }
 
 // ── Word Export (HTML-based .doc with official school dual logos) ──

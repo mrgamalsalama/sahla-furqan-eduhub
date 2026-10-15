@@ -3,7 +3,7 @@ import {
   Library as LibraryIcon, Trash2, FileEdit, Clock,
   ClipboardList, FileText, FileQuestion, Presentation, FolderOpen,
   Cloud, CloudOff, Globe, Printer, FileType2, Package,
-  LogIn, Sparkles, ToggleLeft, ToggleRight
+  LogIn, Sparkles, ToggleLeft, ToggleRight, X, AlertTriangle
 } from 'lucide-react';
 import type { SavedLesson } from '@/types';
 import { OUTPUT_LABELS_AR, OUTPUT_LABELS_EN } from '@/types';
@@ -91,12 +91,14 @@ export default function LibraryPage({
   }
 
   // Delete lesson
-  async function handleDelete(lesson: SavedLesson, e: React.MouseEvent) {
+  function handleDeleteClick(lesson: SavedLesson, e: React.MouseEvent) {
     e.stopPropagation();
-    if (!confirm(isAr ? 'هل أنت متأكد من حذف هذا المستند؟' : 'Are you sure you want to delete this resource?')) {
-      return;
-    }
+    setLessonToDelete(lesson);
+  }
 
+  async function handleConfirmDelete() {
+    if (!lessonToDelete) return;
+    const lesson = lessonToDelete;
     try {
       // Delete locally
       deleteLesson(lesson.id);
@@ -109,6 +111,8 @@ export default function LibraryPage({
       setLessons((prev) => prev.filter((item) => item.id !== lesson.id));
     } catch (err) {
       console.warn('Delete error:', err);
+    } finally {
+      setLessonToDelete(null);
     }
   }
 
@@ -117,7 +121,6 @@ export default function LibraryPage({
     e.stopPropagation();
 
     if (!user) {
-      alert(isAr ? 'يرجى تسجيل الدخول أو إنشاء حساب لتتمكن من النشر في مجتمع المعلمين.' : 'Please sign in to publish to the community.');
       onSignIn?.();
       return;
     }
@@ -311,7 +314,7 @@ export default function LibraryPage({
                         </span>
                       )}
                       <button
-                        onClick={(e) => handleDelete(lesson, e)}
+                        onClick={(e) => handleDeleteClick(lesson, e)}
                         className="text-slate-400 hover:text-rose-600 hover:bg-rose-50 p-1 rounded-lg transition-colors"
                         title={isAr ? 'حذف من المكتبة' : 'Delete'}
                       >
@@ -436,6 +439,59 @@ export default function LibraryPage({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal (Sandboxed iframe safe) */}
+      {lessonToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">
+                    {isAr ? 'حذف هذا المستند؟' : 'Delete Resource?'}
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    {lessonToDelete.title || (isAr ? 'مستند بدون عنوان' : 'Untitled')}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLessonToDelete(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              {isAr
+                ? 'هل أنت متأكد من رغبتك في حذف هذا المستند من مكتبتك الخاصة؟ لا يمكن التراجع عن هذه العملية.'
+                : 'Are you sure you want to delete this resource from your library? This action cannot be undone.'}
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setLessonToDelete(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs transition"
+              >
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-sm transition"
+              >
+                {isAr ? 'نعم، حذف' : 'Delete'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

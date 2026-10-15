@@ -9,6 +9,7 @@ export type View =
   | 'qti-converter'
   | 'grader-advisor'
   | 'performance-task'
+  | 'weekly-statement'
   | 'editor'
   | 'library'
   | 'community'
@@ -21,7 +22,8 @@ export type OutputType =
   | 'quiz'
   | 'qti-exam'
   | 'standardized-test'
-  | 'performance-task';
+  | 'performance-task'
+  | 'weekly-statement';
 
 export type StandardFramework =
   | 'diagnostic_gap'
@@ -336,6 +338,7 @@ export const OUTPUT_LABELS_AR: Record<OutputType, string> = {
   slides: 'استوديو العروض التقديمية',
   'standardized-test': 'اختبار معياري / تشخيصي (ABT / IB / تشخيص فجوات)',
   'performance-task': 'المهمة الأدائية ومشاريع التعلم (PBL)',
+  'weekly-statement': 'التقرير الأسبوعي المعتمد (Weekly Statement)',
 };
 
 export const OUTPUT_LABELS_EN: Record<OutputType, string> = {
@@ -346,6 +349,7 @@ export const OUTPUT_LABELS_EN: Record<OutputType, string> = {
   slides: 'Presentation Studio',
   'standardized-test': 'Standardized / Diagnostic Test',
   'performance-task': 'Performance Task & PBL Project',
+  'weekly-statement': 'Official Weekly Statement',
 };
 
 export const INSTITUTIONS = {
@@ -360,3 +364,78 @@ export const INSTITUTIONS = {
     en: 'Al-Furqan International School',
   },
 } as const;
+
+// -------------------------------------------------------------
+// Weekly Statement (Academic Projection) Models
+// -------------------------------------------------------------
+export type ShiftType = 'mena' | 'us';
+export type GenderCohort = 'boys' | 'girls' | 'joint';
+export type NativeCohort = 'native' | 'non-native' | 'both';
+
+export interface WeeklySubjectDailyPlan {
+  id: string;
+  day: number; // 1 to 5
+  subjectId: string;
+  subjectName: string;
+  teacherName?: string;
+  isNoSession: boolean;
+  noSessionNote?: string; // e.g. "No Session", "No Session - Boys", "Girls: No session", "لا توجد حصة", "للناطقين: لا توجد حصة"
+  genderCohort: GenderCohort; // 'joint', 'boys', 'girls'
+  nativeCohort?: NativeCohort; // for Arabic/Islamic/Quran
+  contentTopic: string;
+  homework: string;
+  optionalEnrichment: string;
+  zoomUrl?: string;
+}
+
+export interface WeeklyQuizItem {
+  id: string;
+  date: string; // e.g. "22/10/2026" or "19/10/2026"
+  subject: string; // e.g. "الإسلاميات للناطقين", "اللغة العربية للناطقين بها", "Quran Non Native"
+  topics: string; // e.g. "الحديث الضعيف وأقسامه", "Relationship between letters"
+  materials?: string;
+}
+
+export interface WeeklySubjectStatus {
+  subjectId: string;
+  is_locked: boolean;
+  status: 'draft' | 'submitted';
+  submitted_at?: string;
+  submitted_by?: string;
+  locked_at?: string;
+  unlocked_at?: string;
+  unlock_reason?: string;
+}
+
+export interface WeeklyStatementAuditLog {
+  id: string;
+  statement_id: string;
+  grade: string;
+  week_number: number;
+  shift: ShiftType;
+  subject_id: string;
+  action: 'submit_and_lock' | 'unlock_for_editing' | 'save_draft' | 'content_update';
+  old_content: unknown;
+  new_content: unknown;
+  changed_by: string;
+  reason?: string;
+  created_at: string;
+}
+
+export interface WeeklyStatementDocument {
+  id: string;
+  grade: string; // e.g. "Grade 1", "Grade 11"
+  shift: ShiftType; // 'mena' | 'us'
+  term: string; // "1", "2", "3"
+  schoolYear: string; // "SY 2026-2027"
+  weekDateHeader: string; // e.g. "September 14, 2026"
+  weekRangeText: string; // e.g. "Sept 14-17, 2026"
+  days: {
+    [dayNumber: number]: WeeklySubjectDailyPlan[];
+  };
+  quizzes: WeeklyQuizItem[];
+  subjectStatuses?: Record<string, WeeklySubjectStatus>;
+  updatedAt: number;
+}
+
+
