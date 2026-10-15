@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Header from '@/components/Header';
+import Sidebar from '@/components/Sidebar';
 import HomePage from '@/components/HomePage';
 import EditorPage from '@/components/EditorPage';
 import LibraryPage from '@/components/LibraryPage';
@@ -28,11 +29,34 @@ interface EditorState {
 }
 
 const VIEW_STORAGE_KEY = 'sahlah_furqan_current_view';
+const SIDEBAR_COLLAPSED_KEY = 'sahlah_sidebar_collapsed';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
+
+  // Sidebar collapse & mobile drawer state
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  const handleToggleSidebarCollapse = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     getCurrentUser().then((u) => setUser(u));
@@ -85,16 +109,6 @@ export default function App() {
     return 'home';
   });
 
-  const [editorState, setEditorState] = useState<EditorState | null>(null);
-  const [uiLang, setUiLang] = useState<UILang>(() => getUILang());
-
-  const direction = uiLang === 'ar' ? 'rtl' : 'ltr';
-
-  useEffect(() => {
-    document.documentElement.dir = direction;
-    document.documentElement.lang = uiLang;
-  }, [direction, uiLang]);
-
   useEffect(() => {
     try {
       localStorage.setItem(VIEW_STORAGE_KEY, view);
@@ -103,15 +117,18 @@ export default function App() {
     }
   }, [view]);
 
-  function handleToggleLang() {
-    const next = uiLang === 'ar' ? 'en' : 'ar';
+  const [editorState, setEditorState] = useState<EditorState | null>(null);
+  const [uiLang, setUiLang] = useState<UILang>(getUILang);
+
+  const handleToggleLang = () => {
+    const next: UILang = uiLang === 'ar' ? 'en' : 'ar';
     setUiLang(next);
     saveUILang(next);
-  }
+  };
 
   function handleOpenResult(result: GenerationResult, outputType: OutputType) {
     setEditorState({
-      html: result.contentHtml,
+      html: result.html,
       title: result.title,
       outputType,
       editingLesson: null,
@@ -121,7 +138,7 @@ export default function App() {
 
   function handleOpenLesson(lesson: SavedLesson) {
     setEditorState({
-      html: lesson.contentHtml,
+      html: lesson.html,
       title: lesson.title,
       outputType: lesson.outputType,
       editingLesson: lesson,
@@ -135,7 +152,11 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-between">
+    <div
+      className="min-h-screen bg-slate-50 flex flex-col font-sans"
+      dir={uiLang === 'ar' ? 'rtl' : 'ltr'}
+    >
+      {/* ── Top Header (Logo, Language Switcher, User Auth only) ── */}
       <Header
         currentView={view}
         onNavigate={(v) => {
@@ -149,122 +170,152 @@ export default function App() {
         user={user}
         onSignIn={() => handleOpenAuthModal('signin')}
         onSignOut={handleSignOut}
+        isSidebarCollapsed={isSidebarCollapsed}
+        onToggleSidebarCollapse={handleToggleSidebarCollapse}
+        onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
       />
 
-      <main className="flex-1">
-        {view === 'home' && (
-          <HomePage
-            onOpenResult={handleOpenResult}
-            uiLang={uiLang}
-            onNavigate={setView}
-          />
-        )}
+      {/* ── Main App Layout: Vertical Sidebar + Scrollable Content ── */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Vertical Sidebar Navigation (Right in RTL / Left in LTR) */}
+        <Sidebar
+          currentView={view}
+          onNavigate={(v) => {
+            if (v !== 'editor') {
+              setEditorState(null);
+            }
+            setView(v);
+          }}
+          uiLang={uiLang}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={handleToggleSidebarCollapse}
+          isMobileOpen={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        />
 
-        {view === 'weekly-statement' && (
-          <WeeklyStatementStudio
-            onClose={() => setView('home')}
-            onOpenResult={handleOpenResult}
-            uiLang={uiLang}
-          />
-        )}
+        {/* Main Content View Container */}
+        <main className="flex-1 overflow-y-auto min-w-0 transition-all duration-300 flex flex-col justify-between">
+          <div className="flex-1">
+            {view === 'home' && (
+              <HomePage
+                onOpenResult={handleOpenResult}
+                uiLang={uiLang}
+                onNavigate={setView}
+              />
+            )}
 
-        {view === 'lesson-plan' && (
-          <LessonPlanStudio
-            onOpenResult={handleOpenResult}
-            uiLang={uiLang}
-          />
-        )}
+            {view === 'weekly-statement' && (
+              <WeeklyStatementStudio
+                onClose={() => setView('home')}
+                onOpenResult={handleOpenResult}
+                uiLang={uiLang}
+              />
+            )}
 
-        {view === 'worksheet' && (
-          <WorksheetStudio
-            onOpenResult={handleOpenResult}
-            uiLang={uiLang}
-          />
-        )}
+            {view === 'lesson-plan' && (
+              <LessonPlanStudio
+                onOpenResult={handleOpenResult}
+                uiLang={uiLang}
+              />
+            )}
 
-        {view === 'slides' && (
-          <PresentationStudio
-            onOpenResult={handleOpenResult}
-            uiLang={uiLang}
-          />
-        )}
+            {view === 'worksheet' && (
+              <WorksheetStudio
+                onOpenResult={handleOpenResult}
+                uiLang={uiLang}
+              />
+            )}
 
-        {view === 'quiz-exam' && (
-          <ExamBankStudio
-            onOpenResult={handleOpenResult}
-            uiLang={uiLang}
-          />
-        )}
+            {view === 'slides' && (
+              <PresentationStudio
+                onOpenResult={handleOpenResult}
+                uiLang={uiLang}
+              />
+            )}
 
-        {view === 'qti-converter' && (
-          <QtiConverterPage uiLang={uiLang} />
-        )}
+            {view === 'quiz-exam' && (
+              <ExamBankStudio
+                onOpenResult={handleOpenResult}
+                uiLang={uiLang}
+              />
+            )}
 
-        {view === 'grader-advisor' && (
-          <GraderAdvisorStudio
-            onBack={handleBack}
-            onOpenResult={handleOpenResult}
-            uiLang={uiLang}
-          />
-        )}
+            {view === 'qti-converter' && (
+              <QtiConverterPage uiLang={uiLang} />
+            )}
 
-        {view === 'performance-task' && (
-          <PerformanceTaskStudio
-            onOpenResult={handleOpenResult}
-            uiLang={uiLang}
-          />
-        )}
+            {view === 'grader-advisor' && (
+              <GraderAdvisorStudio
+                onBack={handleBack}
+                onOpenResult={handleOpenResult}
+                uiLang={uiLang}
+              />
+            )}
 
-        {view === 'benchmark' && (
-          <BenchmarkPage
-            onBack={handleBack}
-            onOpenResult={handleOpenResult}
-            uiLang={uiLang}
-          />
-        )}
+            {view === 'performance-task' && (
+              <PerformanceTaskStudio
+                onOpenResult={handleOpenResult}
+                uiLang={uiLang}
+              />
+            )}
 
-        {view === 'editor' && editorState && (
-          <EditorPage
-            initialHtml={editorState.html}
-            title={editorState.title}
-            outputType={editorState.outputType}
-            onBack={handleBack}
-            editingLesson={editorState.editingLesson}
-            uiLang={uiLang}
-            user={user}
-            onSignIn={() => handleOpenAuthModal('signin')}
-          />
-        )}
+            {view === 'benchmark' && (
+              <BenchmarkPage
+                onBack={handleBack}
+                onOpenResult={handleOpenResult}
+                uiLang={uiLang}
+              />
+            )}
 
-        {view === 'library' && (
-          <LibraryPage
-            onOpenLesson={handleOpenLesson}
-            uiLang={uiLang}
-            user={user}
-            onSignIn={() => handleOpenAuthModal('signin')}
-          />
-        )}
+            {view === 'editor' && editorState && (
+              <EditorPage
+                initialHtml={editorState.html}
+                title={editorState.title}
+                outputType={editorState.outputType}
+                onBack={handleBack}
+                editingLesson={editorState.editingLesson}
+                uiLang={uiLang}
+                user={user}
+                onSignIn={() => handleOpenAuthModal('signin')}
+              />
+            )}
 
-        {view === 'community' && (
-          <CommunityPage
-            onOpenLesson={handleOpenLesson}
-            uiLang={uiLang}
-            user={user}
-            onSignIn={() => handleOpenAuthModal('signin')}
-          />
-        )}
-      </main>
+            {view === 'library' && (
+              <LibraryPage
+                onOpenLesson={handleOpenLesson}
+                uiLang={uiLang}
+                user={user}
+                onSignIn={() => handleOpenAuthModal('signin')}
+              />
+            )}
 
-      <footer className="border-t border-gray-100 bg-white py-6 no-print">
-        <div className="max-w-7xl mx-auto px-4 text-center space-y-1">
-          <p className="text-sm font-medium text-gray-700">
-            تم إعداد وإهداء هذه المنصة من أ/ جمال سلامة إلى الزملاء الأعزاء معلمي أكاديمية سهلة الدولية ومدرسة الفرقان العالمية
-          </p>
-          <p className="text-xs text-gray-400">
-            المنصة الرسمية المعتمدة - جميع الحقوق محفوظة © 2026
-          </p>
-        </div>
-      </footer>
+            {view === 'community' && (
+              <CommunityPage
+                onOpenLesson={handleOpenLesson}
+                uiLang={uiLang}
+                user={user}
+                onSignIn={() => handleOpenAuthModal('signin')}
+              />
+            )}
+          </div>
+
+          {/* Clean App Footer */}
+          <footer className="border-t border-slate-200 bg-white py-6 no-print mt-12">
+            <div className="max-w-7xl mx-auto px-4 text-center space-y-1">
+              <p className="text-sm font-semibold text-slate-700">
+                {uiLang === 'ar'
+                  ? 'تم إعداد وإهداء هذه المنصة من أ/ جمال سلامة إلى الزملاء الأعزاء معلمي أكاديمية سهلة الدولية ومدرسة الفرقان العالمية'
+                  : 'Sahlah Academy & Al-Furqan International School AI Platform'}
+              </p>
+              <p className="text-xs text-slate-400">
+                {uiLang === 'ar'
+                  ? 'المنصة الرسمية المعتمدة - جميع الحقوق محفوظة © 2026'
+                  : 'Official Certified System • All Rights Reserved © 2026'}
+              </p>
+            </div>
+          </footer>
+        </main>
+      </div>
 
       {/* Direct Email/Password Authentication & Registration Modal */}
       <AuthModal

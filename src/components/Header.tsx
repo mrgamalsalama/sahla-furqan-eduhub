@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import {
-  Home, ClipboardList, Layers, Presentation, FileQuestion, FileCode2,
-  FileCheck2, Library, Languages, Globe, LogOut, ChevronDown, LogIn, Compass,
-  CalendarDays
+  Languages, LogOut, ChevronDown, LogIn, Menu, PanelLeftClose, PanelLeftOpen,
+  PanelRightClose, PanelRightOpen
 } from 'lucide-react';
 import type { View } from '@/types';
 import type { UILang } from '@/lib/i18n';
@@ -11,23 +10,28 @@ import type { User } from '@supabase/supabase-js';
 import { extractProfileFromUser } from '@/lib/supabase';
 
 interface HeaderProps {
-  currentView: View;
+  currentView?: View;
   onNavigate: (view: View) => void;
   uiLang: UILang;
   onToggleLang: () => void;
   user: User | null;
   onSignIn: () => void;
   onSignOut: () => void;
+  isSidebarCollapsed?: boolean;
+  onToggleSidebarCollapse?: () => void;
+  onOpenMobileSidebar?: () => void;
 }
 
 export default function Header({
-  currentView,
   onNavigate,
   uiLang,
   onToggleLang,
   user,
   onSignIn,
   onSignOut,
+  isSidebarCollapsed = false,
+  onToggleSidebarCollapse,
+  onOpenMobileSidebar,
 }: HeaderProps) {
   const s = t(uiLang);
   const isAr = uiLang === 'ar';
@@ -47,133 +51,135 @@ export default function Header({
 
   const profile = user ? extractProfileFromUser(user) : null;
 
-  const navItems: { view: View; label: string; icon: typeof Home }[] = [
-    { view: 'home', label: isAr ? 'الرئيسية' : 'Dashboard', icon: Home },
-    { view: 'weekly-statement', label: isAr ? 'التقرير الأسبوعي' : 'Weekly Statement', icon: CalendarDays },
-    { view: 'lesson-plan', label: isAr ? 'خطط الدروس' : 'Lesson Plans', icon: ClipboardList },
-    { view: 'performance-task', label: isAr ? 'المهمة الأدائية (PBL)' : 'PBL Projects', icon: Compass },
-    { view: 'worksheet', label: isAr ? 'أوراق العمل' : 'Worksheets', icon: Layers },
-    { view: 'slides', label: isAr ? 'العروض التقديمية' : 'Slides Deck', icon: Presentation },
-    { view: 'quiz-exam', label: isAr ? 'بنك الاختبارات' : 'Exam Bank', icon: FileQuestion },
-    { view: 'qti-converter', label: isAr ? 'محول QTI' : 'QTI Converter', icon: FileCode2 },
-    { view: 'grader-advisor', label: isAr ? 'الفاحص & المستشار' : 'Grader & Advisor', icon: FileCheck2 },
-    { view: 'library', label: s.navLibrary, icon: Library },
-    { view: 'community', label: isAr ? 'المكتبة العامة 🌐' : 'Community Hub 🌐', icon: Globe },
-  ];
-
   return (
-    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-xs no-print">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs no-print">
+      <div className="w-full px-3 sm:px-6">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <button
-            onClick={() => onNavigate('home')}
-            className="flex items-center gap-3 group"
-          >
-            {/* أيقونة المعلم الذكي */}
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-900 to-teal-600 flex items-center justify-center shadow-md group-hover:scale-105 transition-transform p-2">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                className="w-full h-full text-white"
+          
+          {/* Left section (Right in RTL): Sidebar Toggles + Logo */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Mobile Sidebar Hamburger Toggle */}
+            {onOpenMobileSidebar && (
+              <button
+                type="button"
+                onClick={onOpenMobileSidebar}
+                className="md:hidden p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition"
+                title={isAr ? 'فتح قائمة التنقل' : 'Open Navigation Menu'}
               >
-                {/* شرارة الفكرة والذكاء الاصطناعي فوق رأس المعلم */}
-                <path
-                  d="M17.5 2.5L18.2 4.2L20 5L18.2 5.8L17.5 7.5L16.8 5.8L15 5L16.8 4.2L17.5 2.5Z"
-                  fill="currentColor"
-                />
+                <Menu className="w-5 h-5 text-teal-800" />
+              </button>
+            )}
 
-                {/* رأس المعلم وتسريحة الشعر */}
-                <path
-                  d="M6 7.5C6 4.5 8.5 2.5 12 2.5C13.5 2.5 14.5 2.8 15 3.2"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M7 8C6 9 6 11 6 12C6 15.3 8.7 17.5 12 17.5C15.3 17.5 18 15.3 18 12C18 11 18 9 17 8"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                />
+            {/* Desktop Sidebar Quick Collapse Toggle */}
+            {onToggleSidebarCollapse && (
+              <button
+                type="button"
+                onClick={onToggleSidebarCollapse}
+                className="hidden md:flex items-center justify-center p-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition border border-transparent hover:border-slate-200"
+                title={
+                  isSidebarCollapsed
+                    ? (isAr ? 'توسيع الشريط الجانبي' : 'Expand Sidebar')
+                    : (isAr ? 'طي الشريط الجانبي' : 'Collapse Sidebar')
+                }
+              >
+                {isSidebarCollapsed ? (
+                  isAr ? <PanelRightOpen className="w-5 h-5 text-teal-700" /> : <PanelLeftOpen className="w-5 h-5 text-teal-700" />
+                ) : (
+                  isAr ? <PanelRightClose className="w-5 h-5 text-slate-600" /> : <PanelLeftClose className="w-5 h-5 text-slate-600" />
+                )}
+              </button>
+            )}
 
-                {/* نظارات المعلم الذكية */}
-                <rect
-                  x="7"
-                  y="9.5"
-                  width="4"
-                  height="3"
-                  rx="1"
-                  stroke="currentColor"
-                  strokeWidth="1.4"
-                />
-                <rect
-                  x="13"
-                  y="9.5"
-                  width="4"
-                  height="3"
-                  rx="1"
-                  stroke="currentColor"
-                  strokeWidth="1.4"
-                />
-                <line
-                  x1="11"
-                  y1="11"
-                  x2="13"
-                  y2="11"
-                  stroke="currentColor"
-                  strokeWidth="1.4"
-                />
-
-                {/* ابتسامة المعلم */}
-                <path
-                  d="M10.5 14.2C11 14.7 11.5 14.9 12 14.9C12.5 14.9 13 14.7 13.5 14.2"
-                  stroke="currentColor"
-                  strokeWidth="1.3"
-                  strokeLinecap="round"
-                />
-
-                {/* ياقة القميص ورداء المعلم الأنيق */}
-                <path
-                  d="M5 21.5C5.5 19 8 18 10 18L12 19.5L14 18C16 18 18.5 19 19 21.5"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
-
-            <div className={uiLang === 'ar' ? 'text-right' : 'text-left'}>
-              <h1 className="text-base sm:text-lg font-extrabold text-blue-950 leading-tight">{s.brandName}</h1>
-              <p className="text-[11px] text-slate-500 font-medium leading-tight">{s.brandSub}</p>
-            </div>
-          </button>
-
-          {/* Navigation + Language */}
-          <div className="flex items-center gap-1 sm:gap-2">
-            <nav className="flex items-center gap-1 sm:gap-2">
-              {navItems.map(({ view, label, icon: Icon }) => (
-                <button
-                  key={view}
-                  onClick={() => onNavigate(view)}
-                  className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl font-medium text-sm transition-all duration-150 ${
-                    currentView === view
-                      ? 'bg-blue-50 text-blue-900 font-bold border border-blue-200 shadow-2xs'
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span className="hidden sm:inline">{label}</span>
-                </button>
-              ))}
-            </nav>
-
+            {/* Brand Logo & Name */}
             <button
+              onClick={() => onNavigate('home')}
+              className="flex items-center gap-2.5 sm:gap-3 group focus:outline-none"
+            >
+              {/* أيقونة المعلم الذكي */}
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-blue-900 via-teal-800 to-teal-600 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform p-1.5 shrink-0">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="w-full h-full text-white"
+                >
+                  <path
+                    d="M17.5 2.5L18.2 4.2L20 5L18.2 5.8L17.5 7.5L16.8 5.8L15 5L16.8 4.2L17.5 2.5Z"
+                    fill="currentColor"
+                  />
+                  <path
+                    d="M6 7.5C6 4.5 8.5 2.5 12 2.5C13.5 2.5 14.5 2.8 15 3.2"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M7 8C6 9 6 11 6 12C6 15.3 8.7 17.5 12 17.5C15.3 17.5 18 15.3 18 12C18 11 18 9 17 8"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                  />
+                  <rect
+                    x="7"
+                    y="9.5"
+                    width="4"
+                    height="3"
+                    rx="1"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                  />
+                  <rect
+                    x="13"
+                    y="9.5"
+                    width="4"
+                    height="3"
+                    rx="1"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                  />
+                  <line
+                    x1="11"
+                    y1="11"
+                    x2="13"
+                    y2="11"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                  />
+                  <path
+                    d="M10.5 14.2C11 14.7 11.5 14.9 12 14.9C12.5 14.9 13 14.7 13.5 14.2"
+                    stroke="currentColor"
+                    strokeWidth="1.3"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M5 21.5C5.5 19 8 18 10 18L12 19.5L14 18C16 18 18.5 19 19 21.5"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </div>
+
+              <div className={isAr ? 'text-right' : 'text-left'}>
+                <h1 className="text-sm sm:text-base font-black text-slate-900 leading-tight">
+                  {s.brandName}
+                </h1>
+                <p className="text-[10px] sm:text-[11px] text-teal-800 font-bold leading-tight hidden xs:block">
+                  {s.brandSub}
+                </p>
+              </div>
+            </button>
+          </div>
+
+          {/* Right section (Left in RTL): Language Switcher + User Profile / Sign In */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Language Switcher */}
+            <button
+              type="button"
               onClick={onToggleLang}
               title={s.langSwitchLabel}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl font-bold text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-900 transition-all duration-150 border border-slate-200 bg-white shadow-2xs"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl font-extrabold text-xs text-slate-700 hover:bg-slate-100 hover:text-slate-950 transition-all border border-slate-200 bg-white shadow-2xs"
             >
               <Languages className="w-4 h-4 text-teal-600" />
               <span>{s.langSwitchLabel}</span>
@@ -185,7 +191,7 @@ export default function Header({
                 <button
                   type="button"
                   onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="flex items-center gap-2 p-1 sm:px-2.5 sm:py-1.5 rounded-xl border border-slate-200 hover:border-blue-300 bg-white hover:bg-blue-50/40 transition-all shadow-2xs"
+                  className="flex items-center gap-2 p-1 sm:px-2.5 sm:py-1.5 rounded-xl border border-slate-200 hover:border-teal-400 bg-white hover:bg-teal-50/30 transition-all shadow-2xs"
                 >
                   {profile.avatarUrl ? (
                     <img
@@ -198,7 +204,7 @@ export default function Header({
                       {profile.name.charAt(0)}
                     </div>
                   )}
-                  <div className="hidden lg:block text-start leading-tight max-w-[120px]">
+                  <div className="hidden sm:block text-start leading-tight max-w-[130px]">
                     <div className="text-xs font-bold text-slate-800 truncate">{profile.name}</div>
                     <div className="text-[10px] font-semibold text-teal-700">
                       {profile.institution === 'furqan'
@@ -242,10 +248,11 @@ export default function Header({
                 title={isAr ? 'تسجيل الدخول أو إنشاء حساب جديد' : 'Sign In / Register'}
               >
                 <LogIn className="w-3.5 h-3.5 text-teal-300" />
-                <span>{isAr ? 'تسجيل الدخول / حساب جديد' : 'Sign In / Register'}</span>
+                <span className="hidden xs:inline">{isAr ? 'تسجيل الدخول' : 'Sign In'}</span>
               </button>
             )}
           </div>
+
         </div>
       </div>
     </header>
