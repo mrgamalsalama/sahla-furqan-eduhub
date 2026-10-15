@@ -3,8 +3,8 @@ import {
   Calendar, Clock, CheckCircle2, AlertTriangle, FileText, Download,
   Printer, Copy, Edit3, ExternalLink, Sparkles, RefreshCw, Trash2, Plus,
   Layers, School, Check, X, Info, User,
-  ChevronRight, BookOpen, Eye, Lock, Unlock, History, ShieldCheck, Database, Code,
-  FolderArchive, KeyRound
+  ChevronRight, BookOpen, Eye, EyeOff, Lock, Unlock, History, ShieldCheck, Database,
+  FolderArchive, KeyRound, ArrowRight, ArrowLeft
 } from 'lucide-react';
 import type {
   WeeklyStatementDocument, WeeklySubjectDailyPlan, WeeklyQuizItem,
@@ -42,7 +42,7 @@ import {
   fetchSubjectStatus,
   fetchGradeSubjectStatuses,
   fetchAuditLogs,
-  SQL_SCHEMA_STATEMENTS_TABLE,
+  getStatementKey,
 } from '@/lib/weeklyStatementSupabase';
 import { exportAllStagesBatchZip, type BatchExportProgress } from '@/lib/weeklyStatementBatchExport';
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -50,10 +50,12 @@ import { isSupabaseConfigured } from '@/lib/supabase';
 interface WeeklyStatementStudioProps {
   onOpenResult: (result: GenerationResult, outputType: OutputType) => void;
   uiLang: UILang;
+  onClose?: () => void;
 }
 
 export default function WeeklyStatementStudio({
   uiLang,
+  onClose,
 }: WeeklyStatementStudioProps) {
   const isAr = uiLang === 'ar';
 
@@ -103,17 +105,17 @@ export default function WeeklyStatementStudio({
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [auditLogs, setAuditLogs] = useState<WeeklyStatementAuditLog[]>([]);
   const [isLoadingAudit, setIsLoadingAudit] = useState(false);
-  const [copiedSql, setCopiedSql] = useState(false);
   const [gradeSubjectStatuses, setGradeSubjectStatuses] = useState<Record<string, WeeklySubjectStatus>>({});
 
-  // ── Reset All Weekly Content (PIN: Sahlah2027) State ──
+  // ── Reset All Weekly Content (PIN Protected) State ──
   const [isResetWeekModalOpen, setIsResetWeekModalOpen] = useState(false);
   const [resetPinInput, setResetPinInput] = useState('');
   const [resetPinError, setResetPinError] = useState('');
   const [showResetPinText, setShowResetPinText] = useState(false);
   const [isResettingWeek, setIsResettingWeek] = useState(false);
 
-  // ── Batch Export All Stages (ZIP Word & PDF) State ──
+  // ── Dedicated Batch Export All Stages (K to 12 ZIP Word & PDF) State ──
+  const [isBatchK12ModalOpen, setIsBatchK12ModalOpen] = useState(false);
   const [isBatchExporting, setIsBatchExporting] = useState(false);
   const [batchProgress, setBatchProgress] = useState<BatchExportProgress | null>(null);
   const [batchShiftChoice, setBatchShiftChoice] = useState<ShiftType | 'both'>('mena');
@@ -567,6 +569,9 @@ export default function WeeklyStatementStudio({
 
       if (result.success) {
         setSubjectStatus(result.status);
+        if (result.auditLog) {
+          setAuditLogs((prev) => [result.auditLog!, ...prev.filter((l) => l.id !== result.auditLog!.id)]);
+        }
         const updatedDoc: WeeklyStatementDocument = {
           ...docData,
           subjectStatuses: {
@@ -621,6 +626,9 @@ export default function WeeklyStatementStudio({
 
       if (result.success) {
         setSubjectStatus(result.status);
+        if (result.auditLog) {
+          setAuditLogs((prev) => [result.auditLog!, ...prev.filter((l) => l.id !== result.auditLog!.id)]);
+        }
         const updatedDoc: WeeklyStatementDocument = {
           ...docData,
           subjectStatuses: {
@@ -649,11 +657,19 @@ export default function WeeklyStatementStudio({
   }
 
   // ── Open Audit Log Modal ──
-  async function handleOpenAuditModal() {
+  async function handleOpenAuditModal(targetSubjectId?: unknown) {
+    const validSubjectId =
+      typeof targetSubjectId === 'string' && targetSubjectId.trim()
+        ? targetSubjectId.trim()
+        : (typeof selectedSubjectId === 'string' && selectedSubjectId.trim() ? selectedSubjectId : 'english');
+
+    if (typeof targetSubjectId === 'string' && targetSubjectId.trim() && targetSubjectId !== selectedSubjectId) {
+      setSelectedSubjectId(targetSubjectId.trim());
+    }
     setIsAuditModalOpen(true);
     setIsLoadingAudit(true);
     try {
-      const logs = await fetchAuditLogs(selectedGrade, selectedWeekNumber, selectedShift, selectedSubjectId);
+      const logs = await fetchAuditLogs(selectedGrade, selectedWeekNumber, selectedShift, validSubjectId);
       setAuditLogs(logs);
     } catch (err) {
       console.warn('Failed to load audit logs:', err);
@@ -685,6 +701,9 @@ export default function WeeklyStatementStudio({
     });
 
     if (result.success) {
+      if (result.auditLog) {
+        setAuditLogs((prev) => [result.auditLog!, ...prev.filter((l) => l.id !== result.auditLog!.id)]);
+      }
       const updatedDoc: WeeklyStatementDocument = {
         ...docData,
         subjectStatuses: {
@@ -1117,43 +1136,70 @@ export default function WeeklyStatementStudio({
             </p>
           </div>
 
-          {/* Action Center: View Switcher & Universal Export Button */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
-            {/* Direct Export Modal Opener Button */}
+          {/* Action Center: K-12 Export, View Switcher & Close Page */}
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            {/* Direct K to 12 Batch Export Button */}
             <button
+              type="button"
+              onClick={() => setIsBatchK12ModalOpen(true)}
+              className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black text-xs sm:text-sm shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 border border-emerald-400/30"
+              title={isAr ? 'تصدير كامل المراحل من الروضة حتى الصف 12 في ملفات Word و PDF منفصلة داخل مجلد مضغوط' : 'Export all stages K-12 in Word & PDF into separate folders'}
+            >
+              <FolderArchive className="w-4 h-4 text-amber-300 shrink-0" />
+              <span>{isAr ? '📦 تصدير كافة المراحل (K to 12)' : '📦 Export K to 12 (All)'}</span>
+            </button>
+
+            {/* Direct Single Grade Export Modal Opener Button */}
+            <button
+              type="button"
               onClick={() => handleOpenExportModal()}
-              className="flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs sm:text-sm shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5"
+              className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs sm:text-sm shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5"
             >
               <Download className="w-4 h-4 text-slate-950" />
-              <span>{isAr ? 'تصدير التقرير الأسبوعي' : 'Export Statement'}</span>
+              <span>{isAr ? 'تصدير التقرير' : 'Export'}</span>
             </button>
 
             {/* Mode Switcher */}
-            <div className="grid grid-cols-2 gap-2 bg-slate-800/80 p-1.5 rounded-2xl border border-slate-700">
+            <div className="flex items-center gap-1 bg-slate-800/80 p-1.5 rounded-2xl border border-slate-700">
               <button
+                type="button"
                 onClick={() => setViewMode('teacher')}
-                className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl transition text-xs font-extrabold ${
+                className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl transition text-xs font-extrabold ${
                   viewMode === 'teacher'
                     ? 'bg-teal-600 text-white shadow-md'
                     : 'text-slate-300 hover:bg-slate-700/50'
                 }`}
               >
-                <User className="w-4 h-4 text-teal-300" />
-                <span>{isAr ? 'إدخال المعلم' : 'Teacher View'}</span>
+                <User className="w-3.5 h-3.5 text-teal-300" />
+                <span>{isAr ? 'المعلم' : 'Teacher'}</span>
               </button>
 
               <button
+                type="button"
                 onClick={() => setViewMode('master')}
-                className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl transition text-xs font-extrabold ${
+                className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl transition text-xs font-extrabold ${
                   viewMode === 'master'
                     ? 'bg-blue-600 text-white shadow-md'
                     : 'text-slate-300 hover:bg-slate-700/50'
                 }`}
               >
-                <Layers className="w-4 h-4 text-blue-300" />
-                <span>{isAr ? 'تقرير المرحلة' : 'Master View'}</span>
+                <Layers className="w-3.5 h-3.5 text-blue-300" />
+                <span>{isAr ? 'المرحلة' : 'Master'}</span>
               </button>
             </div>
+
+            {/* Close Page Button (Return to Main Dashboard) */}
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-white/10 hover:bg-rose-600 text-white font-extrabold text-xs sm:text-sm border border-white/20 hover:border-rose-400 shadow-md transition-all transform hover:-translate-y-0.5"
+                title={isAr ? 'إغلاق الصفحة والعودة للشاشة الرئيسية' : 'Close Studio & Return Home'}
+              >
+                <ArrowRight className="w-4 h-4 rtl:rotate-0 ltr:rotate-180" />
+                <span>{isAr ? 'إغلاق الصفحة' : 'Close'}</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1742,7 +1788,7 @@ export default function WeeklyStatementStudio({
                 {/* Audit Log Viewer Button */}
                 <button
                   type="button"
-                  onClick={handleOpenAuditModal}
+                  onClick={() => handleOpenAuditModal(selectedSubjectId)}
                   className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs border border-slate-300 transition"
                 >
                   <History className="w-4 h-4 text-teal-700" />
@@ -2277,12 +2323,12 @@ export default function WeeklyStatementStudio({
 
                 <button
                   type="button"
-                  onClick={() => handleOpenExportModal(selectedShift)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-teal-800 hover:bg-teal-900 text-white font-black text-xs transition shadow-sm"
+                  onClick={() => setIsBatchK12ModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-800 hover:from-emerald-700 hover:to-teal-900 text-white font-black text-xs transition shadow-sm"
                   title={isAr ? 'تحميل مجلد ZIP يحتوي كل المراحل منفصلة Word & PDF' : 'Download All Stages ZIP'}
                 >
                   <FolderArchive className="w-3.5 h-3.5 text-amber-300" />
-                  <span>{isAr ? 'تصدير كافة المراحل (ZIP)' : 'All Stages (ZIP)'}</span>
+                  <span>{isAr ? '📦 تصدير كافة المراحل (K to 12)' : '📦 Export K-12 (All)'}</span>
                 </button>
 
                 <button
@@ -2407,10 +2453,7 @@ export default function WeeklyStatementStudio({
                         <>
                           <button
                             type="button"
-                            onClick={() => {
-                              setSelectedSubjectId(sub.id);
-                              handleOpenAuditModal();
-                            }}
+                            onClick={() => handleOpenAuditModal(sub.id)}
                             className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-50 font-bold text-[11px] transition shadow-2xs"
                             title={isAr ? 'سجل التدقيق' : 'Audit Log'}
                           >
@@ -3239,29 +3282,29 @@ export default function WeeklyStatementStudio({
               </button>
             </div>
 
-            {/* Supabase status pill & SQL snippet button */}
-            <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs shrink-0">
+            {/* Supabase Connected Status & Instant Refresh */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs shrink-0">
               <div className="flex items-center gap-2">
-                <Database className="w-4 h-4 text-teal-600 shrink-0" />
-                <span className="font-bold text-slate-800">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="font-extrabold text-slate-800">
                   {isSupabaseConfigured()
-                    ? (isAr ? 'متصل بقاعدة Supabase: جدول weekly_statements و weekly_statement_audit_logs' : 'Connected to Supabase Tables')
-                    : (isAr ? 'نظام التدقيق نشط محلياً + جاهز للمزامنة السحابية فور إدخال المفاتيح' : 'Audit system active locally & ready for cloud sync')}
+                    ? (isAr ? 'متصل بقاعدة Supabase: جدول weekly_statement_audit_logs' : 'Connected to weekly_statement_audit_logs')
+                    : (isAr ? 'سجل التدقيق مفعل وموثق' : 'Audit Log active')}
+                </span>
+                <span className="font-mono text-[11px] text-teal-800 bg-teal-100/70 px-2 py-0.5 rounded-md font-semibold">
+                  statement_id: {getStatementKey(selectedGrade, selectedWeekNumber, selectedShift, selectedSubjectId)}
                 </span>
               </div>
 
               <button
                 type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(SQL_SCHEMA_STATEMENTS_TABLE);
-                  setCopiedSql(true);
-                  setTimeout(() => setCopiedSql(false), 3000);
-                  showToast(isAr ? 'تم نسخ كود SQL لإنشاء الجداول في Supabase' : 'Copied SQL Schema', 'success');
-                }}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold border border-teal-200 transition"
+                onClick={() => handleOpenAuditModal(selectedSubjectId)}
+                disabled={isLoadingAudit}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 font-extrabold border border-slate-300 transition shadow-2xs"
+                title={isAr ? 'تحديث السجلات الآن' : 'Refresh audit logs'}
               >
-                <Code className="w-3.5 h-3.5 text-teal-600" />
-                <span>{copiedSql ? (isAr ? 'تم النسخ ✅' : 'Copied!') : (isAr ? 'نسخ كود SQL للجداول' : 'Copy SQL Schema')}</span>
+                <RefreshCw className={`w-3.5 h-3.5 text-teal-600 ${isLoadingAudit ? 'animate-spin' : ''}`} />
+                <span>{isAr ? 'تحديث السجلات' : 'Refresh'}</span>
               </button>
             </div>
 
@@ -3414,7 +3457,7 @@ export default function WeeklyStatementStudio({
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') handleConfirmResetWeek();
                     }}
-                    placeholder={isAr ? 'أدخل الرقم السري هنا...' : 'Enter PIN...'}
+                    placeholder="••••••••"
                     className={`w-full px-4 py-3 rounded-2xl border-2 text-sm font-mono tracking-wider focus:outline-none transition ${
                       resetPinError
                         ? 'border-rose-500 bg-rose-50/50 focus:border-rose-600'
@@ -3426,8 +3469,9 @@ export default function WeeklyStatementStudio({
                     type="button"
                     onClick={() => setShowResetPinText(!showResetPinText)}
                     className="absolute inset-y-0 end-0 px-3.5 flex items-center text-slate-400 hover:text-slate-600"
+                    title={showResetPinText ? (isAr ? 'إخفاء الرمز' : 'Hide PIN') : (isAr ? 'إظهار الرمز' : 'Show PIN')}
                   >
-                    <Eye className="w-4 h-4" />
+                    {showResetPinText ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
 
@@ -3464,6 +3508,170 @@ export default function WeeklyStatementStudio({
                 </button>
               </div>
 
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* Dedicated Batch Export All Stages (K to 12) Modal */}
+      {/* ------------------------------------------------------------- */}
+      {isBatchK12ModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-5 text-start overflow-hidden">
+            
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-800 text-white font-bold flex items-center justify-center shrink-0 shadow-md">
+                  <FolderArchive className="w-6 h-6 text-amber-300" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base sm:text-lg">
+                    {isAr ? '📦 حزمة تصدير كافة المراحل (K to 12) دفعة واحدة' : '📦 Batch Export All Stages (K to 12)'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {isAr
+                      ? `للأسبوع الدراسي ${selectedWeekNumber} - من مرحلة الروضة حتى الصف الثاني عشر`
+                      : `Week ${selectedWeekNumber} • Kindergarten to Grade 12`}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isBatchExporting) setIsBatchK12ModalOpen(false);
+                }}
+                disabled={isBatchExporting}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition disabled:opacity-30"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Feature Description Card */}
+            <div className="p-4 rounded-2xl bg-teal-50/70 border border-teal-200/80 text-xs text-teal-950 space-y-2 leading-relaxed">
+              <div className="flex items-center gap-2 font-black text-teal-900 text-xs sm:text-sm">
+                <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                <span>{isAr ? 'ميزة التصدير الإداري الشامل:' : 'Administrative Batch Archive:'}</span>
+              </div>
+              <ul className="list-disc list-inside space-y-1.5 text-teal-950 font-medium ps-1">
+                <li>
+                  {isAr
+                    ? 'يتم تنزيل أرشيف مضغوط ZIP يحتوي مجلداً منفصلاً لكل مرحلة دراسية (Kindergarten, Grade 1, Grade 2, ... Grade 12).'
+                    : 'Downloads an organized ZIP archive with a dedicated folder for each stage (Kindergarten, Grade 1, ... Grade 12).'}
+                </li>
+                <li>
+                  {isAr
+                    ? 'داخل كل مجلد مرحلة، يتوفر ملف Word (.docx) وملف PDF (.pdf) عالي الجودة ومطابق للنموذج الرسمي.'
+                    : 'Each stage folder contains both official Word (.docx) and high-fidelity PDF (.pdf) files.'}
+                </li>
+                <li>
+                  {isAr
+                    ? 'تعتمد الجداول تلقائياً قواعد الحصص الرسمية وخطة كل معلم مع جدول الكويزات.'
+                    : 'Preserves full PrimeTimetable scheduling rules and quiz projections.'}
+                </li>
+              </ul>
+            </div>
+
+            {/* Shift Filter Option */}
+            <div className="space-y-2">
+              <label className="text-xs font-black text-slate-800 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-teal-600" />
+                <span>{isAr ? 'اختر الفترة المراد تصدير تقاريرها:' : 'Select Target Shift:'}</span>
+              </label>
+
+              <div className="grid grid-cols-3 gap-2 bg-slate-100 p-1.5 rounded-2xl text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setBatchShiftChoice('mena')}
+                  disabled={isBatchExporting}
+                  className={`py-2 px-3 rounded-xl transition ${
+                    batchShiftChoice === 'mena'
+                      ? 'bg-teal-700 text-white shadow-sm'
+                      : 'text-slate-700 hover:text-slate-900'
+                  }`}
+                >
+                  {isAr ? 'الشرق الأوسط (MENA)' : 'MENA Shift'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBatchShiftChoice('us')}
+                  disabled={isBatchExporting}
+                  className={`py-2 px-3 rounded-xl transition ${
+                    batchShiftChoice === 'us'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-700 hover:text-slate-900'
+                  }`}
+                >
+                  {isAr ? 'أمريكا (US)' : 'US Shift'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBatchShiftChoice('both')}
+                  disabled={isBatchExporting}
+                  className={`py-2 px-3 rounded-xl transition ${
+                    batchShiftChoice === 'both'
+                      ? 'bg-slate-900 text-white shadow-sm'
+                      : 'text-slate-700 hover:text-slate-900'
+                  }`}
+                >
+                  {isAr ? 'الفترتان معاً' : 'Both Shifts'}
+                </button>
+              </div>
+            </div>
+
+            {/* Live Progress Bar when Generating */}
+            {isBatchExporting && batchProgress && (
+              <div className="p-4 bg-slate-50 rounded-2xl border border-teal-300 space-y-2">
+                <div className="flex items-center justify-between text-xs font-black text-slate-800">
+                  <span className="flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 animate-spin text-teal-600" />
+                    <span>{batchProgress.statusText}</span>
+                  </span>
+                  <span className="font-mono text-teal-800 bg-teal-100 px-2 py-0.5 rounded-md font-bold">
+                    {batchProgress.current} / {batchProgress.total}
+                  </span>
+                </div>
+                <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-teal-500 to-emerald-600 h-2.5 rounded-full transition-all duration-300"
+                    style={{
+                      width: `${Math.round((batchProgress.current / Math.max(1, batchProgress.total)) * 100)}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsBatchK12ModalOpen(false)}
+                disabled={isBatchExporting}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-100 transition disabled:opacity-40"
+              >
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+
+              <button
+                type="button"
+                disabled={isBatchExporting}
+                onClick={async () => {
+                  await handleBatchExportAllStages(batchShiftChoice);
+                }}
+                className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black text-xs sm:text-sm shadow-lg hover:shadow-xl transition disabled:opacity-50"
+              >
+                <FolderArchive className="w-4 h-4 text-amber-300" />
+                <span>
+                  {isBatchExporting
+                    ? (isAr ? 'جاري تجهيز وتنزيل الحزمة...' : 'Generating Archive...')
+                    : (isAr ? 'بدء تنزيل الحزمة (Word & PDF)' : 'Download Batch ZIP')}
+                </span>
+              </button>
             </div>
 
           </div>

@@ -162,6 +162,7 @@ export default function App() {
 
         {view === 'weekly-statement' && (
           <WeeklyStatementStudio
+            onClose={() => setView('home')}
             onOpenResult={handleOpenResult}
             uiLang={uiLang}
           />

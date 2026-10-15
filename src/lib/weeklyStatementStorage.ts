@@ -46,8 +46,8 @@ export function saveTeacherProfile(profile: Partial<TeacherProfile>): void {
   }
 }
 
-function getStorageKey(grade: string, weekNumber: number, shift: ShiftType): string {
-  const safeGrade = grade.toLowerCase().replace(/[^a-z0-9]/g, '_');
+function getStorageKey(grade: string | unknown, weekNumber: number, shift: ShiftType): string {
+  const safeGrade = String(grade || 'Grade 11').toLowerCase().replace(/[^a-z0-9]/g, '_');
   return `${STATEMENT_STORAGE_PREFIX}${safeGrade}_w${weekNumber}_${shift}`;
 }
 

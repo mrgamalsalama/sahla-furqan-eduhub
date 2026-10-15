@@ -57,9 +57,33 @@ create index if not exists idx_weekly_audit_lookup on public.weekly_statement_au
 const LOCAL_AUDIT_PREFIX = 'sahlah_stmt_audit_logs_';
 const LOCAL_STATUS_PREFIX = 'sahlah_stmt_status_';
 
-export function getStatementKey(grade: string, weekNumber: number, shift: ShiftType, subjectId: string): string {
-  const safeGrade = grade.toLowerCase().replace(/[^a-z0-9]/g, '_');
-  return `${safeGrade}_w${weekNumber}_${shift}_${subjectId.toLowerCase()}`;
+export function getStatementKey(
+  grade: unknown,
+  weekNumber: unknown,
+  shift: ShiftType | unknown,
+  subjectId: unknown
+): string {
+  const safeGrade = (typeof grade === 'string' ? grade : String(grade || 'Grade 11'))
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]/g, '_');
+
+  let rawSubject = '';
+  if (typeof subjectId === 'string') {
+    rawSubject = subjectId;
+  } else if (subjectId && typeof (subjectId as { id?: unknown }).id === 'string') {
+    rawSubject = (subjectId as { id: string }).id;
+  } else if (subjectId && typeof (subjectId as { subjectId?: unknown }).subjectId === 'string') {
+    rawSubject = (subjectId as { subjectId: string }).subjectId;
+  } else {
+    rawSubject = 'general';
+  }
+
+  const safeSubject = rawSubject.toLowerCase().trim().replace(/[^a-z0-9]/g, '_');
+  const safeShift = (typeof shift === 'string' && (shift === 'us' || shift === 'mena')) ? shift : 'mena';
+  const safeWeek = Number(weekNumber) || 1;
+
+  return `${safeGrade}_w${safeWeek}_${safeShift}_${safeSubject}`;
 }
 
 export function getLocalAuditLogs(statementKey: string): WeeklyStatementAuditLog[] {
@@ -269,46 +293,65 @@ export async function fetchAuditLogs(
   }
 
   try {
-    const { data, error } = await supabase
+    // 1. Primary query: exact match on statement_id (the standard foreign key)
+    const { data: primaryData, error: primaryError } = await supabase
       .from('weekly_statement_audit_logs')
       .select('*')
       .eq('statement_id', statementKey)
       .order('created_at', { ascending: false })
-      .limit(50);
+      .limit(100);
 
-    if (error) {
-      console.warn('Supabase audit logs fetch warning:', error.message);
-      return localLogs;
-    }
+    let supabaseLogs: WeeklyStatementAuditLog[] = [];
 
-    if (data && Array.isArray(data) && data.length > 0) {
-      // Merge unique logs
-      const combined = [...data, ...localLogs];
-      const seen = new Set<string>();
-      const deduped: WeeklyStatementAuditLog[] = [];
-      for (const item of combined) {
-        if (!seen.has(item.id)) {
-          seen.add(item.id);
-          deduped.push({
-            id: item.id,
-            statement_id: item.statement_id,
-            grade: item.grade,
-            week_number: item.week_number,
-            shift: item.shift,
-            subject_id: item.subject_id,
-            action: item.action,
-            old_content: item.old_content,
-            new_content: item.new_content,
-            changed_by: item.changed_by,
-            reason: item.reason,
-            created_at: item.created_at,
-          });
-        }
+    if (!primaryError && primaryData && primaryData.length > 0) {
+      supabaseLogs = primaryData as WeeklyStatementAuditLog[];
+    } else {
+      // 2. Fallback query: matching by individual dimension columns in case statement_id has variation
+      const safeGrade = grade.toLowerCase().trim().replace(/[^a-z0-9]/g, '_');
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('weekly_statement_audit_logs')
+        .select('*')
+        .eq('week_number', weekNumber)
+        .ilike('shift', shift)
+        .ilike('subject_id', subjectId)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (!fallbackError && fallbackData && fallbackData.length > 0) {
+        supabaseLogs = (fallbackData as WeeklyStatementAuditLog[]).filter((item) => {
+          const itemGrade = (item.grade || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '_');
+          return itemGrade === safeGrade || item.grade === grade;
+        });
       }
-      return deduped.sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
     }
+
+    // Merge Supabase records with local logs so any instant action is immediately visible
+    const combined = [...supabaseLogs, ...localLogs];
+    const seen = new Set<string>();
+    const deduped: WeeklyStatementAuditLog[] = [];
+    for (const item of combined) {
+      if (item && item.id && !seen.has(item.id)) {
+        seen.add(item.id);
+        deduped.push({
+          id: item.id,
+          statement_id: item.statement_id || statementKey,
+          grade: item.grade || grade,
+          week_number: item.week_number || weekNumber,
+          shift: item.shift || shift,
+          subject_id: item.subject_id || subjectId,
+          action: item.action,
+          old_content: item.old_content,
+          new_content: item.new_content,
+          changed_by: item.changed_by,
+          reason: item.reason,
+          created_at: item.created_at,
+        });
+      }
+    }
+
+    return deduped.sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
   } catch (err) {
     console.warn('Failed to fetch audit logs from Supabase:', err);
   }
@@ -332,7 +375,7 @@ export async function submitAndLockSubjectPlan(params: {
   dailyPlans: Record<number, WeeklySubjectDailyPlan>;
   quizzes?: WeeklyQuizItem[];
   oldPlans?: Record<number, WeeklySubjectDailyPlan>;
-}): Promise<{ success: boolean; status: WeeklySubjectStatus; error?: string }> {
+}): Promise<{ success: boolean; status: WeeklySubjectStatus; auditLog?: WeeklyStatementAuditLog; error?: string }> {
   const {
     grade,
     weekNumber,
@@ -438,7 +481,7 @@ export async function submitAndLockSubjectPlan(params: {
     }
   }
 
-  return { success: true, status: updatedStatus };
+  return { success: true, status: updatedStatus, auditLog };
 }
 
 /**
@@ -453,7 +496,7 @@ export async function unlockSubjectPlan(params: {
   teacherName: string;
   reason: string;
   currentPlans: Record<number, WeeklySubjectDailyPlan>;
-}): Promise<{ success: boolean; status: WeeklySubjectStatus; error?: string }> {
+}): Promise<{ success: boolean; status: WeeklySubjectStatus; auditLog?: WeeklyStatementAuditLog; error?: string }> {
   const {
     grade,
     weekNumber,
@@ -542,5 +585,5 @@ export async function unlockSubjectPlan(params: {
     }
   }
 
-  return { success: true, status: updatedStatus };
+  return { success: true, status: updatedStatus, auditLog };
 }
