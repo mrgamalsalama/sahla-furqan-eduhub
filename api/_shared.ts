@@ -6,18 +6,44 @@ import { SAHLAH_LOGO, FURQAN_LOGO } from './logos.js';
 // Clean Institution Headers
 function getInstitutionHeader(settings: any, outputType?: string): string {
   const isAr = settings.contentLanguage === 'ar';
-  const inst = settings.institution || 'sahlah';
+  const inst = settings.institution || 'both';
 
   // For official Weekly Lesson Plan: Render exact template header (Title + Logo)
   if (outputType === 'lesson-plan') {
-    const logoSrc = inst === 'furqan' ? FURQAN_LOGO : SAHLAH_LOGO;
-    const logoAlt = inst === 'furqan' ? 'Al-Furqan School' : 'SAHLAH';
+    let logoHtml = '';
+    if (inst === 'both') {
+      logoHtml = `<div style="display:flex; justify-content:center; align-items:center; gap:20px; margin-bottom:8px;">
+        <img src="${SAHLAH_LOGO}" alt="أكاديمية سهلة الدولية" style="height: 38px; max-width: 170px; object-fit: contain;" />
+        <div style="width:1px; height:30px; background:#cbd5e1;"></div>
+        <img src="${FURQAN_LOGO}" alt="مدارس الفرقان العالمية" style="height: 44px; max-width: 120px; object-fit: contain;" />
+      </div>`;
+    } else if (inst === 'furqan') {
+      logoHtml = `<div style="margin-bottom: 6px;">
+        <img src="${FURQAN_LOGO}" alt="مدارس الفرقان العالمية" style="height: 48px; max-width: 220px; object-fit: contain; display: inline-block;" />
+      </div>`;
+    } else {
+      logoHtml = `<div style="margin-bottom: 6px;">
+        <img src="${SAHLAH_LOGO}" alt="أكاديمية سهلة الدولية" style="height: 40px; max-width: 220px; object-fit: contain; display: inline-block;" />
+      </div>`;
+    }
+
     return `<div class="sahlah-lesson-header" style="text-align: center; margin-bottom: 20px;">
-      <div style="font-size: 16px; font-weight: 800; color: #1e293b; margin-bottom: 12px; letter-spacing: 0.5px;">${isAr ? 'خطة الدرس الأسبوعية' : 'Weekly Lesson Plan'}</div>
-      <div style="margin-bottom: 6px;">
-        <img src="${logoSrc}" alt="${logoAlt}" style="height: 44px; max-width: 220px; object-fit: contain; display: inline-block;" />
-      </div>
+      <div style="font-size: 16px; font-weight: 800; color: #1e293b; margin-bottom: 12px; letter-spacing: 0.5px;">${isAr ? 'خطة الدرس الأسبوعية المعتمدة' : 'Official Weekly Lesson Plan'}</div>
+      ${logoHtml}
     </div>`;
+  }
+
+  let logosHtml = '';
+  if (inst === 'both') {
+    logosHtml = `<div style="display:flex; justify-content:center; align-items:center; gap:16px; margin-bottom:8px;">
+      <img src="${SAHLAH_LOGO}" alt="أكاديمية سهلة" style="height:32px; max-width:140px; object-fit:contain;" />
+      <div style="width:1px; height:24px; background:#cbd5e1;"></div>
+      <img src="${FURQAN_LOGO}" alt="الفرقان" style="height:36px; max-width:90px; object-fit:contain;" />
+    </div>`;
+  } else if (inst === 'furqan') {
+    logosHtml = `<div style="margin-bottom:8px;"><img src="${FURQAN_LOGO}" alt="الفرقان" style="height:40px; object-fit:contain; display:inline-block;" /></div>`;
+  } else {
+    logosHtml = `<div style="margin-bottom:8px;"><img src="${SAHLAH_LOGO}" alt="سهلة" style="height:34px; object-fit:contain; display:inline-block;" /></div>`;
   }
 
   const titleText =
@@ -28,6 +54,7 @@ function getInstitutionHeader(settings: any, outputType?: string): string {
       : (isAr ? 'أَكَادِيمِيَّةُ سَهْلَةَ الدَّوْلِيَّةُ & مَدْرَسَةُ الْفُرْقَانِ الْعَالَمِيَّةُ' : 'Sahlah Academy & Al-Furqan International School');
 
   return `<div style="text-align:center; margin-bottom:18px; padding-bottom:12px; border-bottom:2px solid #e2e8f0;">
+    ${logosHtml}
     <h2 style="font-size:1.35rem; font-weight:800; color:#1e3a8a; margin:0 0 4px 0;">${titleText}</h2>
   </div>`;
 }

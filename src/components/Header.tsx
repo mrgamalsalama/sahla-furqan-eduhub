@@ -4,6 +4,7 @@ import {
   PanelRightClose, PanelRightOpen
 } from 'lucide-react';
 import type { View } from '@/types';
+import { INSTITUTIONS } from '@/types';
 import type { UILang } from '@/lib/i18n';
 import { t } from '@/lib/i18n';
 import type { User } from '@supabase/supabase-js';
@@ -54,7 +55,7 @@ export default function Header({
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs no-print">
       <div className="w-full px-3 sm:px-6">
-        <div className="flex items-center justify-between h-16 sm:h-20">
+        <div className="flex items-center justify-between h-16">
           
           {/* Left section (Right in RTL): Sidebar Toggles + Logo */}
           <div className="flex items-center gap-2 sm:gap-3">
@@ -90,24 +91,35 @@ export default function Header({
               </button>
             )}
 
-            {/* Official Platform Logo - Clickable link to Home (/) */}
+            {/* Brand Logos (Sahlah & Furqan) & Title */}
             <button
-              type="button"
               onClick={() => onNavigate('home')}
-              className="flex items-center justify-center focus:outline-none hover:opacity-95 transition-opacity p-1 shrink-0 overflow-visible"
-              title={isAr ? 'الرئيسية - مدارس الفرقان العالمية' : 'Home - Al-Furqan Schools'}
+              className="flex items-center gap-2.5 sm:gap-3.5 group focus:outline-none"
+              title={isAr ? 'الرئيسية - سَهلة & الفُرقان إديو هَب' : 'Home - Sahlah & Al-Furqan EduHub'}
             >
-              <img
-                src="/Logo.png"
-                alt={isAr ? 'شعار مدارس الفرقان العالمية' : 'Al-Furqan International School Logo'}
-                className="h-12 sm:h-14 md:h-16 w-auto max-h-16 object-contain transition-transform duration-150 hover:scale-[1.02] shrink-0"
-                onError={(e) => {
-                  const target = e.currentTarget;
-                  if (!target.src.includes('logo.png') && !target.src.startsWith('data:')) {
-                    target.src = '/logo.png';
-                  }
-                }}
-              />
+              {/* Dual Official Institution Logos */}
+              <div className="flex items-center gap-2 bg-slate-50/90 hover:bg-slate-100 p-1.5 sm:p-2 rounded-xl border border-slate-200/90 transition shadow-2xs group-hover:border-teal-400">
+                <img
+                  src={INSTITUTIONS.sahlah.logo}
+                  alt="أكاديمية سهلة الدولية"
+                  className="h-6 sm:h-7 w-auto max-w-[85px] sm:max-w-[105px] object-contain"
+                />
+                <div className="h-5 w-px bg-slate-300" />
+                <img
+                  src={INSTITUTIONS.furqan.logo}
+                  alt="مدارس الفرقان العالمية"
+                  className="h-6 sm:h-7 w-auto object-contain"
+                />
+              </div>
+
+              <div className={isAr ? 'text-right' : 'text-left'}>
+                <h1 className="text-xs sm:text-sm font-black text-slate-900 leading-tight">
+                  {s.brandName}
+                </h1>
+                <p className="text-[9px] sm:text-[10px] text-teal-800 font-bold leading-tight hidden xs:block">
+                  {s.brandSub}
+                </p>
+              </div>
             </button>
           </div>
 
