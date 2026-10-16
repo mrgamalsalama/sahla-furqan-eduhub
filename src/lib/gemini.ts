@@ -99,7 +99,14 @@ export async function generateContent(
     throw new Error(errorData.error || 'فشل توليد المحتوى، يرجى المحاولة بعد قليل.');
   }
 
-  return response.json();
+  const data = await response.json();
+  const rawHtml = data.contentHtml || data.html || '';
+  return {
+    ...data,
+    contentHtml: rawHtml,
+    html: rawHtml,
+    title: data.title || '',
+  };
 }
 
 export async function askEducationalAdvisor(

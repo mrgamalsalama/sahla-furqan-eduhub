@@ -277,7 +277,9 @@ export interface CommunityResource extends SavedLesson {
 
 export interface GenerationResult {
   contentHtml: string;
+  html?: string;
   title: string;
+  qtiXml?: string;
 }
 
 export interface SubjectOption {

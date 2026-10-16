@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import Sidebar from '@/components/Sidebar';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import HomePage from '@/components/HomePage';
 import EditorPage from '@/components/EditorPage';
 import LibraryPage from '@/components/LibraryPage';
@@ -127,8 +128,9 @@ export default function App() {
   };
 
   function handleOpenResult(result: GenerationResult, outputType: OutputType) {
+    const rawHtml = result.html || result.contentHtml || '';
     setEditorState({
-      html: result.html,
+      html: rawHtml,
       title: result.title,
       outputType,
       editingLesson: null,
@@ -195,8 +197,9 @@ export default function App() {
 
         {/* Main Content View Container */}
         <main className="flex-1 overflow-y-auto min-w-0 transition-all duration-300 flex flex-col justify-between">
-          <div className="flex-1">
-            {view === 'home' && (
+          <ErrorBoundary uiLang={uiLang} onReset={() => setView('home')}>
+            <div className="flex-1">
+              {view === 'home' && (
               <HomePage
                 onOpenResult={handleOpenResult}
                 uiLang={uiLang}
@@ -269,13 +272,8 @@ export default function App() {
 
             {view === 'editor' && (
               <EditorPage
-                initialHtml={
-                  editorState?.html ||
-                  (uiLang === 'ar'
-                    ? '<h1 style="color: #0f766e; text-align: center; font-family: Cairo, sans-serif;">مستند إبداعي جديد</h1><p style="text-align: center; color: #64748b; font-size: 14px;">أهلاً بك في المحرر الإبداعي الشامل. يمكنك هنا كتابة وتنسيق محتواك التعليمي، تنسيق الجداول، وتطبيق الخطوط العربية والأكاديمية، والاستفادة من أدوات الذكاء الاصطناعي (الترجمة، تصنيف بلوم و DoK، الأنشطة التفاعلية، والتمايز)، والتصدير إلى Word و PDF و PowerPoint.</p><hr/><p>ابدأ بكتابة الدرس أو المستند التعليمي هنا...</p>'
-                    : '<h1 style="color: #0f766e; text-align: center; font-family: Poppins, sans-serif;">New Creative Document</h1><p style="text-align: center; color: #64748b; font-size: 14px;">Welcome to the Creative Document Editor. Type and format your educational content, insert tables, apply premium fonts, leverage AI pedagogical tools, and export to Word, PDF, and PowerPoint.</p><hr/><p>Start drafting your educational content here...</p>')
-                }
-                title={editorState?.title || (uiLang === 'ar' ? 'مستند إبداعي جديد' : 'New Creative Document')}
+                initialHtml={editorState?.html || '<p><br></p>'}
+                title={editorState?.title || (uiLang === 'ar' ? 'مستند تحرير جديد' : 'New Document')}
                 outputType={editorState?.outputType || 'lesson-plan'}
                 onBack={handleBack}
                 editingLesson={editorState?.editingLesson || null}
@@ -303,6 +301,7 @@ export default function App() {
               />
             )}
           </div>
+        </ErrorBoundary>
 
           {/* Clean App Footer */}
           <footer className="border-t border-slate-200 bg-white py-6 no-print mt-12">

@@ -68,9 +68,9 @@ const FONT_SIZES = [
 ];
 
 export default function EditorPage({
-  initialHtml,
-  title,
-  outputType,
+  initialHtml = '',
+  title = '',
+  outputType = 'lesson-plan',
   onBack,
   editingLesson,
   uiLang,
@@ -81,26 +81,35 @@ export default function EditorPage({
   const isAr = uiLang === 'ar';
   const outputLabels = isAr ? OUTPUT_LABELS_AR : OUTPUT_LABELS_EN;
 
+  const safeHtml = typeof initialHtml === 'string' ? initialHtml : '';
+  const safeTitle = typeof title === 'string' && title.trim() ? title : (isAr ? 'مستند تحرير جديد' : 'New Document');
+
   const editorRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const [cloudSaving, setCloudSaving] = useState(false);
   const [cloudSyncMsg, setCloudSyncMsg] = useState<string | null>(null);
   const [exporting, setExporting] = useState<'word' | null>(null);
-  const [currentTitle, setCurrentTitle] = useState(title);
+  const [currentTitle, setCurrentTitle] = useState(safeTitle);
   const [lessonId] = useState(editingLesson?.id || uid());
 
   // تحديد اتجاه المحتوى والخط الافتراضي
-  const isContentArabic = /[\u0600-\u06FF]/.test(initialHtml.slice(0, 500));
+  const isContentArabic = /[\u0600-\u06FF]/.test(safeHtml.slice(0, 500));
   const [activeFont, setActiveFont] = useState(isContentArabic ? 'Cairo, sans-serif' : 'inherit');
   const [activeFontSize, setActiveFontSize] = useState('3');
   const [activeDir, setActiveDir] = useState<'rtl' | 'ltr'>(isContentArabic ? 'rtl' : 'ltr');
 
   useEffect(() => {
-    if (editorRef.current) {
-      editorRef.current.innerHTML = initialHtml;
+    if (safeTitle) {
+      setCurrentTitle(safeTitle);
     }
-  }, [initialHtml]);
+  }, [safeTitle]);
+
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.innerHTML = safeHtml;
+    }
+  }, [safeHtml]);
 
   const exec = useCallback((command: string, value?: string) => {
     document.execCommand(command, false, value);
@@ -815,7 +824,7 @@ ${manifestResources}  </resources>
 
         {/* زر الترجمة الذكية للغة الأخرى */}
         <TranslateContentButton
-          getHtmlContent={() => editorRef.current?.innerHTML || initialHtml || ''}
+          getHtmlContent={() => editorRef.current?.innerHTML || safeHtml}
           onTranslationComplete={handleTranslationComplete}
           uiLang={uiLang}
         />
@@ -918,16 +927,16 @@ ${manifestResources}  </resources>
       <InteractiveActivitiesModal
         isOpen={interactiveModalOpen}
         onClose={() => setInteractiveModalOpen(false)}
-        htmlContent={editorRef.current?.innerHTML || initialHtml || ''}
+        htmlContent={editorRef.current?.innerHTML || safeHtml}
         uiLang={uiLang}
-        lessonTitle={currentTitle || title}
+        lessonTitle={currentTitle || safeTitle}
       />
 
       {/* 🧠 DOK & Bloom Cognitive Levels Analyzer Modal */}
       <DokBloomAnalyzerModal
         isOpen={dokAnalyzerModalOpen}
         onClose={() => setDokAnalyzerModalOpen(false)}
-        htmlContent={editorRef.current?.innerHTML || initialHtml || ''}
+        htmlContent={editorRef.current?.innerHTML || safeHtml}
         uiLang={uiLang}
         onInjectQuestion={handleInjectDokQuestion}
       />
@@ -936,7 +945,7 @@ ${manifestResources}  </resources>
       <DifferentiatedLearningModal
         isOpen={differentiationModalOpen}
         onClose={() => setDifferentiationModalOpen(false)}
-        htmlContent={editorRef.current?.innerHTML || initialHtml || ''}
+        htmlContent={editorRef.current?.innerHTML || safeHtml}
         uiLang={uiLang}
         onApplyAdaptedContent={handleApplyDifferentiatedContent}
       />

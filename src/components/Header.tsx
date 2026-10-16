@@ -54,7 +54,7 @@ export default function Header({
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs no-print">
       <div className="w-full px-3 sm:px-6">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between h-16 sm:h-20">
           
           {/* Left section (Right in RTL): Sidebar Toggles + Logo */}
           <div className="flex items-center gap-2 sm:gap-3">
@@ -90,85 +90,24 @@ export default function Header({
               </button>
             )}
 
-            {/* Brand Logo & Name */}
+            {/* Official Platform Logo - Clickable link to Home (/) */}
             <button
+              type="button"
               onClick={() => onNavigate('home')}
-              className="flex items-center gap-2.5 sm:gap-3 group focus:outline-none"
+              className="flex items-center justify-center focus:outline-none hover:opacity-95 transition-opacity p-1 shrink-0 overflow-visible"
+              title={isAr ? 'الرئيسية - مدارس الفرقان العالمية' : 'Home - Al-Furqan Schools'}
             >
-              {/* أيقونة المعلم الذكي */}
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-blue-900 via-teal-800 to-teal-600 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform p-1.5 shrink-0">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="w-full h-full text-white"
-                >
-                  <path
-                    d="M17.5 2.5L18.2 4.2L20 5L18.2 5.8L17.5 7.5L16.8 5.8L15 5L16.8 4.2L17.5 2.5Z"
-                    fill="currentColor"
-                  />
-                  <path
-                    d="M6 7.5C6 4.5 8.5 2.5 12 2.5C13.5 2.5 14.5 2.8 15 3.2"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M7 8C6 9 6 11 6 12C6 15.3 8.7 17.5 12 17.5C15.3 17.5 18 15.3 18 12C18 11 18 9 17 8"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                  />
-                  <rect
-                    x="7"
-                    y="9.5"
-                    width="4"
-                    height="3"
-                    rx="1"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                  />
-                  <rect
-                    x="13"
-                    y="9.5"
-                    width="4"
-                    height="3"
-                    rx="1"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                  />
-                  <line
-                    x1="11"
-                    y1="11"
-                    x2="13"
-                    y2="11"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                  />
-                  <path
-                    d="M10.5 14.2C11 14.7 11.5 14.9 12 14.9C12.5 14.9 13 14.7 13.5 14.2"
-                    stroke="currentColor"
-                    strokeWidth="1.3"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M5 21.5C5.5 19 8 18 10 18L12 19.5L14 18C16 18 18.5 19 19 21.5"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-
-              <div className={isAr ? 'text-right' : 'text-left'}>
-                <h1 className="text-sm sm:text-base font-black text-slate-900 leading-tight">
-                  {s.brandName}
-                </h1>
-                <p className="text-[10px] sm:text-[11px] text-teal-800 font-bold leading-tight hidden xs:block">
-                  {s.brandSub}
-                </p>
-              </div>
+              <img
+                src="/Logo.png"
+                alt={isAr ? 'شعار مدارس الفرقان العالمية' : 'Al-Furqan International School Logo'}
+                className="h-12 sm:h-14 md:h-16 w-auto max-h-16 object-contain transition-transform duration-150 hover:scale-[1.02] shrink-0"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (!target.src.includes('logo.png') && !target.src.startsWith('data:')) {
+                    target.src = '/logo.png';
+                  }
+                }}
+              />
             </button>
           </div>
 

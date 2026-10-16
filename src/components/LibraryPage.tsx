@@ -51,6 +51,7 @@ export default function LibraryPage({
   const [loading, setLoading] = useState(true);
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
+  const [lessonToDelete, setLessonToDelete] = useState<SavedLesson | null>(null);
 
   useEffect(() => {
     loadLibrary();

@@ -162,10 +162,18 @@ export default function Sidebar({
       
       {/* Mobile Drawer Top Banner */}
       <div className="md:hidden flex items-center justify-between p-4 border-b border-slate-200 bg-slate-50">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-900 to-teal-600 flex items-center justify-center text-white font-black text-xs shadow-xs">
-            S
-          </div>
+        <div className="flex items-center gap-2.5">
+          <img
+            src="/Logo.png"
+            alt="Logo"
+            className="w-9 h-9 object-contain shrink-0"
+            onError={(e) => {
+              const target = e.currentTarget;
+              if (!target.src.includes('logo.png')) {
+                target.src = '/logo.png';
+              }
+            }}
+          />
           <span className="font-extrabold text-sm text-slate-800">
             {isAr ? 'قائمة التنقل' : 'Navigation Menu'}
           </span>

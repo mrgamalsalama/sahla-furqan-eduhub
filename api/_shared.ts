@@ -99,11 +99,10 @@ export function getApiKey(): string | undefined {
 }
 
 const CANDIDATE_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-3.1-flash-lite',
-  'gemini-flash-latest',
   'gemini-3.8-flash',
-  'gemini-3.5-flash',
+  'gemini-flash-latest',
+  'gemini-3.1-flash-lite',
+  'gemini-4-argon',
 ];
 
 let currentKeyIndex = 0;
@@ -1194,7 +1193,7 @@ Strict rule: Use the attached content below as the primary reference for this ge
       qtiXml = xmlMatch[1].replace(/^<!\[CDATA\[/i, '').replace(/\]\]>$/i, '').trim();
     }
 
-    return res.status(200).json({ contentHtml: fullHtml, title, qtiXml });
+    return res.status(200).json({ contentHtml: fullHtml, html: fullHtml, title, qtiXml });
   } catch (error: any) {
     console.error('executeGenerate error:', error);
     const { status, message } = formatApiError(error);
