@@ -150,11 +150,11 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
               }`}
             >
               <div className="text-sm font-bold mb-1 flex items-center justify-between">
-                <span>{isAr ? 'امتحان بلوم الشامل (50 سؤالاً)' : '50-MCQ Bloom Exam'}</span>
+                <span>{isAr ? 'امتحان بلوم الشامل (20 سؤالاً معيارياً)' : '20-MCQ Bloom Exam'}</span>
                 {examType === 'qti-exam' && <CheckCircle2 className="w-4 h-4 text-blue-600" />}
               </div>
               <p className="text-xs text-slate-600 font-normal">
-                {isAr ? 'موزعة: 15 تذكر، 20 تطبيق، 15 تفكير عليا مع مصفوفة' : '15 remember, 20 apply, 15 HOTS'}
+                {isAr ? 'موزعة: 6 تذكر، 8 تطبيق، 6 تفكير عليا مع مصفوفة وQTI' : '6 remember, 8 apply, 6 HOTS with QTI'}
               </p>
             </button>
 

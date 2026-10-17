@@ -87,9 +87,9 @@ export async function generateContent(
     }
   }
 
-  // إضافة مؤقت إلغاء للعميل (55 ثانية) ليعطي رسالة ودية قبل أن يفصل سيرفر Vercel قسراً
+  // مؤقت أمان للعميل (85 ثانية) لمنع تعليق الصفحة في الحالات القصوى
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 55000);
+  const timeoutId = setTimeout(() => controller.abort(), 85000);
 
   try {
     const response = await fetch('/api/generate', {
@@ -300,18 +300,39 @@ export interface VoiceToLessonResponse {
 export async function parseAndGenerateVoiceToLesson(
   payload: VoiceToLessonPayload
 ): Promise<VoiceToLessonResponse> {
-  const response = await fetch('/api/voice-to-lesson', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 85000);
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || 'تعذر معالجة التسجيل الصوتي.');
+  try {
+    const response = await fetch('/api/voice-to-lesson', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      if (response.status === 504) {
+        throw new Error(
+          payload.contentLanguage === 'en'
+            ? 'The AI processing took longer than expected. Please try again with a shorter prompt.'
+            : 'استغرقت معالجة التسجيل وقتاً أطول من المعتاد (Timeout 504). يرجى تقليل تفاصيل التسجيل أو المحاولة مرة أخرى.'
+        );
+      }
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'تعذر معالجة التسجيل الصوتي.');
+    }
+
+    return response.json();
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error('استغرقت معالجة الصوت وقتاً طويلاً وتم إلغاء الطلب لتفادي تعليق الصفحة. يرجى إعادة المحاولة.');
+    }
+    throw err;
   }
-
-  return response.json();
 }
 
 export async function differentiateContent(payload: {

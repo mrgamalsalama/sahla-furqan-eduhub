@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import fs from 'node:fs';
 import path from 'node:path';
 import { SAHLAH_LOGO, FURQAN_LOGO } from './logos.js';
@@ -125,23 +125,31 @@ export function getApiKey(): string | undefined {
   return keys.length > 0 ? keys[0] : undefined;
 }
 
+// Order prioritized by stability, speed, and eliminating 503 high demand stalls
 const CANDIDATE_MODELS = [
-  'gemini-3.8-flash',
   'gemini-flash-latest',
   'gemini-3.1-flash-lite',
-  'gemini-4-argon',
+  'gemini-3.8-flash',
 ];
 
 let currentKeyIndex = 0;
 
-export async function callGemini(contents: any) {
+export async function callGemini(contents: any, options?: { fast?: boolean; model?: string }) {
   const keys = getApiKeys();
   if (keys.length === 0) {
     const err = new Error(
-      'مفتاح الذكاء الاصطناعي (GEMINI_API_KEY) غير مهيأ في بيئة Vercel. يرجى إضافة GEMINI_API_KEY في Project Settings > Environment Variables.'
+      'مفتاح الذكاء الاصطناعي (GEMINI_API_KEY) غير مهيأ. يرجى إضافة GEMINI_API_KEY في إعدادات البيئة.'
     );
     (err as any).statusCode = 401;
     throw err;
+  }
+
+  // Determine model fallback sequence
+  let modelsToTry = [...CANDIDATE_MODELS];
+  if (options?.model) {
+    modelsToTry = [options.model, ...modelsToTry.filter((m) => m !== options.model)];
+  } else if (options?.fast) {
+    modelsToTry = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash'];
   }
 
   // Round-robin index rotation across available keys to distribute load
@@ -167,11 +175,16 @@ export async function callGemini(contents: any) {
       },
     });
 
-    for (const model of CANDIDATE_MODELS) {
+    for (const model of modelsToTry) {
       try {
         const response = await ai.models.generateContent({
           model,
           contents,
+          config: {
+            thinkingConfig: {
+              thinkingLevel: options?.fast ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW,
+            },
+          },
         });
         return response;
       } catch (err: any) {
@@ -189,7 +202,7 @@ export async function callGemini(contents: any) {
           break; // break to next API key
         }
 
-        console.warn(`Model ${model} failed, switching immediately:`, errMessage.slice(0, 150));
+        console.warn(`Model ${model} failed, switching to fallback candidate:`, errMessage.slice(0, 150));
         lastError = err;
       }
     }
@@ -448,7 +461,7 @@ function buildStandardizedPrompt(settings: any, isAr: boolean, ctx: string): str
       : '';
 
     return `${ctx}${sourceDirective}${formatDirectiveAr}
-المَطْلُوبُ: تَوْلِيدُ "اخْتِبَارٍ مِعْيَارِيٍّ / تَشْخِيصِيٍّ مُتَكَامِلٍ" بِاللُّغَةِ الْعَرَبِيَّةِ وَمَشْكُولٍ بِالْكَامِلِ تَشْكِيلاً تَامّاً (100%) عَلَى شَكْلِ HTML احْتِرَافِيٍّ جَاهِزٍ لِلْعَرْضِ وَالطِّبَاعَةِ وَالتَّصْدِيرِ لِلِاعْتِمَادِ التَّرْبَوِيِّ.
+المَطْلُوبُ: تَوْلِيدُ "اخْتِبَارٍ مِعْيَارِيٍّ / تَشْخِيصِيٍّ مُتَكَامِلٍ" بِاللُّغَةِ الْعَرَبِيَّةِ بِلُغَةٍ سَلِيمَةٍ وَمَضْبُوطَةٍ عَلَى شَكْلِ HTML احْتِرَافِيٍّ جَاهِزٍ لِلْعَرْضِ وَالطِّبَاعَةِ وَالتَّصْدِيرِ لِلِاعْتِمَادِ التَّرْبَوِيِّ (مِنْ 10 إِلَى 12 سُؤَالاً مُعَيَّراً).
 تَفَاصِيلُ الْإِطَارِ الْمِعْيَارِيِّ الْمُسْتَهْدَفِ:
 ${frameworkDetails}
 ${subCriteriaText}
@@ -570,8 +583,8 @@ function buildBasePrompt(settings: any, outputType: string): string {
   if (isAr) {
     const ctx = `أَنْتَ مُعَلِّمٌ خَبِيرٌ وَمُسَاعِدٌ تَرْبَوِيٌّ مُتَقَدِّمٌ لِإِعْدَادِ الدُّرُوسِ وَالْمَنَاهِجِ التَّعْلِيمِيَّةِ التَّابِعَةِ لِأَكَادِيمِيَّةِ سَهْلَةَ الدَّوْلِيَّةِ وَمَدْرَسَةِ الْفُرْقَانِ الْعَالَمِيَّةِ، وَخَبِيرٌ مُتَمَرِّسٌ فِي التَّدْرِيسِ وَالتَّقْيِيمِ لِلُّغَةِ الْعَرَبِيَّةِ وَالْمَنَاهِجِ الدَّوْلِيَّةِ.
 
-قَاعِدَةٌ لُغَوِيَّةٌ إِلْزَامِيَّةٌ وَصَارِمَةٌ:
-يَجِبُ تَشْكِيلُ وَضَبْطُ جَمِيعِ النُّصُوصِ، الْعَنَاوِينِ، الْفِقْرَاتِ، الْأَسْئِلَةِ، وَالْخِيَارَاتِ الْمَكْتُوبَةِ بِاللُّغَةِ الْعَرَبِيَّةِ تَشْكِيلاً تَامّاً وَكَامِلاً (حَرَكَاتُ الْإِعْرَابِ وَالْبِنْيَةِ: الْفَتْحَةُ، الضَّمَّةُ، الْكَسْرَةُ، السُّكُونُ، التَّنْوِينُ، وَالشَّدَّةُ) ضَبْطاً نَحْوِيّاً وَصَرْفِيّاً دَقِيقاً بِنِسْبَةِ 100%. لَا تَتْرُكْ أَيَّ كَلِمَةٍ عَرَبِيَّةٍ دُونَ تَشْكِيلٍ تَامٍّ.
+قَاعِدَةٌ لُغَوِيَّةٌ وَإِمْلَائِيَّةٌ:
+يَجِبُ ضَبْطُ الْعَنَاوِينِ الرَّئِيسَةِ وَالْمَفَاهِيمِ وَالْكَلِمَاتِ الْمِفْتَاحِيَّةِ وَالْأَسْئِلَةِ ضَبْطاً نَحْوِيّاً سَلِيماً وَمُتْقَناً بِالشَّكْلِ مَعَ سَلَاسَةِ الصِّيَاغَةِ وَالْإِيجَازِ التَّرْبَوِيِّ دُونَ إِثْقَالٍ مُعِيقٍ لِسُرْعَةِ الْقِرَاءَةِ.
 
 مَعْلُومَاتُ الدَّرْسِ:
 - الْمَادَّةُ: ${settings.subject || 'غَيْرُ مُحَدَّدٍ'}
@@ -598,7 +611,7 @@ ${teacherPromptText}`;
         const title = settings.lessonTitle || '—';
 
         return `${ctx}
-الْمَطْلُوبُ: تَوْلِيدُ "خُطَّةِ دَرْسٍ أُسْبُوعِيَّةٍ مُعْتَمَدَةٍ" شَامِلَةٍ وَعَمِيقَةٍ تَرْبَوِيّاً تُطَابِقُ حَرْفِيّاً النَّمُوذَجَ الرَّسْمِيَّ الْمُعْتَمَدَ لِأَكَادِيمِيَّةِ سَهْلَةَ الدَّوْلِيَّةِ وَمَدَارِسِ الْفُرْقَانِ، مَشْكُولَةً بِالْكَامِلِ (100%) دُونَ أَيِّ اخْتِصَارٍ مُخِلٍّ.
+الْمَطْلُوبُ: تَوْلِيدُ "خُطَّةِ دَرْسٍ أُسْبُوعِيَّةٍ مُعْتَمَدَةٍ" شَامِلَةٍ وَعَمِيقَةٍ تَرْبَوِيّاً تُطَابِقُ حَرْفِيّاً النَّمُوذَجَ الرَّسْمِيَّ الْمُعْتَمَدَ لِأَكَادِيمِيَّةِ سَهْلَةَ الدَّوْلِيَّةِ وَمَدَارِسِ الْفُرْقَانِ، مَضْبُوطَةً لُغَوِيّاً بِصِيَاغَةٍ تَرْبَوِيَّةٍ دَقِيقَةٍ.
 
 قَوَاعِدُ الصِّيَاغَةِ وَالِاحْتِرَافِيَّةِ التَّرْبَوِيَّةِ:
 - مَمْنُوعٌ تَمَاماً كِتَابَةُ أَيِّ كَلَامٍ حِوَارِيٍّ أَوْ مُقَدِّمَاتٍ شَخْصِيَّةٍ مِثْلِ: "بصفتي معلماً خبيراً..." أَوْ "يسرني أن أقدم لك...".
@@ -819,16 +832,16 @@ ${lmsXmlDirective}
         const grd = settings.grade || 'الصَّفُّ السَّادِسُ';
 
         return `${ctx}
-الْمَطْلُوبُ حَصْرِيّاً: تَوْلِيدُ "امْتِحَانِ اخْتِيَارٍ مِنْ مُتَعَدِّدٍ شَامِلٍ (50 سُؤَال QTI)" بِاللُّغَةِ الْعَرَبِيَّةِ وَمَشْكُولٍ بِالْكَامِلِ (100%) عَلَى شَكْلِ HTML، بِدُونِ أَيِّ مُقَدِّمَاتٍ حِوَارِيَّةٍ أَوْ رُمُوزِ مَارْكْدَاوْن.
+الْمَطْلُوبُ حَصْرِيّاً: تَوْلِيدُ "امْتِحَانِ اخْتِيَارٍ مِنْ مُتَعَدِّدٍ شَامِلٍ لِمُسْتَوَيَاتِ بِلُوم (20 سُؤَالَ QTI مُعَيَّراً)" بِاللُّغَةِ الْعَرَبِيَّةِ وَمَشْكُولٍ بِالْكَامِلِ (100%) عَلَى شَكْلِ HTML، بِدُونِ أَيِّ مُقَدِّمَاتٍ حِوَارِيَّةٍ أَوْ رُمُوزِ مَارْكْدَاوْن.
 
 1. عُنْوَانُ الِامْتِحَانِ:
 <h1 style="color:#0369a1; text-align:center; font-size:22px; font-weight:800; margin-bottom:20px;">امْتِحَانُ بِلُومَ الشَّامِلُ (${subj} - ${grd})</h1>
 
-2. الشَّكْلُ الْأَوَّلُ: جَدْوَلُ الْأَسْئِلَةِ (50 سُؤَالَ اخْتِيَارٍ مِنْ مُتَعَدِّدٍ)
-جَدْوَلُ HTML أَنِيقٌ بـ 6 أَعْمِدَةٍ (رَقْمُ السُّؤَالِ | السُّؤَالُ | أ | ب | ج | د) لِجَمِيعِ الْـ 50 سُؤَالاً مُوَزَّعَةً حَسَبَ هَرَمِ بِلُومَ:
-- 15 سُؤَالاً: التَّذَكُّرُ وَالْفَهْمُ (1 - 15).
-- 20 سُؤَالاً: التَّطْبِيقُ وَالتَّحْلِيلُ (16 - 35).
-- 15 سُؤَالاً: التَّقْوِيمُ وَالِابْتِكَارُ (36 - 50).
+2. الشَّكْلُ الْأَوَّلُ: جَدْوَلُ الْأَسْئِلَةِ (20 سُؤَالَ اخْتِيَارٍ مِنْ مُتَعَدِّدٍ)
+جَدْوَلُ HTML أَنِيقٌ بـ 6 أَعْمِدَةٍ (رَقْمُ السُّؤَالِ | السُّؤَالُ | أ | ب | ج | د) لِجَمِيعِ الْـ 20 سُؤَالاً مُوَزَّعَةً حَسَبَ هَرَمِ بِلُومَ:
+- 6 أَسْئِلَة: التَّذَكُّرُ وَالْفَهْمُ (1 - 6).
+- 8 أَسْئِلَة: التَّطْبِيقُ وَالتَّحْلِيلُ (7 - 14).
+- 6 أَسْئِلَة: التَّقْوِيمُ وَالِابْتِكَارُ (15 - 20).
 <h3 style="color:#0f172a; margin-bottom:12px; font-weight:bold;">أَوَّلاً: جَدْوَلُ الْأَسْئِلَةِ (اخْتِيَارٌ مِنْ مُتَعَدِّدٍ)</h3>
 <table dir="rtl" border="1" style="width:100%; border-collapse:collapse; margin-bottom:28px; text-align:center; font-size:14px; border:1px solid #cbd5e1;">
   <thead>
@@ -842,7 +855,7 @@ ${lmsXmlDirective}
     </tr>
   </thead>
   <tbody>
-    <!-- صُفُوفُ جَمِيعِ الْأَسْئِلَةِ مِنْ 1 حَتَّى 50 -->
+    <!-- صُفُوفُ جَمِيعِ الْأَسْئِلَةِ مِنْ 1 حَتَّى 20 -->
   </tbody>
 </table>
 
@@ -850,16 +863,16 @@ ${lmsXmlDirective}
 <div style="margin-top:24px;">
   <h3 style="color:#0284c7; margin-bottom:12px; font-weight:bold;">ثَانِياً: نَمُوذَجُ الْإِجَابَةِ وَالتَّعْلِيلِ</h3>
   <ul style="list-style-type:disc; padding-right:24px; line-height:2.2; font-size:14px; color:#1e293b;">
-    <!-- جَمِيعُ الْإِجَابَاتِ مِنْ 1 حَتَّى 50 مَعَ التَّعْلِيلِ -->
+    <!-- جَمِيعُ الْإِجَابَاتِ مِنْ 1 حَتَّى 20 مَعَ التَّعْلِيلِ -->
   </ul>
 </div>
 
 4. مَصْفُوفَةُ نَوَاتِجِ التَّعَلُّمِ وَجَدْوَلُ الْمُوَاصَفَاتِ فِي جَدْوَلٍ مُنَسَّقٍ.
 
-5. كُودُ QTI XML لِلْـ 50 سُؤَالاً دَاخِلَ:
+5. كُودُ QTI XML لِلْـ 20 سُؤَالاً دَاخِلَ:
 ${lmsXmlDirective}
 <div id="qti-xml-payload" style="display:none;">
-<!-- كُودُ QTI XML الصَّالِحُ لِجَمِيعِ الْأَسْئِلَةِ مِنْ Q_01 إِلَى Q_50 مَعَ نُصُوصِ الْأَسْئِلَةِ الْكَامِلَةِ -->
+<!-- كُودُ QTI XML الصَّالِحُ لِجَمِيعِ الْأَسْئِلَةِ مِنْ Q_01 إِلَى Q_20 مَعَ نُصُوصِ الْأَسْئِلَةِ الْكَامِلَةِ -->
 </div>`;
       }
 
@@ -1494,6 +1507,7 @@ STRICT REQUIREMENTS:
  * extracts curriculum metadata, and optionally generates the complete official lesson plan immediately.
  */
 export async function executeVoiceToLesson(req: any, res: any) {
+  const startTime = Date.now();
   try {
     const body = req.body || {};
     const {
@@ -1505,49 +1519,38 @@ export async function executeVoiceToLesson(req: any, res: any) {
       contentLanguage = 'ar',
     } = body;
 
+    console.log(`[VoiceToLesson] Request received: autoGenerate=${autoGenerate}, transcript length=${voiceTranscript?.length}`);
+
     if (!voiceTranscript || typeof voiceTranscript !== 'string' || !voiceTranscript.trim()) {
       return res.status(400).json({ error: 'النص الصوتي المفرغ غير موجود أو فارغ.' });
     }
 
     const isAr = contentLanguage === 'ar';
 
-    // 1. Parsing prompt with structured JSON extraction
-    const parserPrompt = `You are an educational NLP parser for K-12 teacher instructions.
-Analyze the teacher's spoken idea/transcript and extract the educational metadata into a strict JSON object:
-Spoken text: "${voiceTranscript}"
+    // 1. Fast Structured Parsing with gemini-3.1-flash-lite (takes < 1 second)
+    let parsed: any = {
+      subject: targetSubject || (isAr ? 'العلوم' : 'Science'),
+      grade: targetGrade || (isAr ? 'الصف التاسع' : 'Grade 9'),
+      lessonTitle: voiceTranscript.slice(0, 40).trim(),
+      duration: isAr ? '45 دقيقة' : '45 min',
+      keyActivities: voiceTranscript,
+    };
 
-Respond with ONLY valid JSON with keys:
-{
-  "subject": "Inferred subject in ${isAr ? 'Arabic' : 'English'} (e.g. العلوم / Science / الرياضيات / اللغة العربية)",
-  "grade": "Inferred grade (e.g. الصف التاسع / Grade 9)",
-  "lessonTitle": "Precise lesson title (e.g. الانقسام الميتوزي / Mitosis)",
-  "duration": "Inferred or default duration (e.g. 50 دقيقة / 50 min)",
-  "keyActivities": "Extracted specific activities (e.g. نشاط مجموعات مدته 10 دقائق)",
-  "labExperiment": "Extracted lab experiment or null if none (e.g. تجربة مجهرية لفحص خلايا البصل)",
-  "assessmentNotes": "Extracted quiz requirements (e.g. اختبار قصير من 5 أسئلة)",
-  "pedagogicalGoal": "Core educational goal derived from the spoken prompt"
-}`;
-
-    const parseResponse = await callGemini([
-      { text: 'You are an educational parser that outputs pure JSON only without formatting markdown fences.' },
-      { text: parserPrompt },
-    ]);
-
-    let parsed: any = {};
+    const parseStart = Date.now();
     try {
+      const parserPrompt = `You are a fast educational NLP parser. Extract metadata from this voice transcript: "${voiceTranscript}". Return JSON ONLY:
+{"subject": "${isAr ? 'العلوم' : 'Science'}", "grade": "${isAr ? 'الصف التاسع' : 'Grade 9'}", "lessonTitle": "Brief Title", "duration": "${isAr ? '45 دقيقة' : '45 min'}", "keyActivities": "Brief summary"}`;
+
+      const parseResponse = await callGemini(parserPrompt, { fast: true, model: 'gemini-3.1-flash-lite' });
       const cleanJson = (parseResponse.text || '')
         .replace(/```json/gi, '')
         .replace(/```/g, '')
         .trim();
-      parsed = JSON.parse(cleanJson);
-    } catch {
-      parsed = {
-        subject: targetSubject || (isAr ? 'العلوم' : 'Science'),
-        grade: targetGrade || (isAr ? 'الصف التاسع' : 'Grade 9'),
-        lessonTitle: voiceTranscript.slice(0, 40),
-        duration: isAr ? '50 دقيقة' : '50 min',
-        keyActivities: voiceTranscript,
-      };
+      const extracted = JSON.parse(cleanJson);
+      parsed = { ...parsed, ...extracted };
+      console.log(`[VoiceToLesson] Parse finished in ${Date.now() - parseStart}ms:`, parsed.lessonTitle);
+    } catch (parseErr: any) {
+      console.warn(`[VoiceToLesson] Parse fallback triggered after ${Date.now() - parseStart}ms:`, parseErr?.message);
     }
 
     // Override with explicit inputs if provided
@@ -1559,25 +1562,26 @@ Respond with ONLY valid JSON with keys:
       return res.status(200).json({ success: true, parsed });
     }
 
-    // Otherwise, generate the complete official lesson plan right away
+    // 2. Generate the complete official lesson plan immediately using gemini-flash-latest
+    const genStart = Date.now();
     const settings = {
       subject: parsed.subject || (isAr ? 'العلوم' : 'Science'),
       grade: parsed.grade || (isAr ? 'الصف التاسع' : 'Grade 9'),
-      duration: parsed.duration || (isAr ? '50 دقيقة' : '50 min'),
-      studentLevel: isAr ? 'مستويات متفاوتة' : 'Mixed levels',
+      duration: parsed.duration || (isAr ? '45 دقيقة' : '45 min'),
+      studentLevel: isAr ? 'متوسط' : 'Intermediate',
       teacherName: isAr ? 'المعلم الفاضل' : 'Master Teacher',
       lessonTitle: parsed.lessonTitle || (isAr ? 'خطة الدرس النموذجية' : 'Sample Lesson'),
       contentLanguage,
       institution,
       teacherPrompt: `توجيهات صوتية مباشرة من المعلم:
-- الأنشطة المحددة: ${parsed.keyActivities || 'نشاط تعاوني'}
-- التجارب المعملية: ${parsed.labExperiment || 'تطبيق عملي مناسب'}
-- التقويم والملاحظات: ${parsed.assessmentNotes || 'اختبار قصير متدرج'}
+- الأنشطة المحددة: ${parsed.keyActivities || voiceTranscript}
 - النص الصوتي الكامل للمعلم: "${voiceTranscript}"`,
     };
 
+    console.log(`[VoiceToLesson] Starting lesson plan generation...`);
     const prompt = buildBasePrompt(settings, 'lesson-plan');
-    const genResponse = await callGemini(prompt);
+    const genResponse = await callGemini(prompt, { model: 'gemini-flash-latest' });
+    console.log(`[VoiceToLesson] Generation finished in ${Date.now() - genStart}ms`);
     const htmlContent = extractHtml(genResponse.text || '');
     const institutionHeader = getInstitutionHeader(settings, 'lesson-plan');
     const direction = isAr ? 'rtl' : 'ltr';
@@ -1586,6 +1590,7 @@ Respond with ONLY valid JSON with keys:
     const fullHtml = `<div class="rte-content sahlah-lesson-plan" dir="${direction}" lang="${contentLanguage}" style="direction: ${direction}; text-align: ${alignment}; font-family: inherit;">${institutionHeader}${htmlContent}</div>`;
     const title = `${isAr ? 'خطة درس صوتية معتمدة' : 'Voice-Generated Lesson Plan'} - ${parsed.lessonTitle || settings.lessonTitle}`;
 
+    console.log(`[VoiceToLesson] Total request completed in ${Date.now() - startTime}ms`);
     return res.status(200).json({
       success: true,
       parsed,
