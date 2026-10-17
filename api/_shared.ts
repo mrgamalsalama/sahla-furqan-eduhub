@@ -125,10 +125,10 @@ export function getApiKey(): string | undefined {
   return keys.length > 0 ? keys[0] : undefined;
 }
 
-// Order prioritized by stability, speed, and eliminating 503 high demand stalls
+// Order prioritized by stability, speed, and active quota limits
 const CANDIDATE_MODELS = [
-  'gemini-flash-latest',
   'gemini-3.1-flash-lite',
+  'gemini-flash-latest',
   'gemini-3.8-flash',
 ];
 
@@ -1579,8 +1579,7 @@ export async function executeVoiceToLesson(req: any, res: any) {
     };
 
     console.log(`[VoiceToLesson] Starting lesson plan generation...`);
-    const prompt = buildBasePrompt(settings, 'lesson-plan');
-    const genResponse = await callGemini(prompt, { model: 'gemini-flash-latest' });
+    const genResponse = await callGemini(prompt);
     console.log(`[VoiceToLesson] Generation finished in ${Date.now() - genStart}ms`);
     const htmlContent = extractHtml(genResponse.text || '');
     const institutionHeader = getInstitutionHeader(settings, 'lesson-plan');
