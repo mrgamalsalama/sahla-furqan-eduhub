@@ -6,17 +6,23 @@ export interface ChatMessage {
 }
 
 /**
- * Optimizes files before sending over the network to Vercel Serverless.
- * - Strips `dataUrl` completely (which is only needed for local browser preview).
- * - Omit multi-megabyte `base64` for Word (.docx), PowerPoint (.pptx), and Text files (since AI only reads `textContent`).
- * - Keeps base64 for compressed images and small PDFs.
+ * دالة دقيقة لحساب الحجم الفعلي للبايت للتحقق من حدود شبكة Vercel (UTF-8 Bytes)
+ */
+function getByteLength(str: string): number {
+  return new TextEncoder().encode(str).length;
+}
+
+/**
+ * تجهيز وتخفيف الملفات قبل إرسالها إلى سيرفر Vercel لتفادي Timeout 504 و 413:
+ * - تجريد كامل لـ dataUrl
+ * - إذا كان هناك نص مستخرج (textContent) للـ PDF أو المستندات، يُحذف الـ base64 تماماً لتقليل وقت معالجة الـ AI إلى أقل من 3 ثوانٍ
+ * - الصور فقط يُسمح لها بالـ base64 إذا لم يتوفر لها نص بديل
  */
 export function prepareFilesForApi(files: UploadedFile[]): Record<string, unknown>[] {
   if (!Array.isArray(files)) return [];
 
   return files.map((file) => {
-    // 1. Text-extractable documents (word, powerpoint, text):
-    // NEVER send base64 or dataUrl! Only send the extracted textContent!
+    // 1. المستندات النصية (Word, PowerPoint, Text)
     if (file.type === 'word' || file.type === 'powerpoint' || file.type === 'text') {
       return {
         id: file.id,
@@ -27,24 +33,25 @@ export function prepareFilesForApi(files: UploadedFile[]): Record<string, unknow
       };
     }
 
-    // 2. Images: send compressed base64 only, NO dataUrl
-    if (file.type === 'image' || file.mimeType?.startsWith('image/')) {
+    // 2. ملفات PDF: الاعتماد التام على النص المستخرج لتفادي بطء تحليل المستند في Gemini
+    if (file.type === 'pdf' || file.mimeType === 'application/pdf') {
       return {
         id: file.id,
         name: file.name,
-        type: 'image',
-        mimeType: file.mimeType || 'image/jpeg',
-        base64: file.base64 || '',
+        type: 'pdf',
+        mimeType: 'application/pdf',
+        // إذا كان النص المستخرج موجوداً، لا نرسل base64 إطلاقاً لمنع الـ 504
+        base64: file.textContent ? '' : (file.base64 || ''),
         textContent: file.textContent || '',
       };
     }
 
-    // 3. PDFs: send base64 (if small) and textContent, NO dataUrl
+    // 3. الصور: إرسال الـ base64 المضغوط فقط
     return {
       id: file.id,
       name: file.name,
-      type: file.type || 'pdf',
-      mimeType: file.mimeType || 'application/pdf',
+      type: 'image',
+      mimeType: file.mimeType || 'image/jpeg',
       base64: file.base64 || '',
       textContent: file.textContent || '',
     };
@@ -58,55 +65,70 @@ export async function generateContent(
 ): Promise<GenerationResult> {
   let optimizedFiles = prepareFilesForApi(files);
 
-  // Pre-flight payload size check
-  let payloadString = JSON.stringify({ settings, outputType, files: optimizedFiles });
+  let payloadObj = { settings, outputType, files: optimizedFiles };
+  let payloadString = JSON.stringify(payloadObj);
+  let payloadBytes = getByteLength(payloadString);
 
-  // If payload exceeds 3.8 MB (Vercel hard limit is 4.5 MB):
-  if (payloadString.length > 3.8 * 1024 * 1024) {
-    // Fallback: drop all large base64 strings and rely on text representation to avoid 413 error!
+  // إذا تجاوز الحجم 3.5 ميجابايت الفعلي، احذف كل الـ base64 فوراً لمنع الـ 504 والـ 413
+  if (payloadBytes > 3.5 * 1024 * 1024) {
     optimizedFiles = optimizedFiles.map((f) => ({
       ...f,
       base64: '',
-      textContent: f.textContent || `[الملف: ${f.name}]`,
+      textContent: (f.textContent as string) || `[محتوى مستند: ${f.name}]`,
     }));
-    payloadString = JSON.stringify({ settings, outputType, files: optimizedFiles });
+    payloadObj = { settings, outputType, files: optimizedFiles };
+    payloadString = JSON.stringify(payloadObj);
+    payloadBytes = getByteLength(payloadString);
 
-    if (payloadString.length > 4.2 * 1024 * 1024) {
+    if (payloadBytes > 4.2 * 1024 * 1024) {
       throw new Error(
-        'حجم الملفات المرفقة كبير جداً ويتجاوز سعة النقل القصوى المسموحة (4.5 ميجابايت). يرجى تقليل حجم الملفات المرفقة أو نسخ المحتوى كنص.'
+        'حجم المحتوى المرفق كبير جداً بالنسبة للخادم. يرجى إزالة بعض الملفات أو لصق النص المطلوب مباشرة.'
       );
     }
   }
 
-  const response = await fetch('/api/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: payloadString,
-  });
+  // إضافة مؤقت إلغاء للعميل (55 ثانية) ليعطي رسالة ودية قبل أن يفصل سيرفر Vercel قسراً
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 55000);
 
-  if (!response.ok) {
-    if (response.status === 413) {
-      throw new Error(
-        'حجم الملفات المرفقة تجاوز الحد الأقصى المسموح به (4.5 ميجابايت). يرجى تقليل حجم الملف أو نسخ المحتوى النصي مباشرة لتفادي سعة الخادم.'
-      );
+  try {
+    const response = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payloadString,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      if (response.status === 413) {
+        throw new Error('حجم الملفات المرفقة تجاوز الحد المسموح. يرجى الاكتفاء بالنصوص أو تصغير الملفات.');
+      }
+      if (response.status === 504) {
+        throw new Error(
+          'استغرق الذكاء الاصطناعي وقتاً أطول من المسموح في صياغة المحتوى (Timeout 504). يُرجى تقليل تفاصيل الطلب أو استخدام محتوى أصغر وإعادة المحاولة.'
+        );
+      }
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'فشل توليد المحتوى، يرجى المحاولة بعد قليل.');
     }
-    if (response.status === 504) {
-      throw new Error(
-        'استغرقت المعالجة وقتاً أطول من المعتاد من الخادم (504 Timeout). تم الآن تسريع المعالجة، يرجى إعادة المحاولة وسيتم الإنتاج بسرعة فائقة.'
-      );
+
+    const data = await response.json();
+    const rawHtml = data.contentHtml || data.html || '';
+    return {
+      ...data,
+      contentHtml: rawHtml,
+      html: rawHtml,
+      title: data.title || '',
+    };
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error('استغرقت الاستجابة وقتاً طويلاً جداً. تم إلغاء الطلب لتفادي تعليق الصفحة، يرجى إعادة المحاولة.');
     }
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || 'فشل توليد المحتوى، يرجى المحاولة بعد قليل.');
+    throw err;
   }
-
-  const data = await response.json();
-  const rawHtml = data.contentHtml || data.html || '';
-  return {
-    ...data,
-    contentHtml: rawHtml,
-    html: rawHtml,
-    title: data.title || '',
-  };
 }
 
 export async function askEducationalAdvisor(
@@ -215,11 +237,6 @@ export async function convertRawTextToQti(payload: {
   return response.json();
 }
 
-/**
- * Academic Smart Translation of generated educational HTML content via Gemini.
- * Strictly preserves HTML structures (<table>, <ul>, <ol>, <p>, options, styles)
- * and translates human-readable academic text between Arabic and English.
- */
 export async function translateGeneratedContent(
   htmlContent: string,
   targetLang: 'ar' | 'en'
@@ -280,10 +297,6 @@ export interface VoiceToLessonResponse {
   title?: string;
 }
 
-/**
- * 🎤 Voice-to-Lesson Client API
- * Converts teacher voice transcript into structured lesson settings or directly generates full lesson.
- */
 export async function parseAndGenerateVoiceToLesson(
   payload: VoiceToLessonPayload
 ): Promise<VoiceToLessonResponse> {
@@ -301,10 +314,6 @@ export async function parseAndGenerateVoiceToLesson(
   return response.json();
 }
 
-/**
- * ♿ Differentiated Learning Client API
- * Adapts educational content for Easy-Read / SEN, Gifted & Talented, or Visual Organizers.
- */
 export async function differentiateContent(payload: {
   htmlContent: string;
   mode: 'easy-read' | 'gifted' | 'visual-organizer';
@@ -325,10 +334,6 @@ export async function differentiateContent(payload: {
   return data.adaptedHtml;
 }
 
-/**
- * 🧠 DOK & Bloom Question Generator Client API
- * Injects high-rigor DOK 3 / DOK 4 critical question with rubric.
- */
 export async function addDokQuestion(payload: {
   currentHtml: string;
   dokLevel: 3 | 4;
