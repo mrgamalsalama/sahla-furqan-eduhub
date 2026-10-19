@@ -433,6 +433,21 @@ export async function generateWeeklyStatementDocxBlob(docData: WeeklyStatementDo
           },
         },
         children: [
+          // Noble Basmala
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            children: [
+              new TextRun({
+                text: '﷽',
+                bold: true,
+                size: 28,
+                color: '1E293B',
+                font: 'Traditional Arabic',
+              }),
+            ],
+            spacing: { after: 100 },
+          }),
+
           // Institutional Brand Header
           new Paragraph({
             alignment: AlignmentType.CENTER,
@@ -487,6 +502,32 @@ export async function generateWeeklyStatementDocxBlob(docData: WeeklyStatementDo
             ? [
                 new Paragraph({ text: '', spacing: { before: 300, after: 100 } }),
                 quizTable,
+              ]
+            : []),
+
+          // Weekly Educational & Moral Core Value (if present)
+          ...(docData.weeklyEducationalValue
+            ? [
+                new Paragraph({ text: '', spacing: { before: 240, after: 60 } }),
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  children: [
+                    new TextRun({
+                      text: '🌿 قِيمَةُ الْأُسْبُوعِ التَّرْبَوِيَّةِ / Weekly Educational Value\n',
+                      bold: true,
+                      size: 20,
+                      color: '166534',
+                    }),
+                    new TextRun({
+                      text: docData.weeklyEducationalValue,
+                      bold: true,
+                      size: 22,
+                      color: '14532D',
+                      font: 'Traditional Arabic',
+                    }),
+                  ],
+                  spacing: { before: 100, after: 100 },
+                }),
               ]
             : []),
         ],

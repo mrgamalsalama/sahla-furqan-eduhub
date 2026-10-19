@@ -14,6 +14,7 @@ import { getLessonSettings, saveLessonSettings } from '@/lib/storage';
 import { generateContent } from '@/lib/gemini';
 import type { UILang } from '@/lib/i18n';
 import SourceMaterialUpload from './SourceMaterialUpload';
+import AiLoadingDhikr from './AiLoadingDhikr';
 
 interface ExamBankStudioProps {
   onOpenResult: (result: GenerationResult, outputType: OutputType) => void;
@@ -106,6 +107,21 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
             ? 'توليد اختبارات قصيرة، وامتحانات هرم بلوم الـ 50 سؤالاً، والاختبارات المعيارية والتشخيصية مع تصدير حزمة مضغوطة رسمية (QTI ZIP) متوافقة فوراً مع سهلة والفرقان.'
             : 'Generate short quizzes, 50-MCQ Bloom exams, and benchmark tests with direct QTI ZIP packaging.'}
         </p>
+      </div>
+
+      {/* 🌿 دعاء بداية التحضير وتجديد النية */}
+      <div className="mb-6 p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 flex items-center justify-between gap-3 text-emerald-900 text-xs sm:text-sm font-bold shadow-2xs">
+        <div className="flex items-center gap-2">
+          <span className="text-base font-serif">﷽</span>
+          <span>
+            {isAr
+              ? 'بسم الله نبدأ.. اللهم لا سهل إلا ما جعلته سهلاً، وأنت تجعل الحزن إذا شئت سهلاً.'
+              : 'In the name of Allah.. O Allah, there is no ease except that which You make easy.'}
+          </span>
+        </div>
+        <span className="hidden sm:inline-block text-[11px] font-semibold text-emerald-700 bg-emerald-100/70 px-2.5 py-1 rounded-full">
+          {isAr ? 'نحتسب نشر العلم النافع 🌱' : 'Dedicated to beneficial knowledge'}
+        </span>
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-7">
@@ -518,6 +534,13 @@ export default function ExamBankStudio({ onOpenResult, uiLang }: ExamBankStudioP
           )}
         </button>
       </form>
+
+      {/* 🌿 شاشة انتظار الذكاء الاصطناعي مع الأذكار والصلاة على النبي ﷺ */}
+      <AiLoadingDhikr
+        loading={loading}
+        message={isAr ? 'جاري بناء بنك الأسئلة ومصفوفة مؤشرات الأداء وتوليد حزمة QTI...' : 'Generating assessment & QTI package...'}
+        uiLang={uiLang}
+      />
     </div>
   );
 }

@@ -16,6 +16,8 @@ import GraderAdvisorStudio from '@/components/GraderAdvisorStudio';
 import BenchmarkPage from '@/components/BenchmarkPage';
 import PerformanceTaskStudio from '@/components/PerformanceTaskStudio';
 import WeeklyStatementStudio from '@/components/WeeklyStatementStudio';
+import FooterBarakahRibbon from '@/components/FooterBarakahRibbon';
+import EducatorWellnessModal from '@/components/EducatorWellnessModal';
 import type { View, OutputType, GenerationResult, SavedLesson } from '@/types';
 import { getUILang, saveUILang } from '@/lib/i18n';
 import type { UILang } from '@/lib/i18n';
@@ -337,6 +339,12 @@ export default function App() {
         }}
         defaultTab={authModalTab}
       />
+
+      {/* 🌿 شريط الأذكار والتذكير الهادئ في تذييل المنصة */}
+      <FooterBarakahRibbon uiLang={uiLang} />
+
+      {/* ☕ تنبيه استراحة وذكر أثناء العمل المتواصل */}
+      <EducatorWellnessModal uiLang={uiLang} />
     </div>
   );
 }

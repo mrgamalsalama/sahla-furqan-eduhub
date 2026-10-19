@@ -263,6 +263,28 @@ export default function CommunityPage({
         </div>
       </div>
 
+      {/* 🌿 ركن الدال على الخير كفاعله وتجديد النية في نفع الزملاء */}
+      <div className="mb-8 p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 text-white border border-emerald-500/30 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center shrink-0 border border-emerald-400/30 shadow-inner">
+            <Heart className="w-6 h-6 text-emerald-300 fill-emerald-400/40" />
+          </div>
+          <div>
+            <div className="text-xs sm:text-sm font-black text-amber-200 font-serif">
+              {isAr ? '«مَنْ سَنَّ فِي الْإِسْلَامِ سُنَّةً حَسَنَةً فَلَهُ أَجْرُهَا وَأَجْرُ مَنْ عَمِلَ بِهَا» — الدَّالُّ عَلَى الْخَيْرِ كَفَاعِلِهِ 🌿' : 'He who introduces a good practice in Islam will have its reward and the reward of those who act upon it'}
+            </div>
+            <p className="text-[11px] sm:text-xs text-emerald-100/90 font-medium mt-0.5">
+              {isAr ? 'شارك أعمالك المتميزة مع زملائك المعلمين واحتسب الأجر في نشر العلم النافع وتيسير الخير لأبنائنا وبناتنا الطلاب.' : 'Share your exemplary lessons with fellow educators to spread beneficial knowledge and earn continuous reward.'}
+            </p>
+          </div>
+        </div>
+        <div className="shrink-0 flex items-center gap-2">
+          <span className="px-3.5 py-1.5 rounded-full bg-emerald-800/80 text-emerald-200 border border-emerald-600/40 text-[11px] font-bold shadow-2xs">
+            {isAr ? 'علمٌ يُنتفع به 🌱' : 'Beneficial Knowledge 🌱'}
+          </span>
+        </div>
+      </div>
+
       {/* Filters and Search Bar */}
       <div className="card p-5 mb-8 shadow-xs border border-slate-200">
         <form onSubmit={handleSearchSubmit} className="flex flex-col lg:flex-row items-center gap-3">

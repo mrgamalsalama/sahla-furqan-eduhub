@@ -36,6 +36,9 @@ export function buildOfficialHeaderBanner(
 
   return `
   <div class="official-school-header" dir="${dir}" style="margin-bottom: 20px; border-bottom: 3px double #1e3a8a; padding-bottom: 12px; font-family: 'Cairo', 'Tajawal', sans-serif;">
+    <div style="text-align: center; font-family: 'Amiri', 'Traditional Arabic', 'Scheherazade New', 'Cairo', serif; font-size: 1.3rem; font-weight: bold; color: #0f172a; margin-bottom: 8px; letter-spacing: 2px;">
+      ﷽
+    </div>
     <table style="width: 100%; border: none; border-collapse: collapse; margin-bottom: 10px;">
       <tr>
         <td style="width: 25%; text-align: ${isAr ? 'right' : 'left'}; vertical-align: middle; border: none; padding: 0;">
@@ -212,6 +215,11 @@ export function printContent(
     .replace(/---\s*صَفْحَةُ?\s*\d+[^<]*---/gi, '')
     .replace(/---\s*Page\s*\d+[^<]*---/gi, '');
 
+  const hasBasmala = htmlContent.includes('﷽') || banner.includes('﷽');
+  const basmalaHeader = !hasBasmala
+    ? `<div style="text-align: center; font-family: 'Amiri', 'Traditional Arabic', 'Scheherazade New', 'Cairo', serif; font-size: 1.35rem; font-weight: bold; color: #0f172a; margin-bottom: 10px; letter-spacing: 2px;">﷽</div>`
+    : '';
+
   const fullHtml = `<!DOCTYPE html>
 <html dir="${dir}" lang="${lang}">
 <head>
@@ -222,6 +230,7 @@ export function printContent(
   <style>${css}</style>
 </head>
 <body>
+  ${basmalaHeader}
   ${banner}
   ${isLessonPlan ? '' : `<h1>${escapeHtml(title)}</h1>`}
   ${sanitizedContent}
@@ -335,6 +344,11 @@ export function exportToWord(
     .sahlah-lesson-header { text-align: center; margin-bottom: 16pt; }
   `;
 
+  const hasBasmala = htmlContent.includes('﷽') || banner.includes('﷽');
+  const basmalaHeader = !hasBasmala
+    ? `<div style="text-align: center; font-family: 'Amiri', 'Traditional Arabic', 'Scheherazade New', 'Cairo', serif; font-size: 14pt; font-weight: bold; color: #0f172a; margin-bottom: 8pt; letter-spacing: 2px;">﷽</div>`
+    : '';
+
   const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
 <head>
   <meta charset="utf-8">
@@ -354,6 +368,7 @@ export function exportToWord(
   </style>
 </head>
 <body dir="${dir}">
+  ${basmalaHeader}
   ${banner}
   ${isLessonPlan ? '' : `<h1>${escapeHtml(title)}</h1>`}
   ${sanitizedContent}

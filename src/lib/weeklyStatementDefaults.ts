@@ -530,6 +530,7 @@ export function createOfficialSampleDocument(grade: string = 'Grade 1', shift: S
     weekRangeText: 'Sept 14-17, 2026',
     days,
     quizzes,
+    weeklyEducationalValue: '«إِنَّمَا بُعِثْتُ لِأُتَمِّمَ مَكَارِمَ الْأَخْلَاقِ» — فضل العلم والأخلاق الفاضلة',
     updatedAt: Date.now(),
   };
 }
@@ -566,6 +567,7 @@ export function createEmptyDocument(grade: string = 'Grade 11', shift: ShiftType
     weekRangeText: 'Week of upcoming Sunday',
     days,
     quizzes: [],
+    weeklyEducationalValue: '«إِنَّمَا بُعِثْتُ لِأُتَمِّمَ مَكَارِمَ الْأَخْلَاقِ» — فضل العلم والأخلاق الفاضلة',
     updatedAt: Date.now(),
   };
 }

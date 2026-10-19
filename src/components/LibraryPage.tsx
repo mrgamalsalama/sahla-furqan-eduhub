@@ -239,6 +239,21 @@ export default function LibraryPage({
         )}
       </div>
 
+      {/* 🌿 ركن الدال على الخير */}
+      <div className="mb-6 p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200/80 text-emerald-900 flex items-center justify-between gap-3 text-xs font-bold shadow-2xs">
+        <div className="flex items-center gap-2.5">
+          <Heart className="w-4 h-4 text-emerald-600 fill-emerald-500/30 shrink-0" />
+          <span>
+            {isAr
+              ? '«الدَّالُّ عَلَى الْخَيْرِ كَفَاعِلِهِ» — شارك دروسك المتميزة في مجتمع المعلمين واحتسب أجر نفع زملائك والطلاب 🌱'
+              : 'Empower fellow educators by sharing your lessons to the community library.'}
+          </span>
+        </div>
+        <span className="hidden sm:inline-block text-[11px] font-semibold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">
+          {isAr ? 'صدقة جارية' : 'Continuous Good'}
+        </span>
+      </div>
+
       {/* Guest Notice Card */}
       {!user && (
         <div className="p-4 sm:p-5 mb-8 rounded-2xl bg-gradient-to-r from-blue-50 via-teal-50/40 to-slate-50 border border-blue-200/80 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">

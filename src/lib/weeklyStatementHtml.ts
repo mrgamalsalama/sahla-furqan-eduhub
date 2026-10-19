@@ -160,6 +160,11 @@ export function generateWeeklyStatementHtml(docData: WeeklyStatementDocument): s
   return `
     <div class="weekly-statement-document" style="font-family: 'Segoe UI', Arial, 'Cairo', Tahoma, sans-serif; max-width: 900px; margin: 0 auto; background-color: #ffffff; padding: 24px 32px; color: #111827;">
       
+      <!-- Noble Basmala Header -->
+      <div style="text-align: center; font-family: 'Amiri', 'Traditional Arabic', 'Scheherazade New', 'Cairo', serif; font-size: 1.25rem; font-weight: bold; color: #1e293b; margin-bottom: 8px; letter-spacing: 2px;">
+        ﷽
+      </div>
+
       <!-- Sahlah Brand Header -->
       <div style="text-align: center; margin-bottom: 14px;">
         <img src="${SAHLAH_LOGO}" alt="Sahlah Academy" style="height: 38px; max-width: 190px; object-fit: contain; margin: 0 auto 10px auto; display: block;" />
@@ -199,6 +204,18 @@ export function generateWeeklyStatementHtml(docData: WeeklyStatementDocument): s
 
       <!-- Weekly Quiz Schedule -->
       ${quizTableHtml}
+
+      <!-- Weekly Educational & Moral Core Value -->
+      ${docData.weeklyEducationalValue ? `
+        <div style="margin-top: 24px; padding: 12px 18px; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px; text-align: center; page-break-inside: avoid;">
+          <div style="font-weight: 800; color: #166534; font-size: 0.88rem; margin-bottom: 4px;">
+            🌿 قِيمَةُ الْأُسْبُوعِ التَّرْبَوِيَّةِ / Weekly Educational Value
+          </div>
+          <div style="font-size: 0.96rem; font-weight: 700; color: #14532d; font-family: 'Amiri', 'Traditional Arabic', 'Cairo', serif; line-height: 1.6;">
+            ${docData.weeklyEducationalValue}
+          </div>
+        </div>
+      ` : ''}
 
       <!-- Print Styling -->
       <style>

@@ -549,20 +549,40 @@ ${manifestResources}  </resources>
       const res = await saveCloudResource(lesson, user, lesson.isPublic);
       setCloudSaving(false);
       if (res.success) {
-        setCloudSyncMsg(isAr ? 'تم الحفظ سحابياً بنجاح! ☁️' : 'Saved to Cloud! ☁️');
+        setCloudSyncMsg(isAr ? 'تم حفظ الدرس بنجاح! ☁️ — الحمد لله الذي بنعمته تتم الصالحات' : 'Saved to Cloud! ☁️ — Praise be to Allah');
       }
     }
 
     setTimeout(() => {
       setSaved(false);
       setCloudSyncMsg(null);
-    }, 2500);
+    }, 3500);
   }
 
   const BackIcon = isAr ? ArrowRight : ArrowLeft;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-6 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-6 animate-fade-in relative">
+      {/* ☁️ Toast Alert: إشعار اكتمال الحفظ بنجاح والحمد لله */}
+      {saved && (
+        <aside
+          aria-label="إشعار اكتمال الحفظ"
+          className="fixed top-20 start-1/2 -translate-x-1/2 z-50 animate-bounce shadow-2xl rounded-2xl bg-gradient-to-r from-emerald-800 to-teal-900 text-white px-5 py-3 border border-emerald-400/50 flex items-center gap-3 backdrop-blur-md"
+        >
+          <div className="w-8 h-8 rounded-xl bg-emerald-500/30 flex items-center justify-center shrink-0">
+            <Check className="w-5 h-5 text-emerald-300" />
+          </div>
+          <div className="text-start">
+            <div className="text-xs sm:text-sm font-extrabold text-white">
+              {isAr ? 'تم حفظ الدرس بنجاح! ☁️' : 'Lesson Saved Successfully! ☁️'}
+            </div>
+            <div className="text-[11px] sm:text-xs text-emerald-200 font-serif font-bold">
+              {isAr ? '«الْحَمْدُ لِلَّهِ الَّذِي بِنِعْمَتِهِ تَتِمُّ الصَّالِحَاتُ» 🌿' : 'Praise be to Allah through whose grace good deeds are completed'}
+            </div>
+          </div>
+        </aside>
+      )}
+
       {/* الشريط العلوي */}
       <div className="flex items-center justify-between mb-4 no-print">
         <button onClick={onBack} className="btn-ghost">

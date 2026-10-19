@@ -20,6 +20,7 @@ import type { GammaSlide, GammaThemeId } from '@/lib/gammaPptx';
 import GammaPresenterModal from './GammaPresenterModal';
 import ImagePickerModal from './ImagePickerModal';
 import SourceMaterialUpload from './SourceMaterialUpload';
+import AiLoadingDhikr from './AiLoadingDhikr';
 import { saveCloudResource, getCurrentUser } from '@/lib/supabase';
 
 interface PresentationStudioProps {
@@ -395,6 +396,23 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
         <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-200 flex items-center gap-3 text-xs text-rose-800 font-semibold animate-shake">
           <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
           <span>{error}</span>
+        </div>
+      )}
+
+      {/* 🌿 دعاء بداية التحضير وتجديد النية */}
+      {!isDeckReady && (
+        <div className="mb-6 p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 flex items-center justify-between gap-3 text-emerald-900 text-xs sm:text-sm font-bold shadow-2xs">
+          <div className="flex items-center gap-2">
+            <span className="text-base font-serif">﷽</span>
+            <span>
+              {isAr
+                ? 'بسم الله نبدأ.. اللهم لا سهل إلا ما جعلته سهلاً، وأنت تجعل الحزن إذا شئت سهلاً.'
+                : 'In the name of Allah.. O Allah, there is no ease except that which You make easy.'}
+            </span>
+          </div>
+          <span className="hidden sm:inline-block text-[11px] font-semibold text-emerald-700 bg-emerald-100/70 px-2.5 py-1 rounded-full">
+            {isAr ? 'نحتسب نشر العلم النافع 🌱' : 'Dedicated to beneficial knowledge'}
+          </span>
         </div>
       )}
 
@@ -1178,6 +1196,13 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
         }}
         onSelectImage={handleSelectImage}
         currentImageUrl={slides.find((s) => s.id === pickingImageSlideId)?.imageUrl}
+      />
+
+      {/* 🌿 شاشة انتظار الذكاء الاصطناعي مع الأذكار والصلاة على النبي ﷺ */}
+      <AiLoadingDhikr
+        loading={loading}
+        message={isAr ? 'جاري صياغة وهندسة شرائح العرض التقديمي بالذكاء الاصطناعي...' : 'Generating presentation slides...'}
+        uiLang={uiLang}
       />
     </div>
   );

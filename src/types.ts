@@ -440,6 +440,7 @@ export interface WeeklyStatementDocument {
   };
   quizzes: WeeklyQuizItem[];
   subjectStatuses?: Record<string, WeeklySubjectStatus>;
+  weeklyEducationalValue?: string;
   updatedAt: number;
 }
 

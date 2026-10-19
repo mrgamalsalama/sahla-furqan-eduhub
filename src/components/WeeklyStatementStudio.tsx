@@ -79,7 +79,7 @@ export default function WeeklyStatementStudio({
   );
 
   // ── Active Tabs in Master View ──
-  const [activeMasterTab, setActiveMasterTab] = useState<'editor' | 'quizzes' | 'preview'>('preview');
+  const [activeMasterTab, setActiveMasterTab] = useState<'editor' | 'quizzes' | 'preview' | 'value'>('preview');
   const [activeMasterDay, setActiveMasterDay] = useState<number>(1);
 
   // ── Feedback & State ──
@@ -1105,6 +1105,21 @@ export default function WeeklyStatementStudio({
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6" dir={isAr ? 'rtl' : 'ltr'}>
       
+      {/* 🌿 دعاء بداية التحضير وتجديد النية */}
+      <div className="mb-4 p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 flex items-center justify-between gap-3 text-emerald-900 text-xs sm:text-sm font-bold shadow-2xs">
+        <div className="flex items-center gap-2">
+          <span className="text-base font-serif">﷽</span>
+          <span>
+            {isAr
+              ? 'بسم الله نبدأ.. اللهم لا سهل إلا ما جعلته سهلاً، وأنت تجعل الحزن إذا شئت سهلاً.'
+              : 'In the name of Allah.. O Allah, there is no ease except that which You make easy.'}
+          </span>
+        </div>
+        <span className="hidden sm:inline-block text-[11px] font-semibold text-emerald-700 bg-emerald-100/70 px-2.5 py-1 rounded-full">
+          {isAr ? 'نحتسب نشر العلم النافع 🌱' : 'Dedicated to beneficial knowledge'}
+        </span>
+      </div>
+
       {/* ------------------------------------------------------------- */}
       {/* Main Studio Banner & Mode Switcher */}
       {/* ------------------------------------------------------------- */}
@@ -2545,6 +2560,18 @@ export default function WeeklyStatementStudio({
                   <Calendar className="w-3.5 h-3.5 text-amber-600" />
                   <span>{isAr ? `كويزات المرحلة (${docData.quizzes?.length || 0})` : `Quizzes (${docData.quizzes?.length || 0})`}</span>
                 </button>
+
+                <button
+                  onClick={() => setActiveMasterTab('value')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-xs transition ${
+                    activeMasterTab === 'value'
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{isAr ? '🌿 قيمة الأسبوع التربوية' : '🌿 Weekly Core Value'}</span>
+                </button>
               </div>
 
               {/* Master Header Export Buttons */}
@@ -2727,6 +2754,106 @@ export default function WeeklyStatementStudio({
                       </button>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT 4: Educational Value */}
+            {activeMasterTab === 'value' && (
+              <div className="space-y-5 bg-gradient-to-br from-emerald-50/70 via-teal-50/40 to-slate-50 p-6 sm:p-8 rounded-3xl border border-emerald-200 shadow-sm animate-fade-in">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100/80 text-emerald-800 text-xs font-bold mb-2">
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>{isAr ? 'تزكية النفوس وبناء الشخصية' : 'Moral & Character Development'}</span>
+                    </div>
+                    <h3 className="font-black text-base sm:text-lg text-emerald-950 flex items-center gap-2">
+                      <span>{isAr ? 'قيمة الأسبوع التربوية (حديث شريف / قيمة أخلاقية)' : 'Weekly Educational Core Value'}</span>
+                    </h3>
+                    <p className="text-xs sm:text-sm text-emerald-800/80 mt-1 font-medium">
+                      {isAr
+                        ? 'تظهر هذه القيمة المباركة في أسفل ترويسة التقرير الأسبوعي المعتمد لجميع أولياء الأمور وفي ملفات Word و PDF لتجديد نية المعلم والطلاب وغرس القيم الأصيلة.'
+                        : 'This value is prominently placed at the bottom of the weekly statement for parents and in exported Word & PDF files.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-2">
+                    {isAr ? 'نص الحديث الشريف أو القيمة التربوية المعتمدة لهذا الأسبوع:' : 'Core Value / Hadith text for this week:'}
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={docData.weeklyEducationalValue || ''}
+                    onChange={(e) => {
+                      const updated = {
+                        ...docData,
+                        weeklyEducationalValue: e.target.value,
+                        updatedAt: Date.now(),
+                      };
+                      setDocData(updated);
+                      saveWeeklyStatement(updated);
+                    }}
+                    placeholder={isAr ? 'اكتب حديثاً شريفاً أو قيمة تربوية (مثل: «إِنَّمَا بُعِثْتُ لِأُتَمِّمَ مَكَارِمَ الْأَخْلَاقِ»)...' : 'Enter a hadith or core value...'}
+                    className="w-full text-xs sm:text-sm p-4 rounded-2xl border border-emerald-300 bg-white focus:ring-2 focus:ring-emerald-500 font-serif font-bold text-slate-900 leading-relaxed shadow-xs"
+                  />
+                </div>
+
+                <div className="space-y-2.5">
+                  <div className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                    <span>{isAr ? 'نماذج وقيم تربوية نبوية جاهزة للاختيار المباشر بنقرة زر:' : 'Preset Recommended Values:'}</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    {[
+                      {
+                        title: isAr ? 'مكارم الأخلاق وحسن المعاملة' : 'Good Manners',
+                        text: '«إِنَّمَا بُعِثْتُ لِأُتَمِّمَ مَكَارِمَ الْأَخْلَاقِ» — فضل العلم والأخلاق الفاضلة',
+                      },
+                      {
+                        title: isAr ? 'فضل طلب العلم والاجتهاد' : 'Seeking Knowledge',
+                        text: '«مَنْ سَلَكَ طَرِيقًا يَلْتَمِسُ فِيهِ عِلْمًا سَهَّلَ اللَّهُ لَهُ بِهِ طَرِيقًا إِلَى الْجَنَّةِ»',
+                      },
+                      {
+                        title: isAr ? 'إتقان العمل والإحسان' : 'Mastery & Ihsan',
+                        text: '«إِنَّ اللَّهَ يُحِبُّ إِذَا عَمِلَ أَحَدُكُمْ عَمَلًا أَنْ يُتْقِنَهُ»',
+                      },
+                      {
+                        title: isAr ? 'التعاون والمحبة بين الطلاب' : 'Cooperation & Kindness',
+                        text: '«تَهَادَوْا تَحَابُّوا» — التعاون والمودة بين الزملاء والأقران',
+                      },
+                      {
+                        title: isAr ? 'الصدق والأمانة' : 'Honesty & Trust',
+                        text: '«عَلَيْكُمْ بِالصِّدْقِ، فَإِنَّ الصِّدْقَ يَهْدِي إِلَى الْبِرِّ»',
+                      },
+                      {
+                        title: isAr ? 'توقير المعلم وبر الوالدين' : 'Respecting Teachers & Parents',
+                        text: '«لَيْسَ مِنَّا مَنْ لَمْ يُجِلَّ كَبِيرَنَا، وَيَرْحَمْ صَغِيرَنَا، وَيَعْرِفْ لِعَالِمِنَا حَقَّهُ»',
+                      },
+                    ].map((preset, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          const updated = {
+                            ...docData,
+                            weeklyEducationalValue: preset.text,
+                            updatedAt: Date.now(),
+                          };
+                          setDocData(updated);
+                          saveWeeklyStatement(updated);
+                        }}
+                        className="p-3.5 text-start rounded-2xl border border-emerald-200 bg-white hover:bg-emerald-100/60 hover:border-emerald-400 transition shadow-2xs group active:scale-[0.99]"
+                      >
+                        <div className="text-xs font-bold text-emerald-950 mb-1 group-hover:text-emerald-700">
+                          {preset.title}
+                        </div>
+                        <div className="text-[11px] text-slate-600 font-serif leading-relaxed line-clamp-2">
+                          {preset.text}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
