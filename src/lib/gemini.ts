@@ -212,7 +212,7 @@ export async function gradeHandwrittenSubmission(
 
 export async function convertRawTextToQti(payload: {
   rawText: string;
-  lmsTarget: 'sahlah_cypher' | 'furqan_canvas';
+  lmsTarget: 'sahlah_cypher' | 'furqan_canvas' | 'canvas_lms';
   title?: string;
   subject?: string;
   grade?: string;
@@ -221,6 +221,7 @@ export async function convertRawTextToQti(payload: {
   qtiXml: string;
   previewHtml: string;
   extractedCount: number;
+  title?: string;
   error?: string;
 }> {
   const response = await fetch('/api/convert-qti', {

@@ -3,7 +3,7 @@ import {
   Library as LibraryIcon, Trash2, FileEdit, Clock,
   ClipboardList, FileText, FileQuestion, Presentation, FolderOpen,
   Cloud, CloudOff, Globe, Printer, FileType2, Package,
-  LogIn, Sparkles, ToggleLeft, ToggleRight, X, AlertTriangle
+  LogIn, Sparkles, ToggleLeft, ToggleRight, X, AlertTriangle, Heart
 } from 'lucide-react';
 import type { SavedLesson } from '@/types';
 import { OUTPUT_LABELS_AR, OUTPUT_LABELS_EN } from '@/types';

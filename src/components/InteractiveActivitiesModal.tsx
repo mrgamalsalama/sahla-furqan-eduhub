@@ -618,37 +618,42 @@ export default function InteractiveActivitiesModal({
                   <table className="w-full text-[11px] text-right border-collapse">
                     <thead className="bg-purple-900 text-white font-bold sticky top-0">
                       <tr>
-                        <th className="p-2 border border-purple-800 text-center w-8">#</th>
-                        <th className="p-2 border border-purple-800 min-w-[180px]">{isAr ? 'السؤال (أقصى 120 حرف)' : 'Question (Max 120)'}</th>
-                        <th className="p-2 border border-purple-800 min-w-[100px]">{isAr ? 'الخيار 1 (أقصى 75)' : 'Answer 1 (Max 75)'}</th>
-                        <th className="p-2 border border-purple-800 min-w-[100px]">{isAr ? 'الخيار 2 (أقصى 75)' : 'Answer 2 (Max 75)'}</th>
-                        <th className="p-2 border border-purple-800 min-w-[100px]">{isAr ? 'الخيار 3' : 'Answer 3'}</th>
-                        <th className="p-2 border border-purple-800 min-w-[100px]">{isAr ? 'الخيار 4' : 'Answer 4'}</th>
-                        <th className="p-2 border border-purple-800 text-center w-14">{isAr ? 'الوقت' : 'Time'}</th>
-                        <th className="p-2 border border-purple-800 text-center w-16">{isAr ? 'الصحيحة' : 'Correct'}</th>
+                        <th className="p-2 border border-purple-800 min-w-[200px]">{isAr ? 'عمود A: السؤال (Question)' : 'Col A: Question'}</th>
+                        <th className="p-2 border border-purple-800 min-w-[100px]">{isAr ? 'عمود B: الخيار 1' : 'Col B: Answer 1'}</th>
+                        <th className="p-2 border border-purple-800 min-w-[100px]">{isAr ? 'عمود C: الخيار 2' : 'Col C: Answer 2'}</th>
+                        <th className="p-2 border border-purple-800 min-w-[100px]">{isAr ? 'عمود D: الخيار 3' : 'Col D: Answer 3'}</th>
+                        <th className="p-2 border border-purple-800 min-w-[100px]">{isAr ? 'عمود E: الخيار 4' : 'Col E: Answer 4'}</th>
+                        <th className="p-2 border border-purple-800 text-center w-16">{isAr ? 'عمود F: الوقت' : 'Col F: Time'}</th>
+                        <th className="p-2 border border-purple-800 text-center w-20">{isAr ? 'عمود G: الصحيحة' : 'Col G: Correct'}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
-                      {activeCards.slice(0, 10).map((card, idx) => {
+                      {activeCards.slice(0, 10).map((card) => {
                         const choices = card.choices || [card.correctAnswer || 'صح', 'خطأ'];
                         let correctIdx = 1;
                         if (card.correctAnswer) {
-                          const found = choices.findIndex((ch) => ch === card.correctAnswer);
-                          if (found !== -1) correctIdx = found + 1;
+                          const normalize = (s: string) => s.replace(/[\u064B-\u065F\u0670]/g, '').trim().toLowerCase();
+                          const target = normalize(card.correctAnswer);
+                          const found = choices.findIndex((ch) => normalize(ch) === target);
+                          if (found !== -1) {
+                            correctIdx = found + 1;
+                          } else {
+                            const num = parseInt(card.correctAnswer.trim(), 10);
+                            if (!isNaN(num) && num >= 1 && num <= 4) correctIdx = num;
+                          }
                         }
                         return (
                           <tr key={card.id} className="hover:bg-purple-50/40 transition">
-                            <td className="p-2 border border-slate-200 text-center font-bold text-slate-500">{idx + 1}</td>
-                            <td className="p-2 border border-slate-200 font-semibold text-slate-900 truncate max-w-[200px]" title={card.question}>
+                            <td className="p-2 border border-slate-200 font-semibold text-slate-900 truncate max-w-[220px]" title={card.question}>
                               {card.question}
                             </td>
                             <td className="p-2 border border-slate-200 text-slate-700 truncate max-w-[120px]">{choices[0] || '—'}</td>
                             <td className="p-2 border border-slate-200 text-slate-700 truncate max-w-[120px]">{choices[1] || '—'}</td>
                             <td className="p-2 border border-slate-200 text-slate-700 truncate max-w-[120px]">{choices[2] || '—'}</td>
                             <td className="p-2 border border-slate-200 text-slate-700 truncate max-w-[120px]">{choices[3] || '—'}</td>
-                            <td className="p-2 border border-slate-200 text-center text-purple-700 font-bold">30s</td>
+                            <td className="p-2 border border-slate-200 text-center text-purple-700 font-bold">30</td>
                             <td className="p-2 border border-slate-200 text-center font-extrabold text-emerald-700 bg-emerald-50/50">
-                              #{correctIdx}
+                              {correctIdx}
                             </td>
                           </tr>
                         );

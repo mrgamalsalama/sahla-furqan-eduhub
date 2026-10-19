@@ -351,7 +351,7 @@ export async function exportGammaSlidesToPptx(
         align: 'right',
         fontFace,
         rtl: true,
-      });
+      } as any);
 
       // Main Title
       s.addText(slide.title, {
@@ -365,7 +365,7 @@ export async function exportGammaSlidesToPptx(
         align: 'right',
         fontFace,
         rtl: true,
-      });
+      } as any);
 
       // Bullets / Learning Goals
       if (slide.points.length > 0) {
@@ -376,10 +376,10 @@ export async function exportGammaSlidesToPptx(
             color: theme.isDark ? 'E2E8F0' : theme.subtextHex,
             fontFace,
             rtl: true,
-          },
+          } as any,
         }));
 
-        s.addText(bulletsText, {
+        s.addText(bulletsText as any, {
           x: textX,
           y: '56%',
           w: textWidth,
@@ -404,7 +404,7 @@ export async function exportGammaSlidesToPptx(
         align: slide.align || 'right',
         fontFace,
         rtl: isRtl,
-      });
+      } as any);
 
       // Slide index badge
       s.addText(`شريحة ${slide.index} من ${slides.length}`, {

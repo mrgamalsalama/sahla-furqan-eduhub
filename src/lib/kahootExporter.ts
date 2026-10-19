@@ -15,7 +15,7 @@ export interface KahootCard {
  * Builds the official 8-row header and data rows matching Kahoot's official template (KahootQuizTemplate.xlsx)
  */
 export function buildKahootAoa(cards: KahootCard[]): (string | number)[][] {
-  // Rows 1 to 7: Official Kahoot instructions banner
+  // Rows 1 to 7: Official Kahoot instructions banner (7 columns)
   const aoa: (string | number)[][] = [
     ['Kahoot! quiz spreadsheet template'],
     ['Questions: Max 120 characters per question.'],
@@ -24,9 +24,8 @@ export function buildKahootAoa(cards: KahootCard[]): (string | number)[][] {
     ['Correct answer(s): Numbers 1, 2, 3 or 4. If more than one correct answer, separate with comma: 1,3'],
     [],
     [],
-    // Row 8: Official Header Row
+    // Row 8: Official Header Row (Column A to G - exactly 7 columns)
     [
-      '',
       'Question - max 120 characters',
       'Answer 1 - max 75 characters',
       'Answer 2 - max 75 characters',
@@ -37,8 +36,8 @@ export function buildKahootAoa(cards: KahootCard[]): (string | number)[][] {
     ],
   ];
 
-  // Rows 9+: Questions data
-  cards.forEach((card, index) => {
+  // Rows 9+: Questions data starting in Column A with Question text
+  cards.forEach((card) => {
     const rawQuestion = (card.question || '').trim();
     // Clean and enforce 120-char limit
     const cleanQ = rawQuestion.replace(/\r?\n+/g, ' ').slice(0, 120);
@@ -52,23 +51,29 @@ export function buildKahootAoa(cards: KahootCard[]): (string | number)[][] {
     const a3 = choices[2] ? choices[2].trim().replace(/\r?\n+/g, ' ').slice(0, 75) : '';
     const a4 = choices[3] ? choices[3].trim().replace(/\r?\n+/g, ' ').slice(0, 75) : '';
 
-    // Determine correct answer number (1, 2, 3, or 4)
+    // Determine correct answer number (1, 2, 3, or 4) with Arabic diacritics stripping
     let correctIdx = 1;
     if (card.correctAnswer) {
-      const target = card.correctAnswer.trim().toLowerCase();
+      const normalize = (s: string) =>
+        s.replace(/[\u064B-\u065F\u0670]/g, '').trim().toLowerCase();
+      const target = normalize(card.correctAnswer);
       const foundIdx = choices.findIndex(
-        (ch) => ch.trim().toLowerCase() === target
+        (ch) => normalize(ch) === target
       );
       if (foundIdx !== -1) {
         correctIdx = foundIdx + 1;
+      } else {
+        const num = parseInt(card.correctAnswer.trim(), 10);
+        if (!isNaN(num) && num >= 1 && num <= 4) {
+          correctIdx = num;
+        }
       }
     }
 
-    const questionNumber = index + 1;
     const timeLimitSeconds = 30;
 
+    // Directly push 7 columns: A (Question) to G (Correct answer)
     aoa.push([
-      questionNumber,
       cleanQ,
       a1,
       a2,
@@ -91,16 +96,15 @@ export function downloadKahootXlsx(cards: KahootCard[], lessonTitle: string = 'K
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(aoa);
 
-  // Set column widths for optimal view in Excel
+  // Set column widths for optimal view in Excel (Columns A to G)
   ws['!cols'] = [
-    { wch: 6 },  // Col A: #
-    { wch: 48 }, // Col B: Question
-    { wch: 26 }, // Col C: Answer 1
-    { wch: 26 }, // Col D: Answer 2
-    { wch: 26 }, // Col E: Answer 3
-    { wch: 26 }, // Col F: Answer 4
-    { wch: 18 }, // Col G: Time limit
-    { wch: 20 }, // Col H: Correct answer
+    { wch: 48 }, // Col A: Question - max 120 characters
+    { wch: 28 }, // Col B: Answer 1 - max 75 characters
+    { wch: 28 }, // Col C: Answer 2 - max 75 characters
+    { wch: 28 }, // Col D: Answer 3 - max 75 characters
+    { wch: 28 }, // Col E: Answer 4 - max 75 characters
+    { wch: 18 }, // Col F: Time limit (sec)
+    { wch: 20 }, // Col G: Correct answer(s)
   ];
 
   XLSX.utils.book_append_sheet(wb, ws, 'Kahoot');

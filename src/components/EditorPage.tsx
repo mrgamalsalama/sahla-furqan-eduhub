@@ -242,7 +242,7 @@ export default function EditorPage({
   }
 
   async function handleDownloadQtiZip(target: 'sahlah_cypher' | 'furqan_canvas' | 'canvas_lms') {
-    const rawHtml = editorRef.current?.innerHTML || initialContent || '';
+    const rawHtml = editorRef.current?.innerHTML || safeHtml || '';
     await createAndDownloadQtiZip({
       title: currentTitle || 'Assessment_QTI',
       xmlPayload: rawHtml,
@@ -518,7 +518,8 @@ ${manifestResources}  </resources>
           },
         ];
       }
-      const schoolName = settings?.institution === 'furqan'
+      const currentSettings = editingLesson?.settings || getLessonSettings();
+      const schoolName = currentSettings?.institution === 'furqan'
         ? 'مدارس الفرقان العالمية'
         : 'أكاديمية سهلة الدولية';
       await exportGammaSlidesToPptx(slides, 'navy', currentTitle || 'عرض_تقديمي', schoolName);
