@@ -139,8 +139,9 @@ export default function App() {
   }
 
   function handleOpenLesson(lesson: SavedLesson) {
+    const rawHtml = lesson.contentHtml || lesson.html || '';
     setEditorState({
-      html: lesson.html,
+      html: rawHtml,
       title: lesson.title,
       outputType: lesson.outputType,
       editingLesson: lesson,
@@ -272,9 +273,14 @@ export default function App() {
 
             {view === 'editor' && (
               <EditorPage
-                initialHtml={editorState?.html || '<p><br></p>'}
-                title={editorState?.title || (uiLang === 'ar' ? 'مستند تحرير جديد' : 'New Document')}
-                outputType={editorState?.outputType || 'lesson-plan'}
+                initialHtml={
+                  editorState?.html ||
+                  editorState?.editingLesson?.contentHtml ||
+                  editorState?.editingLesson?.html ||
+                  ''
+                }
+                title={editorState?.title || editorState?.editingLesson?.title || (uiLang === 'ar' ? 'مستند تحرير جديد' : 'New Document')}
+                outputType={editorState?.outputType || editorState?.editingLesson?.outputType || 'lesson-plan'}
                 onBack={handleBack}
                 editingLesson={editorState?.editingLesson || null}
                 uiLang={uiLang}

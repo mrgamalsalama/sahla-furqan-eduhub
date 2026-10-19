@@ -150,8 +150,11 @@ export default function CommunityPage({
   async function handleClone(resource: SavedLesson, e: React.MouseEvent) {
     e.stopPropagation();
 
+    const htmlToClone = resource.contentHtml || resource.html || '';
     const clonedLesson: SavedLesson = {
       ...resource,
+      contentHtml: htmlToClone,
+      html: htmlToClone,
       id: `lesson_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       title: isAr ? `نسخة: ${resource.title}` : `Copy of ${resource.title}`,
       createdAt: Date.now(),

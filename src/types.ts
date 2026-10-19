@@ -245,6 +245,7 @@ export interface SavedLesson {
   outputType: OutputType;
   settings: LessonSettings;
   contentHtml: string;
+  html?: string;
   createdAt: number;
   updatedAt: number;
   // Cloud & Community extensions

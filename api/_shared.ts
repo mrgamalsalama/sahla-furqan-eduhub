@@ -74,8 +74,8 @@ export function getApiKeys(): string[] {
       });
   }
 
-  // 2. Check GEMINI_API_KEY (can also be comma-separated or single)
-  const singleKey = process.env.GEMINI_API_KEY;
+  // 2. Check GEMINI_API_KEY and API_KEY (can also be comma-separated or single)
+  const singleKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
   if (singleKey) {
     singleKey
       .split(/[,\n]/)
@@ -128,6 +128,7 @@ export function getApiKey(): string | undefined {
 // Order prioritized by stability, speed, and active quota limits
 const CANDIDATE_MODELS = [
   'gemini-3.1-flash-lite',
+  'gemini-2.5-flash',
   'gemini-flash-latest',
   'gemini-3.8-flash',
 ];

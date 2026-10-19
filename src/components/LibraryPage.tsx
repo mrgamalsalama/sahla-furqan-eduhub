@@ -155,7 +155,7 @@ export default function LibraryPage({
       await exportToWord(
         {
           title: lesson.title,
-          htmlContent: lesson.contentHtml,
+          htmlContent: lesson.contentHtml || lesson.html || '',
           fileName: lesson.title || 'Lesson_Document',
           settings: lesson.settings,
         },
@@ -171,7 +171,7 @@ export default function LibraryPage({
     e.stopPropagation();
     printContent(
       lesson.title,
-      lesson.contentHtml,
+      lesson.contentHtml || lesson.html || '',
       lesson.settings?.contentLanguage === 'en' ? 'en' : 'ar',
       lesson.settings
     );
@@ -182,7 +182,7 @@ export default function LibraryPage({
     e.stopPropagation();
     setExportingId(`qti_${lesson.id}`);
     try {
-      const rawHtml = lesson.contentHtml || '';
+      const rawHtml = lesson.contentHtml || lesson.html || '';
       const target = lesson.settings?.institution === 'furqan' ? 'furqan_canvas' : 'sahlah_cypher';
       await createAndDownloadQtiZip({
         title: lesson.title || 'Assessment_QTI',

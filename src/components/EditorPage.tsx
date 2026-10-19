@@ -81,8 +81,15 @@ export default function EditorPage({
   const isAr = uiLang === 'ar';
   const outputLabels = isAr ? OUTPUT_LABELS_AR : OUTPUT_LABELS_EN;
 
-  const safeHtml = typeof initialHtml === 'string' ? initialHtml : '';
-  const safeTitle = typeof title === 'string' && title.trim() ? title : (isAr ? 'مستند تحرير جديد' : 'New Document');
+  const rawCandidate =
+    (typeof initialHtml === 'string' && initialHtml.trim() && initialHtml !== '<p><br></p>')
+      ? initialHtml
+      : (editingLesson?.contentHtml || editingLesson?.html || initialHtml || '');
+  const safeHtml = typeof rawCandidate === 'string' ? rawCandidate : '';
+  const safeTitle =
+    (typeof title === 'string' && title.trim())
+      ? title
+      : (editingLesson?.title || (isAr ? 'مستند تحرير جديد' : 'New Document'));
 
   const editorRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
@@ -109,6 +116,9 @@ export default function EditorPage({
     if (editorRef.current) {
       editorRef.current.innerHTML = safeHtml;
     }
+    const isArContent = /[\u0600-\u06FF]/.test(safeHtml.slice(0, 500));
+    setActiveDir(isArContent ? 'rtl' : 'ltr');
+    setActiveFont(isArContent ? 'Cairo, sans-serif' : 'inherit');
   }, [safeHtml]);
 
   const exec = useCallback((command: string, value?: string) => {
@@ -519,13 +529,14 @@ ${manifestResources}  </resources>
 
   async function handleSave() {
     const html = editorRef.current?.innerHTML || '';
-    const settings: LessonSettings = getLessonSettings();
+    const settings: LessonSettings = editingLesson?.settings || getLessonSettings();
     const lesson: SavedLesson = {
       id: lessonId,
       title: currentTitle || outputLabels[outputType],
       outputType,
       settings,
       contentHtml: html,
+      html: html,
       createdAt: editingLesson?.createdAt || Date.now(),
       updatedAt: Date.now(),
       isPublic: editingLesson?.isPublic || false,

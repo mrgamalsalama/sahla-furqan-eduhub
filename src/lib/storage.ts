@@ -7,19 +7,34 @@ export function getSavedLessons(): SavedLesson[] {
   try {
     const raw = localStorage.getItem(LESSONS_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as SavedLesson[];
+    const list = JSON.parse(raw);
+    if (!Array.isArray(list)) return [];
+    return list.map((item: any) => {
+      const htmlContent = item.contentHtml || item.html || '';
+      return {
+        ...item,
+        contentHtml: htmlContent,
+        html: htmlContent,
+      };
+    });
   } catch {
     return [];
   }
 }
 
 export function saveLesson(lesson: SavedLesson): void {
+  const htmlContent = lesson.contentHtml || lesson.html || '';
+  const normalizedLesson: SavedLesson = {
+    ...lesson,
+    contentHtml: htmlContent,
+    html: htmlContent,
+  };
   const lessons = getSavedLessons();
-  const idx = lessons.findIndex((l) => l.id === lesson.id);
+  const idx = lessons.findIndex((l) => l.id === normalizedLesson.id);
   if (idx >= 0) {
-    lessons[idx] = lesson;
+    lessons[idx] = normalizedLesson;
   } else {
-    lessons.unshift(lesson);
+    lessons.unshift(normalizedLesson);
   }
   localStorage.setItem(LESSONS_KEY, JSON.stringify(lessons));
 }

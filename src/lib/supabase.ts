@@ -1,26 +1,82 @@
 import { createClient, type User } from '@supabase/supabase-js';
 import type { SavedLesson, LessonSettings, ResourceComment, OutputType, InstitutionId } from '@/types';
 
-// Supabase configuration with URL normalization (strips trailing /rest/v1 and slashes)
-const rawUrl = (import.meta.env.VITE_SUPABASE_URL as string) || 'https://opukajcwunqrxtdeikcs.supabase.co';
-export const supabaseUrl = rawUrl
-  .trim()
-  .replace(/\/rest\/v1\/?$/, '')
-  .replace(/\/+$/, '');
-const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || '';
+// Supabase configuration with robust URL validation and fallback
+const DEFAULT_SUPABASE_URL = 'https://opukajcwunqrxtdeikcs.supabase.co';
+const DEFAULT_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder_signature';
+
+function resolveSupabaseUrl(): string {
+  const envUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim();
+  if (envUrl && envUrl !== 'undefined' && envUrl !== 'null' && envUrl !== '""') {
+    try {
+      const parsed = new URL(envUrl);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return envUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+      }
+    } catch {
+      // invalid URL format, fall back to default
+    }
+  }
+  return DEFAULT_SUPABASE_URL;
+}
+
+export const supabaseUrl = resolveSupabaseUrl();
+const rawAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || '';
+const supabaseAnonKey = (rawAnonKey && rawAnonKey !== 'undefined' && rawAnonKey !== 'null') ? rawAnonKey : '';
 
 export const isSupabaseConfigured = (): boolean => {
-  return Boolean(supabaseUrl && supabaseAnonKey && supabaseAnonKey.length > 10);
+  const envUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim();
+  if (!envUrl || envUrl === 'undefined' || envUrl === 'null' || !supabaseAnonKey || supabaseAnonKey.length < 15) {
+    return false;
+  }
+  try {
+    const parsed = new URL(envUrl);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
 };
 
-// Initialize Supabase client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey || 'placeholder-anon-key', {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-});
+// Initialize Supabase client safely with resilient fallback
+function initSupabaseClient() {
+  try {
+    return createClient(supabaseUrl, supabaseAnonKey || DEFAULT_ANON_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    });
+  } catch (err) {
+    console.warn('[EduHub] Could not initialize real Supabase client, active mock fallback:', err);
+    const dummyQueryBuilder: any = {
+      select: () => dummyQueryBuilder,
+      insert: async () => ({ data: null, error: new Error('Supabase not configured') }),
+      upsert: async () => ({ data: null, error: new Error('Supabase not configured') }),
+      update: () => dummyQueryBuilder,
+      delete: () => dummyQueryBuilder,
+      eq: () => dummyQueryBuilder,
+      order: () => dummyQueryBuilder,
+      limit: () => dummyQueryBuilder,
+      single: async () => ({ data: null, error: new Error('Supabase not configured') }),
+      ilike: () => dummyQueryBuilder,
+      then: (resolve: any) => resolve({ data: [], error: null }),
+    };
+    return {
+      from: () => dummyQueryBuilder,
+      auth: {
+        signInWithPassword: async () => ({ data: { user: null }, error: new Error('Supabase not configured') }),
+        signUp: async () => ({ data: { user: null, session: null }, error: new Error('Supabase not configured') }),
+        signInWithOAuth: async () => ({ error: new Error('Supabase not configured') }),
+        signOut: async () => ({ error: null }),
+        getUser: async () => ({ data: { user: null }, error: null }),
+        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+      },
+    } as unknown as ReturnType<typeof createClient>;
+  }
+}
+
+export const supabase = initSupabaseClient();
 
 // ============================================================================
 // AUTHENTICATION HELPERS
@@ -268,6 +324,7 @@ function mapRecordToLesson(rec: CloudResourceRecord): SavedLesson {
       ...(parsedSettings as unknown as Partial<LessonSettings>),
     },
     contentHtml: rec.content_html,
+    html: rec.content_html,
     createdAt: new Date(rec.created_at).getTime(),
     updatedAt: new Date(rec.updated_at).getTime(),
     isPublic: rec.is_public,
@@ -316,7 +373,7 @@ export async function saveCloudResource(
       subject: lesson.settings?.subject || '',
       grade: lesson.settings?.grade || '',
       output_type: lesson.outputType,
-      content_html: lesson.contentHtml,
+      content_html: lesson.contentHtml || lesson.html || '',
       settings: enhancedSettings,
       is_public: isPublic,
       likes_count: lesson.likesCount || 0,
