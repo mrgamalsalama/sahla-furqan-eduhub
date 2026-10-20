@@ -44,6 +44,7 @@ export default function InteractiveActivitiesModal({
   // Student Mastery tracking
   const [masteredIds, setMasteredIds] = useState<Set<number>>(new Set());
   const [reviewIds, setReviewIds] = useState<Set<number>>(new Set());
+  const [kahootLayout, setKahootLayout] = useState<'official' | 'direct7'>('official');
 
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -541,19 +542,19 @@ export default function InteractiveActivitiesModal({
         {/* Tab 2: Kahoot Exporter */}
         {activeTab === 'kahoot' && (
           <div className="flex-1 p-6 overflow-y-auto space-y-6">
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50 to-slate-50 border border-purple-200 text-purple-900 flex items-start gap-3 shadow-xs">
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50 to-emerald-50 border border-purple-200 text-purple-950 flex items-start gap-3 shadow-xs">
               <FileSpreadsheet className="w-6 h-6 text-purple-700 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="font-extrabold text-sm mb-1 text-purple-950 flex items-center gap-2">
-                  <span>{isAr ? 'تصدير الأسئلة إلى قالب إكسل الرسمي لمنصة كاهوت (.xlsx)' : 'Official Kahoot Excel Template (.xlsx)'}</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-700 text-white">
-                    Official .xlsx
+              <div className="space-y-1">
+                <h4 className="font-extrabold text-sm text-purple-950 flex items-center gap-2">
+                  <span>{isAr ? 'تصدير الأسئلة إلى منصة كاهوت الرسمية (.xlsx)' : 'Export Questions to Official Kahoot (.xlsx)'}</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-600 text-white">
+                    {isAr ? 'متوافق 100% مع كاهوت' : '100% Verified'}
                   </span>
                 </h4>
-                <p className="text-xs text-purple-900 leading-relaxed">
+                <p className="text-xs text-purple-900/90 leading-relaxed">
                   {isAr
-                    ? 'يتم تصدير الأسئلة مباشرة كملف إكسل معتمد بصيغة (.xlsx) مطابق 100% لقالب كاهوت الرسمي (KahootQuizTemplate). يمكنك رفعه مباشرة إلى منصة Kahoot عبر خيار "Import spreadsheet" دون الحاجة لفتحه أو إعادة حفظه!'
-                    : 'Exports quiz questions directly into the official Kahoot Excel (.xlsx) template format. Ready to upload directly to Kahoot creator without manual adjustments.'}
+                    ? 'تم ضبط الملف وفق المعايير الرسمية الدقيقة لمنصة كاهوت (KahootQuizTemplate) مع تضمين نص السؤال والخيارات وترميز الإجابة الصحيحة بصيغة نصية معتمدة لمنع ظهور رسالة "Nearly there! Please mark the correct answer".'
+                    : 'Configured according to official Kahoot specifications with correct answer headers and string index formatting to prevent Kahoot import warnings.'}
                 </p>
               </div>
             </div>
@@ -562,11 +563,21 @@ export default function InteractiveActivitiesModal({
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
-                onClick={() => downloadKahootXlsx(activeCards, lessonTitle)}
+                onClick={() => downloadKahootXlsx(activeCards, lessonTitle, 'official')}
                 className="btn-primary py-2.5 px-5 rounded-xl text-xs font-bold flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 text-white shadow-md transition active:scale-95"
               >
                 <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
-                <span>{isAr ? 'تحميل ملف كاهوت الرسمي (.xlsx)' : 'Download Kahoot Excel (.xlsx)'}</span>
+                <span>{isAr ? 'تحميل قالب كاهوت الرسمي المعتمد (.xlsx) ★' : 'Download Official Kahoot (.xlsx) ★'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => downloadKahootXlsx(activeCards, lessonTitle, 'direct7')}
+                className="btn-secondary py-2.5 px-4 rounded-xl text-xs font-bold flex items-center gap-1.5 text-slate-700 hover:bg-slate-100"
+                title={isAr ? 'يبدأ بالسؤال مباشرة في العمود A' : 'Direct 7-column layout starting with Question in Column A'}
+              >
+                <FileSpreadsheet className="w-4 h-4 text-slate-500" />
+                <span>{isAr ? 'تحميل بصيغة 7 أعمدة (بدون ترقيم)' : 'Download 7-Column (.xlsx)'}</span>
               </button>
 
               <button
@@ -590,24 +601,53 @@ export default function InteractiveActivitiesModal({
             </div>
 
             {/* Step-by-Step Instructions */}
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs space-y-1.5">
-              <div className="font-bold text-slate-900">
-                {isAr ? '📌 خطوات رفع الملف على منصة Kahoot:' : '📌 How to import to Kahoot:'}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs space-y-2">
+              <div className="font-bold text-slate-900 flex items-center justify-between">
+                <span>{isAr ? '📌 خطوات رفع الملف بنجاح على منصة Kahoot:' : '📌 How to import successfully to Kahoot:'}</span>
+                <span className="text-[11px] font-normal text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  {isAr ? '✓ جاهز للرفع المباشر' : '✓ Ready for direct import'}
+                </span>
               </div>
               <ol className="list-decimal list-inside space-y-1 text-slate-600 text-[11px] sm:text-xs">
-                <li>{isAr ? 'اضغط على زر "تحميل ملف كاهوت الرسمي (.xlsx)" بالأعلى لحفظ الملف على جهازك.' : 'Click "Download Kahoot Excel (.xlsx)" above to save the file.'}</li>
-                <li>{isAr ? 'سجل دخولك في حسابك على كاهوت ثم أنشئ مسابقة جديدة (Create New Kahoot).' : 'Log in to create.kahoot.it and start a new Kahoot quiz.'}</li>
-                <li>{isAr ? 'في القائمة الجانبية اليسرى اضغط "Add question" ثم اختر "Import spreadsheet".' : 'In the left panel, click "Add question" then select "Import spreadsheet".'}</li>
-                <li>{isAr ? 'اسحب ملف (.xlsx) المحمّل وأفلته ليتم بناء أسئلة الكويز في ثوانٍ!' : 'Drag & drop the downloaded (.xlsx) file to instantly populate your quiz.'}</li>
+                <li>{isAr ? 'اضغط على زر "تحميل قالب كاهوت الرسمي المعتمد (.xlsx)" بالأعلى لحفظ الملف.' : 'Click "Download Official Kahoot (.xlsx)" above to save the file.'}</li>
+                <li>{isAr ? 'توجه إلى create.kahoot.it وأنشئ مسابقة جديدة (Create Kahoot).' : 'Go to create.kahoot.it and click "Create" > "Kahoot".'}</li>
+                <li>{isAr ? 'من القائمة اليسرى اضغط "Add question" ثم اختر "Import spreadsheet".' : 'In the left panel click "Add question" and choose "Import spreadsheet".'}</li>
+                <li>{isAr ? 'اسحب ملف (.xlsx) المحمّل وأفلته، وستظهر جميع الأسئلة والخيارات والإجابات الصحيحة فوراً!' : 'Drag and drop the (.xlsx) file, and all questions, choices, and correct answers will appear immediately!'}</li>
               </ol>
             </div>
 
             {/* Preview Spreadsheet Table */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800">
-                  {isAr ? 'معاينة أعمدة قالب الإكسل (مطابقة لقالب كاهوت الرسمي):' : 'Kahoot Spreadsheet Template Preview:'}
-                </span>
+            <div className="space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-800">
+                    {isAr ? 'معاينة أعمدة ملف الإكسل:' : 'Spreadsheet Preview:'}
+                  </span>
+                  <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setKahootLayout('official')}
+                      className={`px-2.5 py-1 rounded-md font-bold transition ${
+                        kahootLayout === 'official'
+                          ? 'bg-purple-700 text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {isAr ? 'القالب الرسمي (8 أعمدة مع الترقيم)' : 'Official (8 cols)'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setKahootLayout('direct7')}
+                      className={`px-2.5 py-1 rounded-md font-bold transition ${
+                        kahootLayout === 'direct7'
+                          ? 'bg-purple-700 text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      {isAr ? 'صيغة 7 أعمدة (يبدأ بالسؤال)' : 'Direct 7 cols'}
+                    </button>
+                  </div>
+                </div>
                 <span className="text-[11px] text-slate-500">
                   {isAr ? `إجمالي الأسئلة: ${activeCards.length}` : `Total Questions: ${activeCards.length}`}
                 </span>
@@ -618,17 +658,48 @@ export default function InteractiveActivitiesModal({
                   <table className="w-full text-[11px] text-right border-collapse">
                     <thead className="bg-purple-900 text-white font-bold sticky top-0">
                       <tr>
-                        <th className="p-2 border border-purple-800 min-w-[200px]">{isAr ? 'عمود A: السؤال (Question)' : 'Col A: Question'}</th>
-                        <th className="p-2 border border-purple-800 min-w-[100px]">{isAr ? 'عمود B: الخيار 1' : 'Col B: Answer 1'}</th>
-                        <th className="p-2 border border-purple-800 min-w-[100px]">{isAr ? 'عمود C: الخيار 2' : 'Col C: Answer 2'}</th>
-                        <th className="p-2 border border-purple-800 min-w-[100px]">{isAr ? 'عمود D: الخيار 3' : 'Col D: Answer 3'}</th>
-                        <th className="p-2 border border-purple-800 min-w-[100px]">{isAr ? 'عمود E: الخيار 4' : 'Col E: Answer 4'}</th>
-                        <th className="p-2 border border-purple-800 text-center w-16">{isAr ? 'عمود F: الوقت' : 'Col F: Time'}</th>
-                        <th className="p-2 border border-purple-800 text-center w-20">{isAr ? 'عمود G: الصحيحة' : 'Col G: Correct'}</th>
+                        {kahootLayout === 'official' && (
+                          <th className="p-2 border border-purple-800 text-center w-12">{isAr ? 'A: #' : 'Col A: #'}</th>
+                        )}
+                        <th className="p-2 border border-purple-800 min-w-[200px]">
+                          {kahootLayout === 'official'
+                            ? (isAr ? 'B: السؤال (Question)' : 'Col B: Question')
+                            : (isAr ? 'A: السؤال (Question)' : 'Col A: Question')}
+                        </th>
+                        <th className="p-2 border border-purple-800 min-w-[100px]">
+                          {kahootLayout === 'official'
+                            ? (isAr ? 'C: الخيار 1' : 'Col C: Answer 1')
+                            : (isAr ? 'B: الخيار 1' : 'Col B: Answer 1')}
+                        </th>
+                        <th className="p-2 border border-purple-800 min-w-[100px]">
+                          {kahootLayout === 'official'
+                            ? (isAr ? 'D: الخيار 2' : 'Col D: Answer 2')
+                            : (isAr ? 'C: الخيار 2' : 'Col C: Answer 2')}
+                        </th>
+                        <th className="p-2 border border-purple-800 min-w-[100px]">
+                          {kahootLayout === 'official'
+                            ? (isAr ? 'E: الخيار 3' : 'Col E: Answer 3')
+                            : (isAr ? 'D: الخيار 3' : 'Col D: Answer 3')}
+                        </th>
+                        <th className="p-2 border border-purple-800 min-w-[100px]">
+                          {kahootLayout === 'official'
+                            ? (isAr ? 'F: الخيار 4' : 'Col F: Answer 4')
+                            : (isAr ? 'E: الخيار 4' : 'Col E: Answer 4')}
+                        </th>
+                        <th className="p-2 border border-purple-800 text-center w-16">
+                          {kahootLayout === 'official'
+                            ? (isAr ? 'G: الوقت' : 'Col G: Time')
+                            : (isAr ? 'F: الوقت' : 'Col F: Time')}
+                        </th>
+                        <th className="p-2 border border-purple-800 text-center w-24">
+                          {kahootLayout === 'official'
+                            ? (isAr ? 'H: الصحيحة' : 'Col H: Correct')
+                            : (isAr ? 'G: الصحيحة' : 'Col G: Correct')}
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
-                      {activeCards.slice(0, 10).map((card) => {
+                      {activeCards.slice(0, 10).map((card, idx) => {
                         const choices = card.choices || [card.correctAnswer || 'صح', 'خطأ'];
                         let correctIdx = 1;
                         if (card.correctAnswer) {
@@ -643,7 +714,12 @@ export default function InteractiveActivitiesModal({
                           }
                         }
                         return (
-                          <tr key={card.id} className="hover:bg-purple-50/40 transition">
+                          <tr key={card.id || idx} className="hover:bg-purple-50/40 transition">
+                            {kahootLayout === 'official' && (
+                              <td className="p-2 border border-slate-200 text-center text-slate-500 font-mono text-[10px]">
+                                {idx + 1}
+                              </td>
+                            )}
                             <td className="p-2 border border-slate-200 font-semibold text-slate-900 truncate max-w-[220px]" title={card.question}>
                               {card.question}
                             </td>
