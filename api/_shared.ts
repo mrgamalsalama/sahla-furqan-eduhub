@@ -1,4 +1,5 @@
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import Groq, { toFile } from 'groq-sdk';
 import fs from 'node:fs';
 import path from 'node:path';
 import { SAHLAH_LOGO, FURQAN_LOGO } from './logos.js';
@@ -125,6 +126,171 @@ export function getApiKey(): string | undefined {
   return keys.length > 0 ? keys[0] : undefined;
 }
 
+export function getGroqApiKeys(): string[] {
+  const keys: string[] = [];
+
+  const multiKeys = process.env.GROQ_API_KEYS;
+  if (multiKeys) {
+    multiKeys
+      .split(/[,\n]/)
+      .map((k) => k.trim())
+      .filter((k) => k && !k.startsWith('MY_'))
+      .forEach((k) => {
+        if (!keys.includes(k)) keys.push(k);
+      });
+  }
+
+  const singleKey = process.env.GROQ_API_KEY;
+  if (singleKey) {
+    singleKey
+      .split(/[,\n]/)
+      .map((k) => k.trim())
+      .filter((k) => k && !k.startsWith('MY_'))
+      .forEach((k) => {
+        if (!keys.includes(k)) keys.push(k);
+      });
+  }
+
+  for (let i = 1; i <= 5; i++) {
+    const numbered = process.env[`GROQ_API_KEY_${i}`];
+    if (numbered && !numbered.startsWith('MY_')) {
+      const clean = numbered.trim();
+      if (clean && !keys.includes(clean)) keys.push(clean);
+    }
+  }
+
+  try {
+    const envPath = path.resolve(process.cwd(), '.env');
+    if (fs.existsSync(envPath)) {
+      const envText = fs.readFileSync(envPath, 'utf-8');
+      const matches = envText.matchAll(/GROQ_API_KEY(?:_\d+|S)?=([^\r\n]+)/g);
+      for (const m of matches) {
+        const val = m[1]?.trim();
+        if (val && !val.startsWith('MY_')) {
+          val.split(/[,\n]/).forEach((k) => {
+            const cleaned = k.trim();
+            if (cleaned && !keys.includes(cleaned)) keys.push(cleaned);
+          });
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return keys;
+}
+
+export function getGroqApiKey(): string | undefined {
+  const keys = getGroqApiKeys();
+  return keys.length > 0 ? keys[0] : undefined;
+}
+
+/**
+ * Convert heterogeneous contents (string, array of {text}, or inlineData parts)
+ * into OpenAI/Groq compatible chat messages.
+ */
+function convertContentsToGroqMessages(contents: any): Array<{ role: 'system' | 'user' | 'assistant'; content: any }> {
+  if (typeof contents === 'string') {
+    return [{ role: 'user', content: contents }];
+  }
+
+  if (Array.isArray(contents)) {
+    const hasMedia = contents.some((item) => item?.inlineData);
+
+    if (hasMedia) {
+      const contentParts: any[] = [];
+      for (const item of contents) {
+        if (typeof item === 'string') {
+          contentParts.push({ type: 'text', text: item });
+        } else if (item?.text) {
+          contentParts.push({ type: 'text', text: item.text });
+        } else if (item?.inlineData) {
+          const mime = item.inlineData.mimeType || 'image/png';
+          const data = item.inlineData.data;
+          contentParts.push({
+            type: 'image_url',
+            image_url: {
+              url: `data:${mime};base64,${data}`,
+            },
+          });
+        }
+      }
+      return [{ role: 'user', content: contentParts }];
+    }
+
+    const textPieces: string[] = [];
+    for (const item of contents) {
+      if (typeof item === 'string') {
+        textPieces.push(item);
+      } else if (item?.text) {
+        textPieces.push(item.text);
+      } else if (typeof item === 'object') {
+        textPieces.push(JSON.stringify(item));
+      }
+    }
+
+    if (textPieces.length === 1) {
+      return [{ role: 'user', content: textPieces[0] }];
+    }
+
+    const first = textPieces[0];
+    const isSystemLike = /^(أنت|You are|Instructions:|System:)/i.test(first.trim());
+    if (isSystemLike && textPieces.length > 1) {
+      return [
+        { role: 'system', content: first },
+        { role: 'user', content: textPieces.slice(1).join('\n\n') },
+      ];
+    }
+
+    return [{ role: 'user', content: textPieces.join('\n\n') }];
+  }
+
+  return [{ role: 'user', content: String(contents || '') }];
+}
+
+/**
+ * Groq Text Engine (llama-3.3-70b-versatile):
+ * Ultra-fast silent fallback engine and secondary processing core.
+ */
+export async function callGroqText(
+  contents: any,
+  options?: { fast?: boolean; model?: string }
+): Promise<{ text: string; engine: 'groq'; model: string }> {
+  const groqKey = getGroqApiKey();
+  if (!groqKey) {
+    throw new Error('مفتاح التشغيل البديل (GROQ_API_KEY) غير مهيأ.');
+  }
+
+  const groq = new Groq({ apiKey: groqKey });
+  const messages = convertContentsToGroqMessages(contents);
+
+  const hasImage = messages.some(
+    (m) => Array.isArray(m.content) && m.content.some((part: any) => part.type === 'image_url')
+  );
+
+  const modelToUse = hasImage
+    ? 'llama-3.2-90b-vision-preview'
+    : (options?.model || 'llama-3.3-70b-versatile');
+
+  console.log(`[Dual-Engine / Groq] Calling model: ${modelToUse} (fast=${Boolean(options?.fast)})...`);
+
+  const completion = await groq.chat.completions.create({
+    model: modelToUse,
+    messages: messages as any,
+    temperature: options?.fast ? 0.2 : 0.4,
+    max_tokens: 8192,
+    top_p: 0.95,
+  });
+
+  const text = completion.choices[0]?.message?.content || '';
+  return {
+    text,
+    engine: 'groq',
+    model: modelToUse,
+  };
+}
+
 // Order prioritized by stability, speed, and active quota limits
 const CANDIDATE_MODELS = [
   'gemini-3.1-flash-lite',
@@ -135,11 +301,23 @@ const CANDIDATE_MODELS = [
 
 let currentKeyIndex = 0;
 
+/**
+ * Unified AI Caller with Dual-Engine Architecture:
+ * - Primary: Google Gemini with multi-key rotation and intelligent model fallback
+ * - Silent Fallback: Groq llama-3.3-70b-versatile on 429 Rate Limits, 503 Overloads, 504 Timeouts, or model exhaustion
+ */
 export async function callGemini(contents: any, options?: { fast?: boolean; model?: string }) {
   const keys = getApiKeys();
+  const groqKey = getGroqApiKey();
+
+  // If no Gemini keys are configured, but Groq key is available, seamless direct dispatch to Groq
   if (keys.length === 0) {
+    if (groqKey) {
+      console.log('[Dual-Engine] No Gemini API key detected. Seamlessly delegating request to Groq llama-3.3-70b-versatile...');
+      return await callGroqText(contents, options);
+    }
     const err = new Error(
-      'مفتاح الذكاء الاصطناعي (GEMINI_API_KEY) غير مهيأ. يرجى إضافة GEMINI_API_KEY في إعدادات البيئة.'
+      'مفتاح الذكاء الاصطناعي (GEMINI_API_KEY أو GROQ_API_KEY) غير مهيأ. يرجى إضافة مفتاح التشغيل في إعدادات البيئة.'
     );
     (err as any).statusCode = 401;
     throw err;
@@ -178,7 +356,16 @@ export async function callGemini(contents: any, options?: { fast?: boolean; mode
 
     for (const model of modelsToTry) {
       try {
-        const response = await ai.models.generateContent({
+        // Enforce a sensible 35s timeout on primary engine call to guarantee swift fallback
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => {
+            const timeoutErr = new Error('Gemini API call timed out after 35s');
+            (timeoutErr as any).name = 'TimeoutError';
+            reject(timeoutErr);
+          }, 35000)
+        );
+
+        const callPromise = ai.models.generateContent({
           model,
           contents,
           config: {
@@ -187,7 +374,14 @@ export async function callGemini(contents: any, options?: { fast?: boolean; mode
             },
           },
         });
-        return response;
+
+        const response: any = await Promise.race([callPromise, timeoutPromise]);
+        return {
+          ...response,
+          text: response.text || '',
+          engine: 'gemini',
+          model,
+        };
       } catch (err: any) {
         const errMessage = err?.message || String(err);
         const isQuotaOrRateLimit =
@@ -209,7 +403,19 @@ export async function callGemini(contents: any, options?: { fast?: boolean; mode
     }
   }
 
-  throw lastError || new Error('فشلت جميع نماذج ومفاتيح الذكاء الاصطناعي المتاحة.');
+  // AUTOMATIC SILENT RESCUE FALLBACK TO GROQ (llama-3.3-70b-versatile)
+  if (groqKey) {
+    try {
+      console.warn(
+        `[Dual-Engine Fallback] Primary engine (Gemini) failed (${lastError?.message?.slice(0, 120) || 'All models exhausted'}). Automatically and silently activating Groq llama-3.3-70b-versatile...`
+      );
+      return await callGroqText(contents, options);
+    } catch (groqErr: any) {
+      console.error('[Dual-Engine Fallback] Groq fallback also failed:', groqErr?.message);
+    }
+  }
+
+  throw lastError || new Error('فشلت جميع نماذج ومفاتيح الذكاء الاصطناعي المتاحة (Gemini & Groq).');
 }
 
 export function formatApiError(error: any): { status: number; message: string } {
@@ -229,7 +435,7 @@ export function formatApiError(error: any): { status: number; message: string } 
   ) {
     return {
       status: 401,
-      message: 'مفتاح الذكاء الاصطناعي (GEMINI_API_KEY) غير صالح أو تم إلغاؤه في Google Cloud. يرجى توليد مفتاح جديد وضبطه في Vercel.',
+      message: 'مفتاح الذكاء الاصطناعي (GEMINI_API_KEY أو GROQ_API_KEY) غير صالح أو تم إلغاؤه. يرجى التحقق من المفاتيح في إعدادات البيئة.',
     };
   }
 
@@ -1513,6 +1719,9 @@ export async function executeVoiceToLesson(req: any, res: any) {
     const body = req.body || {};
     const {
       voiceTranscript,
+      audioBase64,
+      audioMimeType = 'audio/webm',
+      transcribeOnly = false,
       autoGenerate = true,
       targetSubject,
       targetGrade,
@@ -1520,26 +1729,106 @@ export async function executeVoiceToLesson(req: any, res: any) {
       contentLanguage = 'ar',
     } = body;
 
-    console.log(`[VoiceToLesson] Request received: autoGenerate=${autoGenerate}, transcript length=${voiceTranscript?.length}`);
+    console.log(
+      `[VoiceToLesson] Request received: autoGenerate=${autoGenerate}, transcribeOnly=${transcribeOnly}, hasAudio=${Boolean(audioBase64)}, transcriptLen=${voiceTranscript?.length || 0}`
+    );
 
-    if (!voiceTranscript || typeof voiceTranscript !== 'string' || !voiceTranscript.trim()) {
-      return res.status(400).json({ error: 'النص الصوتي المفرغ غير موجود أو فارغ.' });
+    let activeTranscript = (typeof voiceTranscript === 'string' ? voiceTranscript : '').trim();
+
+    // 1. Primary Engine for Voice: Groq whisper-large-v3 for instantaneous Arabic transcription (< 1 sec)
+    if (audioBase64 && !activeTranscript) {
+      const groqKey = getGroqApiKey();
+      if (groqKey) {
+        const whisperStart = Date.now();
+        try {
+          console.log('[VoiceToLesson] Dispatching audio to Groq whisper-large-v3...');
+          const groq = new Groq({ apiKey: groqKey });
+          const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '');
+          const audioBuffer = Buffer.from(cleanBase64, 'base64');
+          const ext = audioMimeType.includes('wav')
+            ? 'wav'
+            : audioMimeType.includes('mp3')
+            ? 'mp3'
+            : audioMimeType.includes('m4a')
+            ? 'm4a'
+            : audioMimeType.includes('ogg')
+            ? 'ogg'
+            : 'webm';
+
+          const audioFile = await toFile(audioBuffer, `recording.${ext}`, {
+            type: audioMimeType || 'audio/webm',
+          });
+
+          const transcription = await groq.audio.transcriptions.create({
+            file: audioFile,
+            model: 'whisper-large-v3',
+            language: contentLanguage === 'ar' ? 'ar' : undefined,
+            response_format: 'json',
+            temperature: 0.0,
+          });
+
+          activeTranscript = (transcription.text || '').trim();
+          console.log(
+            `[VoiceToLesson] Groq whisper-large-v3 completed in ${Date.now() - whisperStart}ms (${activeTranscript.length} chars): ${activeTranscript.slice(0, 60)}...`
+          );
+        } catch (whisperErr: any) {
+          console.warn('[VoiceToLesson] Groq whisper-large-v3 error, falling back to Gemini audio:', whisperErr?.message);
+        }
+      }
+
+      // Secondary Fallback for Audio: Gemini Multimodal Audio Transcription
+      if (!activeTranscript) {
+        try {
+          console.log('[VoiceToLesson] Running Gemini audio transcription fallback...');
+          const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, '');
+          const geminiTrans = await callGemini([
+            {
+              inlineData: {
+                mimeType: audioMimeType || 'audio/webm',
+                data: cleanBase64,
+              },
+            },
+            {
+              text:
+                contentLanguage === 'ar'
+                  ? 'فرغ هذا التسجيل الصوتي بدقة تامة إلى نص عربي فصيح بدون أي مقدمات أو تعليق.'
+                  : 'Transcribe this audio recording accurately into text without any preamble or commentary.',
+            },
+          ]);
+          activeTranscript = (geminiTrans.text || '').trim();
+          console.log(`[VoiceToLesson] Gemini audio fallback completed: ${activeTranscript.slice(0, 60)}...`);
+        } catch (geminiAudioErr: any) {
+          console.warn('[VoiceToLesson] Gemini audio fallback failed:', geminiAudioErr?.message);
+        }
+      }
+    }
+
+    // If client only requested transcription without generating lesson plan
+    if (transcribeOnly) {
+      if (!activeTranscript) {
+        return res.status(400).json({ error: 'تعذر تفريغ التسجيل الصوتي، يرجى المحاولة مرة أخرى أو التحقق من وضوح الصوت.' });
+      }
+      return res.status(200).json({ success: true, transcript: activeTranscript });
+    }
+
+    if (!activeTranscript) {
+      return res.status(400).json({ error: 'النص الصوتي المفرغ غير موجود أو فارغ. يرجى تسجيل الصوت أو كتابة الأفكار.' });
     }
 
     const isAr = contentLanguage === 'ar';
 
-    // 1. Fast Structured Parsing with gemini-3.1-flash-lite (takes < 1 second)
+    // 2. Fast Structured NLP Parsing (Fast mode: Groq llama-3.3-70b-versatile or Gemini flash-lite)
     let parsed: any = {
       subject: targetSubject || (isAr ? 'العلوم' : 'Science'),
       grade: targetGrade || (isAr ? 'الصف التاسع' : 'Grade 9'),
-      lessonTitle: voiceTranscript.slice(0, 40).trim(),
+      lessonTitle: activeTranscript.slice(0, 40).trim(),
       duration: isAr ? '45 دقيقة' : '45 min',
-      keyActivities: voiceTranscript,
+      keyActivities: activeTranscript,
     };
 
     const parseStart = Date.now();
     try {
-      const parserPrompt = `You are a fast educational NLP parser. Extract metadata from this voice transcript: "${voiceTranscript}". Return JSON ONLY:
+      const parserPrompt = `You are a fast educational NLP parser. Extract metadata from this voice transcript: "${activeTranscript}". Return JSON ONLY:
 {"subject": "${isAr ? 'العلوم' : 'Science'}", "grade": "${isAr ? 'الصف التاسع' : 'Grade 9'}", "lessonTitle": "Brief Title", "duration": "${isAr ? '45 دقيقة' : '45 min'}", "keyActivities": "Brief summary"}`;
 
       const parseResponse = await callGemini(parserPrompt, { fast: true, model: 'gemini-3.1-flash-lite' });
@@ -1549,7 +1838,7 @@ export async function executeVoiceToLesson(req: any, res: any) {
         .trim();
       const extracted = JSON.parse(cleanJson);
       parsed = { ...parsed, ...extracted };
-      console.log(`[VoiceToLesson] Parse finished in ${Date.now() - parseStart}ms:`, parsed.lessonTitle);
+      console.log(`[VoiceToLesson] Metadata parsed in ${Date.now() - parseStart}ms:`, parsed.lessonTitle);
     } catch (parseErr: any) {
       console.warn(`[VoiceToLesson] Parse fallback triggered after ${Date.now() - parseStart}ms:`, parseErr?.message);
     }
@@ -1560,10 +1849,10 @@ export async function executeVoiceToLesson(req: any, res: any) {
 
     // If autoGenerate is false, return the extracted parameters immediately
     if (!autoGenerate) {
-      return res.status(200).json({ success: true, parsed });
+      return res.status(200).json({ success: true, transcript: activeTranscript, parsed });
     }
 
-    // 2. Generate the complete official lesson plan immediately using gemini-flash-latest
+    // 3. Generate the complete official lesson plan immediately using Dual-Engine (Gemini Primary + Groq Fallback)
     const genStart = Date.now();
     const settings = {
       subject: parsed.subject || (isAr ? 'العلوم' : 'Science'),
@@ -1575,13 +1864,16 @@ export async function executeVoiceToLesson(req: any, res: any) {
       contentLanguage,
       institution,
       teacherPrompt: `توجيهات صوتية مباشرة من المعلم:
-- الأنشطة المحددة: ${parsed.keyActivities || voiceTranscript}
-- النص الصوتي الكامل للمعلم: "${voiceTranscript}"`,
+- الأنشطة المحددة: ${parsed.keyActivities || activeTranscript}
+- النص الصوتي الكامل للمعلم: "${activeTranscript}"`,
     };
 
-    console.log(`[VoiceToLesson] Starting lesson plan generation...`);
+    const prompt = buildBasePrompt(settings, 'lesson-plan');
+
+    console.log(`[VoiceToLesson] Starting lesson plan generation via Dual-Engine...`);
     const genResponse = await callGemini(prompt);
-    console.log(`[VoiceToLesson] Generation finished in ${Date.now() - genStart}ms`);
+    console.log(`[VoiceToLesson] Lesson plan generated in ${Date.now() - genStart}ms via [${genResponse.engine || 'dual-engine'}]`);
+
     const htmlContent = extractHtml(genResponse.text || '');
     const institutionHeader = getInstitutionHeader(settings, 'lesson-plan');
     const direction = isAr ? 'rtl' : 'ltr';
@@ -1593,6 +1885,7 @@ export async function executeVoiceToLesson(req: any, res: any) {
     console.log(`[VoiceToLesson] Total request completed in ${Date.now() - startTime}ms`);
     return res.status(200).json({
       success: true,
+      transcript: activeTranscript,
       parsed,
       contentHtml: fullHtml,
       title,

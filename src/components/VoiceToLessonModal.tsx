@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  Mic, MicOff, Sparkles, Loader2, Play, Square,
-  X, Check, AlertCircle, ArrowLeft, ArrowRight, Wand2
+  Mic, Sparkles, Loader2, Square,
+  X, AlertCircle, ArrowLeft, ArrowRight, Wand2, Upload, Zap
 } from 'lucide-react';
-import { parseAndGenerateVoiceToLesson } from '@/lib/gemini';
+import { parseAndGenerateVoiceToLesson, transcribeAudioWithGroq } from '@/lib/gemini';
 import type { UILang } from '@/lib/i18n';
 import type { GenerationResult, OutputType } from '@/types';
 
@@ -62,21 +62,14 @@ export default function VoiceToLessonModal({
   const [transcript, setTranscript] = useState('');
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [speechSupported, setSpeechSupported] = useState(true);
 
   const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<any>(null);
-
-  useEffect(() => {
-    // Check Web Speech API support
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      setSpeechSupported(false);
-    }
-  }, []);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Cleanup on unmount or close
   useEffect(() => {
@@ -86,72 +79,67 @@ export default function VoiceToLessonModal({
     }
   }, [isOpen]);
 
-  function startRecording() {
+  async function startRecording() {
     setError(null);
+    audioChunksRef.current = [];
+
+    // 1. Try to initialize MediaRecorder for high-accuracy Groq Whisper transcription
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data && event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+        mediaRecorderRef.current = mediaRecorder;
+        mediaRecorder.start(250); // collect in 250ms chunks
+      }
+    } catch (mediaErr: any) {
+      console.warn('Could not initialize MediaRecorder:', mediaErr);
+    }
+
+    // 2. Try SpeechRecognition in parallel for live visual feedback
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-    if (!SpeechRecognition) {
-      setSpeechSupported(false);
-      setError(
-        isAr
-          ? 'المتصفح لا يدعم ميزة التعرف الصوتي المباشر. يمكنك كتابة أو لصق أفكارك في الصندوق أدناه.'
-          : 'Direct speech recognition is not supported in this browser. You can type or paste your thoughts below.'
-      );
-      return;
+    if (SpeechRecognition) {
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = isAr ? 'ar-SA' : 'en-US';
+
+        recognition.onresult = (event: any) => {
+          let currentTranscript = '';
+          for (let i = 0; i < event.results.length; i++) {
+            currentTranscript += event.results[i][0].transcript + ' ';
+          }
+          setTranscript(currentTranscript.trim());
+        };
+
+        recognition.onerror = (event: any) => {
+          if (event.error !== 'no-speech') {
+            console.warn('Speech recognition warning:', event.error);
+          }
+        };
+
+        recognitionRef.current = recognition;
+        recognition.start();
+      } catch (speechErr) {
+        console.warn('Speech recognition start failed:', speechErr);
+      }
     }
 
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = isAr ? 'ar-SA' : 'en-US';
-
-      recognition.onstart = () => {
-        setIsRecording(true);
-        setRecordingSeconds(0);
-        timerRef.current = setInterval(() => {
-          setRecordingSeconds((prev) => prev + 1);
-        }, 1000);
-      };
-
-      recognition.onresult = (event: any) => {
-        let currentTranscript = '';
-        for (let i = 0; i < event.results.length; i++) {
-          currentTranscript += event.results[i][0].transcript + ' ';
-        }
-        setTranscript(currentTranscript.trim());
-      };
-
-      recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
-        if (event.error === 'not-allowed') {
-          setError(
-            isAr
-              ? 'تم رفض إذن استخدام الميكروفون. يرجى السماح بالوصول للميكروفون من إعدادات المتصفح.'
-              : 'Microphone permission was denied. Please allow microphone access in browser settings.'
-          );
-        } else if (event.error !== 'no-speech') {
-          setError(isAr ? `تنبيه الميكروفون: ${event.error}` : `Mic alert: ${event.error}`);
-        }
-        stopRecording();
-      };
-
-      recognition.onend = () => {
-        setIsRecording(false);
-        if (timerRef.current) clearInterval(timerRef.current);
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch (err: any) {
-      console.error('Failed to start speech recognition:', err);
-      setIsRecording(false);
-      setError(err?.message || 'تعذر تشغيل الميكروفون.');
-    }
+    setIsRecording(true);
+    setRecordingSeconds(0);
+    timerRef.current = setInterval(() => {
+      setRecordingSeconds((prev) => prev + 1);
+    }, 1000);
   }
 
-  function stopRecording() {
+  async function stopRecording() {
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -160,11 +148,50 @@ export default function VoiceToLessonModal({
       }
       recognitionRef.current = null;
     }
+
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+
     setIsRecording(false);
+
+    // Stop MediaRecorder and if transcript is short or empty, transcribe with Groq Whisper
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      // Stop all tracks in the stream
+      mediaRecorderRef.current.stream?.getTracks().forEach((track) => track.stop());
+
+      // If transcript is still empty or less than 5 characters after speaking, send audio to Groq Whisper
+      setTimeout(async () => {
+        if (audioChunksRef.current.length > 0 && transcript.trim().length < 5) {
+          try {
+            setTranscribing(true);
+            const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+              const base64Audio = reader.result as string;
+              if (base64Audio) {
+                try {
+                  const whisperText = await transcribeAudioWithGroq(base64Audio, 'audio/webm', isAr ? 'ar' : 'en');
+                  if (whisperText) {
+                    setTranscript((prev) => (prev ? `${prev} ${whisperText}` : whisperText));
+                  }
+                } catch (err: any) {
+                  console.warn('Groq whisper error:', err);
+                } finally {
+                  setTranscribing(false);
+                }
+              }
+            };
+            reader.readAsDataURL(audioBlob);
+          } catch (err) {
+            console.warn('Blob reading error:', err);
+            setTranscribing(false);
+          }
+        }
+      }, 300);
+    }
   }
 
   function toggleRecording() {
@@ -172,6 +199,41 @@ export default function VoiceToLessonModal({
       stopRecording();
     } else {
       startRecording();
+    }
+  }
+
+  async function handleAudioFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setTranscribing(true);
+    setError(null);
+
+    try {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64Data = reader.result as string;
+        try {
+          const transcribedText = await transcribeAudioWithGroq(
+            base64Data,
+            file.type || 'audio/mp3',
+            isAr ? 'ar' : 'en'
+          );
+          if (transcribedText) {
+            setTranscript((prev) => (prev ? `${prev} ${transcribedText}` : transcribedText));
+          } else {
+            setError(isAr ? 'لم يتم العثور على كلمات واضحة في الملف الصوتي.' : 'No clear speech detected in file.');
+          }
+        } catch (apiErr: any) {
+          setError(apiErr?.message || 'فشل تفريغ الملف الصوتي.');
+        } finally {
+          setTranscribing(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (readErr: any) {
+      setError(readErr?.message || 'فشل قراءة الملف.');
+      setTranscribing(false);
     }
   }
 
@@ -298,13 +360,47 @@ export default function VoiceToLessonModal({
                   </span>
                 </div>
               ) : (
-                <div className="text-slate-600 text-xs font-semibold">
-                  {isAr
-                    ? 'اضغط على الميكروفون للتحدث، أو اكتب أفكارك مباشرة في المربع أدناه'
-                    : 'Click the mic to speak, or write/edit your thoughts directly below'}
+                <div className="space-y-2">
+                  <div className="text-slate-600 text-xs font-semibold">
+                    {isAr
+                      ? 'اضغط على الميكروفون للتحدث، أو ارفع تسجيلاً صوتياً، أو اكتب أفكارك مباشرة'
+                      : 'Click the mic to speak, upload an audio clip, or type directly below'}
+                  </div>
+
+                  <div className="flex items-center justify-center gap-2 pt-1">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="audio/*,.mp3,.wav,.m4a,.webm,.ogg"
+                      onChange={handleAudioFileUpload}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={loading || transcribing || isRecording}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition shadow-xs"
+                      title={isAr ? 'رفع ملف صوتي من جهازك لتفريغه فورياً عبر Groq Whisper' : 'Upload audio file for instant Groq Whisper transcription'}
+                    >
+                      <Upload className="w-3.5 h-3.5 text-blue-900" />
+                      <span>{isAr ? 'رفع ملف صوتي (MP3/WAV/M4A)' : 'Upload Audio File'}</span>
+                    </button>
+
+                    <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-bold">
+                      <Zap className="w-3 h-3 text-amber-600" />
+                      <span>{isAr ? 'Groq Whisper v3 ⚡' : 'Groq Whisper v3 ⚡'}</span>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
+
+            {transcribing && (
+              <div className="mt-3 p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-bold flex items-center justify-center gap-2 animate-pulse">
+                <Loader2 className="w-4 h-4 animate-spin text-blue-900" />
+                <span>{isAr ? 'جارٍ تفريغ الصوت بنموذج Groq Whisper Large v3 (أقل من ثانية)...' : 'Transcribing audio with Groq Whisper Large v3 (< 1s)...'}</span>
+              </div>
+            )}
           </div>
 
           {/* Transcript Box */}

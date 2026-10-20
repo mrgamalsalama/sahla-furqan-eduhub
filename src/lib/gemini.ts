@@ -274,7 +274,10 @@ export async function translateGeneratedContent(
 }
 
 export interface VoiceToLessonPayload {
-  voiceTranscript: string;
+  voiceTranscript?: string;
+  audioBase64?: string;
+  audioMimeType?: string;
+  transcribeOnly?: boolean;
   autoGenerate?: boolean;
   targetSubject?: string;
   targetGrade?: string;
@@ -284,6 +287,7 @@ export interface VoiceToLessonPayload {
 
 export interface VoiceToLessonResponse {
   success: boolean;
+  transcript?: string;
   parsed: {
     subject?: string;
     grade?: string;
@@ -296,6 +300,31 @@ export interface VoiceToLessonResponse {
   };
   contentHtml?: string;
   title?: string;
+}
+
+export async function transcribeAudioWithGroq(
+  audioBase64: string,
+  audioMimeType: string = 'audio/webm',
+  lang: 'ar' | 'en' = 'ar'
+): Promise<string> {
+  const response = await fetch('/api/voice-to-lesson', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      audioBase64,
+      audioMimeType,
+      transcribeOnly: true,
+      contentLanguage: lang,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'فشل تفريغ الصوت عبر Groq Whisper.');
+  }
+
+  const data = await response.json();
+  return data.transcript || '';
 }
 
 export async function parseAndGenerateVoiceToLesson(

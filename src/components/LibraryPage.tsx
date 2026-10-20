@@ -3,7 +3,7 @@ import {
   Library as LibraryIcon, Trash2, FileEdit, Clock,
   ClipboardList, FileText, FileQuestion, Presentation, FolderOpen,
   Cloud, CloudOff, Globe, Printer, FileType2, Package,
-  LogIn, Sparkles, ToggleLeft, ToggleRight, X, AlertTriangle, Heart
+  LogIn, Sparkles, ToggleLeft, ToggleRight, X, Heart
 } from 'lucide-react';
 import type { SavedLesson } from '@/types';
 import { OUTPUT_LABELS_AR, OUTPUT_LABELS_EN } from '@/types';
@@ -360,9 +360,17 @@ export default function LibraryPage({
                     </div>
                   )}
 
-                  <div className="flex items-center gap-1.5 text-[11px] text-slate-400 mb-4">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>{formatDate(lesson.updatedAt)}</span>
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 mb-4">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>{formatDate(lesson.updatedAt)}</span>
+                    </div>
+                    {typeof lesson.likesCount === 'number' && lesson.likesCount > 0 && (
+                      <div className="flex items-center gap-1 text-rose-500 font-bold" title={isAr ? 'عدد الإعجابات' : 'Likes count'}>
+                        <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
+                        <span>{lesson.likesCount}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

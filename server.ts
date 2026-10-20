@@ -45,7 +45,7 @@ async function startServer() {
   } else if (!process.env.VERCEL) {
     const { createServer } = await import('vite');
     const vite = await createServer({
-      server: { middlewareMode: true, host: '0.0.0.0', port: PORT },
+      server: { middlewareMode: true, host: '0.0.0.0', port: PORT, allowedHosts: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
