@@ -1582,40 +1582,80 @@ export async function executeAdvisor(req: any, res: any) {
 export async function executeRubric(req: any, res: any) {
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-    const { subject, grade, assignmentTitle, maxScore, lang = 'ar' } = body || {};
+    const {
+      subject,
+      grade,
+      assignmentTitle,
+      maxScore,
+      lang = 'ar',
+      imageFile,
+      customCriteriaText,
+    } = body || {};
     const isAr = lang !== 'en';
     const total = Number(maxScore) || 20;
 
-    const prompt = isAr
-      ? `أَنْتَ كَبِيرُ خُبَرَاءِ الْقِيَاسِ وَالتَّقْوِيمِ التَّرْبَوِيِّ فِي أَعْرَقِ الْمُؤَسَّسَاتِ التَّعْلِيمِيَّةِ الدَّوْلِيَّةِ (أَكَادِيمِيَّةُ سَهْلَةَ & مَدَارِسُ الْفُرْقَانِ).
+    let prompt = '';
+    if (isAr) {
+      prompt = `أَنْتَ كَبِيرُ خُبَرَاءِ الْقِيَاسِ وَالتَّقْوِيمِ التَّرْبَوِيِّ فِي أَعْرَقِ الْمُؤَسَّسَاتِ التَّعْلِيمِيَّةِ الدَّوْلِيَّةِ (أَكَادِيمِيَّةُ سَهْلَةَ & مَدَارِسُ الْفُرْقَانِ).
 مَهَمَّتُكَ: صِيَاغَةُ "سُلَّمِ تَقْدِيرٍ لَفْظِيٍّ تَحْلِيلِيٍّ احْتِرَافِيٍّ (Analytic Grading Rubric)" مَبْنِيٍّ عَلَى مَعَايِيرِ الْجَوْدَةِ التَّعْلِيمِيَّةِ لِتَقْيِيمِ التَّكْلِيفِ التَّالِي:
-- الْمَادَّةُ الدِّرَاسِيَّةُ: ${subject || 'اللُّغَةُ الْعَرَبِيَّةُ (الْكِتَابَةُ وَالتَّعْبِيرُ)'}
+- الْمَادَّةُ الدِّرَاسِيَّةُ: ${subject || 'اللُّغَةُ الْعَرَبِيَّةُ'}
 - الصَّفُّ الدِّرَاسِيُّ: ${grade || 'مُتَوَسِّطٌ / ثَانَوِيٌّ'}
-- مَوْضُوعُ التَّكْلِيفِ أَوِ السُّؤَالِ: ${assignmentTitle || 'كِتَابَةُ فِقْرَةٍ أَوْ مَقَالٍ إِقْنَاعِيٍّ'}
-- الدَّرَجَةُ الْكُلِّيَّةُ الْمُسْتَحَقَّةُ: ${total} دَرَجَةً.
+- مَوْضُوعُ التَّكْلِيفِ أَوِ السُّؤَالِ: ${assignmentTitle || 'تَكْلِيفٌ تَعْلِيمِيٌّ'}
+- الدَّرَجَةُ الْكُلِّيَّةُ الْمُسْتَحَقَّةُ: ${total} دَرَجَةً.`;
 
-الْمَعَايِيرُ التَّرْبَوِيَّةُ الْمُعْتَمَدَةُ (قَوَاعِدُ إِلْزَامِيَّةٌ 100%):
-1. صِغْ 4 إِلَى 5 مَعَايِيرَ تَقْيِيمٍ نَوْعِيَّةٍ دَقِيقَةٍ تُلَائِمُ مَوْضُوعَ التَّكْلِيفِ وَالْمَادَّةَ (مَثَلاً لِلْكِتَابَةِ الْعَرَبِيَّةِ: 1. الْمُحْتَوَى وَعُمْقُ الْأَفْكَارِ، 2. الْبِنَاءُ التَّنْظِيمِيُّ وَالتَّرَابُطُ، 3. الثَّرْوَةُ اللُّغَوِيَّةُ وَالْأُسْلُوبُ الْبَلَاغِيُّ، 4. الصِّحَّةُ النَّحْوِيَّةُ وَالصَّرْفِيَّةُ، 5. السَّلَامَةُ الْإِمْلَائِيَّةُ وَعَلَامَاتُ التَّرْقِيمِ وَالْخَطُّ).
+      if (imageFile && imageFile.base64) {
+        prompt += `\n\n📌 هَامٌّ جِدّاً: لَقَدْ رَفَعَ الْمُعَلِّمُ صُورَةَ وَرَقَةِ الْأَسْئِلَةِ / التَّكْلِيفِ الْمُرْفَقَةِ. قُمْ بِقِرَاءَةِ نَصِّ الْأَسْئِلَةِ وَالْمَطَالِبِ الْمَوْجُودَةِ عَلَى الْوَرَقَةِ الْمُرْفَقَةِ بِدِقَّةٍ، وَاسْتَنْبِطْ سُلَّمَ التَّقْدِيرِ لِيُعَبِّرَ تَمَاماً عَنْ أَسْئِلَةِ وَعَنَاصِرِ هَذِهِ الْوَرَقَةِ.`;
+      }
+
+      if (customCriteriaText && customCriteriaText.trim()) {
+        prompt += `\n\n📌 مُعْطَيَاتُ وَمَعَايِيرُ الْمُعَلِّمِ الْخَاصَّةُ:\n"""\n${customCriteriaText.trim()}\n"""\nقُمْ بِصِيَاغَةِ وَتَنْظِيمِ هَذِهِ الْمَعَايِيرِ الَّتِي حَدَّدَهَا الْمُعَلِّمُ دَاخِلَ جَدْوَلِ سُلَّمِ التَّقْدِيرِ، مَعَ ضَبْطِ أَوْزَانِهَا لِتُطَابِقَ ${total} دَرَجَةً تَمَاماً، وَكِتَابَةِ مُؤَشِّرَاتِ أَدَاءِ لِكُلِّ مُسْتَوًى.`;
+      }
+
+      prompt += `\n\nالْمَعَايِيرُ التَّرْبَوِيَّةُ الْمُعْتَمَدَةُ (قَوَاعِدُ إِلْزَامِيَّةٌ 100%):
+1. صِغْ 4 إِلَى 5 مَعَايِيرَ تَقْيِيمٍ نَوْعِيَّةٍ دَقِيقَةٍ تُلَائِمُ مَوْضُوعَ التَّكْلِيفِ وَالْمَادَّةَ وَالْوَرَقَةَ الْمُرْفَقَةَ.
 2. تَحْدِيدُ الدَّرَجَةِ الْقُصْوَى لِكُلِّ مِعْيَارٍ بِحَيْثُ يَكُونُ مَجْمُوعُهَا مَسَاوِياً لِـ ${total} دَرَجَةً تَمَاماً بِلَا أَيِّ زِيَادَةٍ أَوْ نُقْصَانٍ.
-3. صِيَاغَةُ 4 مُسْتَوَيَاتِ أَدَاءٍ لِكُلِّ مِعْيَارٍ مَعَ حِسَابِ الدَّرَجَاتِ بِدِقَّةٍ:
+3. صِيَاغَةُ 4 مُسْتَوَيَاتِ أَدَاءٍ لِكُلِّ مِعْيَارٍ:
    - مُتَمَيِّزٌ (100% من الدرجة): أداء إبداعي متقن خالٍ من الثغرات.
    - مُتَقَدِّمٌ (جيد جداً / 75-80%): أداء سليم مع ملاحظات ثانوية لا تؤثر على الجوهر.
    - مَقْبُولٌ (نامٍ / 50-60%): أداء حقق الحد الأدنى مع وجود أخطاء واضحة.
    - بِحَاجَةٍ لِدَعْمٍ (أقل من 50%): قصور وضعف ظاهر يتطلب برنامجاً علاجياً.
-4. اكْتُبْ كُلَّ مِعْيَارٍ بِمُؤَشِّرَاتٍ إِجْرَائِيَّةٍ وَاقِعِيَّةٍ وَمَلْمُوسَةٍ لَا تَحْتَمِلُ اللَّبْسَ لِيَسْتَفِيدَ مِنْهَا الْمُعَلِّمُ وَالطَّالِبُ.
-5. صِغِ الْجَدْوَلَ فِي هَيْكَلِ HTML رَسْمِيٍّ فَائِقِ الْأَنَاقَةِ (#1e3a8a، #0f172a، #f8fafc) دُونَ أَيِّ كُتَلِ مَارْكْدَاوْن (\`\`\` أَوْ ###). ابْدَأْ بِـ <table... فَوْراً.`
-      : `You are a master educational measurement and assessment specialist for Sahlah Academy and Al-Furqan School.
+4. اكْتُبْ كُلَّ مِعْيَارٍ بِمُؤَشِّرَاتٍ إِجْرَائِيَّةٍ وَاقِعِيَّةٍ وَمَلْمُوسَةٍ لَا تَحْتَمِلُ اللَّبْسَ.
+5. صِغِ الْجَدْوَلَ فِي هَيْكَلِ HTML رَسْمِيٍّ فَائِقِ الْأَنَاقَةِ (#1e3a8a، #0f172a، #f8fafc) دُونَ أَيِّ كُتَلِ مَارْكْدَاوْن (\`\`\` أَوْ ###). ابْدَأْ بِـ <table... فَوْراً.`;
+    } else {
+      prompt = `You are a master educational measurement and assessment specialist for Sahlah Academy and Al-Furqan School.
 Generate a comprehensive Analytic Grading Rubric for:
 - Subject: ${subject || 'General'}
 - Grade: ${grade || 'Unspecified'}
 - Assignment: ${assignmentTitle || 'Written Task'}
-- Total Marks: ${total} points.
-Requirements:
+- Total Marks: ${total} points.`;
+
+      if (imageFile && imageFile.base64) {
+        prompt += `\n\nNote: The user uploaded the question paper image. Inspect the image content and tailor the rubric directly to the questions shown on paper.`;
+      }
+      if (customCriteriaText && customCriteriaText.trim()) {
+        prompt += `\n\nTeacher Custom Criteria:\n"""\n${customCriteriaText.trim()}\n"""\nIncorporate these exact teacher criteria into the rubric table, calibrating weights to sum to ${total} points.`;
+      }
+      prompt += `\n\nRequirements:
 1. 4-5 domain-specific criteria with exact point allocation summing exactly to ${total}.
 2. 4 Performance levels (Exemplary, Proficient, Developing, Beginning) with clear behavioral descriptors.
 3. Output clean, elegant HTML table directly without markdown fences.`;
+    }
 
-    const response = await callGemini(prompt, { fast: true });
+    let contents: any = prompt;
+    if (imageFile && imageFile.base64) {
+      const cleanBase64 = imageFile.base64.replace(/^data:image\/[a-z]+;base64,/, '');
+      contents = [
+        prompt,
+        {
+          inlineData: {
+            mimeType: imageFile.mimeType || 'image/jpeg',
+            data: cleanBase64,
+          },
+        },
+      ];
+    }
+
+    const response = await callGemini(contents, { fast: true });
     const rubric = extractHtml(response.text || '');
     return res.status(200).json({ rubric });
   } catch (error: any) {

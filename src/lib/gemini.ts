@@ -157,6 +157,8 @@ export async function generateRubricForAssignment(context: {
   assignmentTitle: string;
   maxScore: number;
   lang?: 'ar' | 'en';
+  imageFile?: { base64: string; mimeType?: string } | null;
+  customCriteriaText?: string;
 }): Promise<string> {
   const response = await fetch('/api/rubric', {
     method: 'POST',
