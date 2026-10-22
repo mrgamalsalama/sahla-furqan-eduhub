@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
-  Sparkles, Layers, Wand2, Loader2, Target, Users, Clock,
-  FileCheck, Shield, BookOpen, AlertCircle, ArrowLeft, ArrowRight,
+  Wand2, Loader2, Target, AlertCircle, ArrowLeft, ArrowRight,
   Lightbulb, Compass
 } from 'lucide-react';
 import type {
@@ -10,9 +9,9 @@ import type {
 } from '@/types';
 import { SUBJECT_OPTIONS, GRADES_AR, GRADES_EN } from '@/types';
 import type { UILang } from '@/lib/i18n';
-import { t } from '@/lib/i18n';
 import SourceMaterialUpload from './SourceMaterialUpload';
 import AiLoadingDhikr from './AiLoadingDhikr';
+import { generateContent } from '@/lib/gemini';
 
 interface PerformanceTaskStudioProps {
   onOpenResult: (result: GenerationResult, outputType: OutputType) => void;
@@ -143,26 +142,11 @@ export default function PerformanceTaskStudio({
     };
 
     try {
-      const response = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          settings,
-          outputType: 'performance-task',
-          files,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'فشل توليد المهمة الأدائية والمشروع.');
-      }
-
-      const data: GenerationResult = await response.json();
-      onOpenResult(data, 'performance-task');
+      const result = await generateContent(settings, 'performance-task', files);
+      onOpenResult(result, 'performance-task');
     } catch (err: any) {
       console.error('PBL Generation error:', err);
-      setError(err?.message || 'حدث خطأ أثناء الاتصال بالذكاء الاصطناعي.');
+      setError(err?.message || (isAr ? 'فشل توليد المهمة الأدائية والمشروع.' : 'Failed to generate performance task.'));
     } finally {
       setLoading(false);
     }

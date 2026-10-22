@@ -293,10 +293,9 @@ export async function callGroqText(
 
 // Order prioritized by stability, speed, and active quota limits
 const CANDIDATE_MODELS = [
-  'gemini-3.1-flash-lite',
-  'gemini-2.5-flash',
-  'gemini-flash-latest',
   'gemini-3.8-flash',
+  'gemini-3.1-flash-lite',
+  'gemini-flash-latest',
 ];
 
 let currentKeyIndex = 0;
@@ -328,7 +327,7 @@ export async function callGemini(contents: any, options?: { fast?: boolean; mode
   if (options?.model) {
     modelsToTry = [options.model, ...modelsToTry.filter((m) => m !== options.model)];
   } else if (options?.fast) {
-    modelsToTry = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash'];
+    modelsToTry = ['gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
   }
 
   // Round-robin index rotation across available keys to distribute load
@@ -342,8 +341,17 @@ export async function callGemini(contents: any, options?: { fast?: boolean; mode
 
   let lastError: any;
 
+  // Maximum time to spend across all Gemini attempts before immediately activating Groq fallback
+  // This guarantees the entire request completes well under the 60s gateway timeout!
+  const geminiDeadline = Date.now() + 25000;
+
   // Try each API key in case of quota exhaustion or rate limits (429 / RESOURCE_EXHAUSTED)
   for (let kIdx = 0; kIdx < orderedKeys.length; kIdx++) {
+    if (Date.now() > geminiDeadline && groqKey) {
+      console.warn('[Dual-Engine] Gemini deadline reached (25s). Fast-forwarding directly to Groq fallback...');
+      break;
+    }
+
     const apiKey = orderedKeys[kIdx];
     const ai = new GoogleGenAI({
       apiKey,
@@ -355,14 +363,18 @@ export async function callGemini(contents: any, options?: { fast?: boolean; mode
     });
 
     for (const model of modelsToTry) {
+      if (Date.now() > geminiDeadline && groqKey) {
+        break;
+      }
+
       try {
-        // Enforce a sensible 35s timeout on primary engine call to guarantee swift fallback
+        // Enforce a tight 20s timeout on primary engine call to guarantee swift response and prevent 504
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => {
-            const timeoutErr = new Error('Gemini API call timed out after 35s');
+            const timeoutErr = new Error(`Gemini API call to ${model} timed out after 20s`);
             (timeoutErr as any).name = 'TimeoutError';
             reject(timeoutErr);
-          }, 35000)
+          }, 20000)
         );
 
         const callPromise = ai.models.generateContent({
@@ -370,7 +382,7 @@ export async function callGemini(contents: any, options?: { fast?: boolean; mode
           contents,
           config: {
             thinkingConfig: {
-              thinkingLevel: options?.fast ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW,
+              thinkingLevel: ThinkingLevel.MINIMAL,
             },
           },
         });
@@ -389,10 +401,15 @@ export async function callGemini(contents: any, options?: { fast?: boolean; mode
           errMessage.includes('RESOURCE_EXHAUSTED') ||
           errMessage.includes('quota') ||
           errMessage.includes('rate limit');
+        const isAuthError =
+          errMessage.includes('401') ||
+          errMessage.includes('403') ||
+          errMessage.includes('API key') ||
+          errMessage.includes('API_KEY_INVALID');
 
-        // If key reached its quota and we have other keys in the pool, switch immediately!
-        if (isQuotaOrRateLimit && orderedKeys.length > 1) {
-          console.warn(`Key #${kIdx + 1} quota/rate limit reached. Switching to next key in pool...`);
+        // If key reached its quota or is invalid, switch immediately to next key instead of retrying models
+        if ((isQuotaOrRateLimit || isAuthError) && orderedKeys.length > 1) {
+          console.warn(`Key #${kIdx + 1} failed (${isAuthError ? 'Auth error' : 'Quota/Rate limit'}). Switching to next key in pool...`);
           lastError = err;
           break; // break to next API key
         }
@@ -407,7 +424,7 @@ export async function callGemini(contents: any, options?: { fast?: boolean; mode
   if (groqKey) {
     try {
       console.warn(
-        `[Dual-Engine Fallback] Primary engine (Gemini) failed (${lastError?.message?.slice(0, 120) || 'All models exhausted'}). Automatically and silently activating Groq llama-3.3-70b-versatile...`
+        `[Dual-Engine Fallback] Primary engine (Gemini) failed or timed out (${lastError?.message?.slice(0, 120) || 'All models exhausted'}). Automatically and silently activating Groq llama-3.3-70b-versatile...`
       );
       return await callGroqText(contents, options);
     } catch (groqErr: any) {
@@ -423,6 +440,18 @@ export function formatApiError(error: any): { status: number; message: string } 
   const customStatus = error?.statusCode;
   if (customStatus) {
     return { status: customStatus, message: rawMessage };
+  }
+
+  if (
+    rawMessage.includes('Timeout') ||
+    rawMessage.includes('timed out') ||
+    rawMessage.includes('504') ||
+    error?.name === 'TimeoutError'
+  ) {
+    return {
+      status: 504,
+      message: 'استغرق توليد المحتوى وقتاً أطول من المتوقع، تم تحسين سرعة المعالجة الاحتياطية. يرجى إعادة المحاولة الآن.',
+    };
   }
 
   if (
@@ -1097,11 +1126,12 @@ ${lmsXmlDirective}
         const gStandards = perf.graspsStandards || 'معايير الإتقان الأكاديمي، جودة المنتج، مهارات العرض والإلقاء، والتفكير الناقد والعمل الجماعي';
 
         return `${ctx}
-الْمَطْلُوبُ: تَوْلِيدُ "مُهِمَّةٍ أَدَائِيَّةٍ وَمَشْرُوعِ تَعَلُّمٍ قَائِمٍ عَلَى الْمَشَارِيعِ (PBL)" احْتِرَافِيٍّ كَامِلٍ لِأَكَادِيمِيَّةِ سَهْلَةَ الدَّوْلِيَّةِ وَمَدَارِسِ الْفُرْقَانِ، مَشْكُولاً بِالْكَامِلِ (100%) ومُصَمَّماً بِمَعَايِيرِ التَّعَلُّمِ الْأَصِيلِ.
+الْمَطْلُوبُ: تَوْلِيدُ "مُهِمَّةٍ أَدَائِيَّةٍ وَمَشْرُوعِ تَعَلُّمٍ قَائِمٍ عَلَى الْمَشَارِيعِ (PBL)" احْتِرَافِيٍّ مُتَكَامِلٍ لِأَكَادِيمِيَّةِ سَهْلَةَ الدَّوْلِيَّةِ وَمَدَارِسِ الْفُرْقَانِ، بِصِيَاغَةٍ أَكَادِيمِيَّةٍ رَفِيعَةٍ مَعَ ضَبْطِ الْعَنَاوِينِ وَالْمَصْطَلَحَاتِ الرَّئِيسَةِ بِالشَّكْلِ التَّامِّ وَإِيجَازٍ تَرْبَوِيٍّ مُحْكَمٍ لِسُرْعَةِ التَّوْلِيدِ.
 
 قَوَاعِدُ الصِّيَاغَةِ:
 - ابْدَأْ فَوْراً بِكُودِ الـ HTML الْمُنَسَّقِ دُونَ أَيِّ كُتَلِ مَارْكْدَاوْن (\`\`\` أَوْ ###).
 - اسْتَخْدِمْ نِظَامَ الْجَدَاوِلِ وَالْأَلْوَانِ الْأَكَادِيمِيَّةِ الرَّسْمِيَّةِ (#1e3a8a، #0f172a، #0d9488، #f8fafc).
+- اكْتُبْ كُلَّ بَنْدٍ بِعُمْقٍ تَرْبَوِيٍّ مُوجَزٍ وَمُبَاشِرٍ دُونَ اسْتِطْرَادٍ غَيْرِ مُفِيدٍ لِضَمَانِ سُرْعَةِ الْإِنْجَازِ.
 
 الْهَيْكَلُ التَّرْبَوِيُّ لِلْمُهِمَّةِ الْأَدَائِيَّةِ الْمُعْتَمَدَةِ:
 1. جَدْوَلُ بَيَانَاتِ الْمَشْرُوعِ وَالتَّرْوِيسَةِ:
@@ -1109,7 +1139,7 @@ ${lmsXmlDirective}
    - الصَّفُّ: ${settings.grade} | الْمَادَّةُ: ${settings.subject}
    - مُدَّةُ الْمَشْرُوعِ: ${pDuration} | نَمَطُ الْعَمَلِ: ${pTeam}
    - نَوْعُ الْمُخْرَجِ: ${pType}
-2. إِطَارُ GRASPS الْعَالَمِيُّ لِلْمَهَامِّ الْأَدَائِيَّةِ فِي جَدْوَلٍ احْتِرَافِيٍّ مُمَيَّزٍ:
+2. إِطَارُ GRASPS الْعَالَمِيُّ لِلْمَهَامِّ الْأَدَائِيَّةِ فِي جَدْوَلٍ احْتِرَافِيٍّ:
    - G (الْهَدَفُ - Goal): ${gGoal}
    - R (الدَّوْرُ - Role): ${gRole}
    - A (الْجُمْهُورُ الْمُسْتَهْدَفُ - Audience): ${gAudience}
@@ -1117,14 +1147,14 @@ ${lmsXmlDirective}
    - P (الْمُنْتَجُ وَالْأَدَاءُ النِّهَائِيُّ - Product/Performance): ${gProduct}
    - S (الْمَعَايِيرُ وَسُلَّمُ التَّقْيِيمِ - Standards): ${gStandards}
 3. مَرَاحِلُ وَخَارِطَةُ طَرِيقِ التَّسْلِيمِ (Project Milestones) فِي جَدْوَلٍ زَمَنِيٍّ مُنَسَّقٍ:
-   - الْمَرْحَلَةُ الْأُولَى: إِطْلَاقُ التَّحَدِّي وَبِنَاءُ الْفَرِيقِ وَمِيثَاقُ الْعَمَلِ (يَوْم 1-3).
-   - الْمَرْحَلَةُ الثَّانِيَةُ: الْبَحْثُ وَجَمْعُ الْبَيَانَاتِ وَالتَّخْطِيطُ (يَوْم 4-7).
-   - الْمَرْحَلَةُ الثَّالِثَةُ: التَّطْبِيقُ وَبِنَاءُ النَّمُوذَجِ الْأَوَّلِيِّ وَالْمُرَاجَعَةُ التَّحْسِينِيَّةُ (يَوْم 8-11).
-   - الْمَرْحَلَةُ الرَّابِعَةُ: الْمَعْرِضُ الْخِتَامِيُّ وَالْعَرْضُ التَّقْدِيمِيُّ وَالتَّقْيِيمُ (يَوْم 12-14).
+   - الْمَرْحَلَةُ 1: إِطْلَاقُ التَّحَدِّي وَبِنَاءُ الْفَرِيقِ وَمِيثَاقُ الْعَمَلِ (يَوْم 1-3).
+   - الْمَرْحَلَةُ 2: الْبَحْثُ وَجَمْعُ الْبَيَانَاتِ وَالتَّخْطِيطُ (يَوْم 4-7).
+   - الْمَرْحَلَةُ 3: التَّطْبِيقُ وَبِنَاءُ النَّمُوذَجِ الْأَوَّلِيِّ وَالْمُرَاجَعَةُ التَّحْسِينِيَّةُ (يَوْم 8-11).
+   - الْمَرْحَلَةُ 4: الْمَعْرِضُ الْخِتَامِيُّ وَالْعَرْضُ التَّقْدِيمِيُّ وَالتَّقْيِيمُ (يَوْم 12-14).
 4. أَدْوَارُ الْفَرِيقِ وَمِيثَاقُ الْمَسْؤُولِيَّةِ (قائد المشروع، باحث المحتوى، المصمم الإبداعي، مدقق الجودة والتقديم).
 5. سُلَّمُ التَّقْيِيمِ التَّحْلِيلِيُّ الشَّامِلُ (Analytical Rubric 4-Levels):
    - جَدْوَلٌ رَسْمِيٌّ يُقَيِّمُ 4 مَحَاوِرَ: (1. عُمْقُ الْمُحْتَوَى وَالْحَلُّ الْعِلْمِيُّ، 2. التَّفْكِيرُ النَّاقِدُ وَالْإِبْدَاعُ، 3. مَهَارَاتُ الْعَرْضِ وَالتَّوَاصُلِ، 4. الْعَمَلُ الْجَمَاعِيُّ وَالِالْتِزَامُ).
-   - مُسْتَوَيَاتُ الدَّرَجَاتِ: (مُتَفَوِّقٌ 4 دَرَجَاتٍ، مُتَقَدِّمٌ 3 دَرَجَاتٍ، مُتَمَكِّنٌ دَرَجَتَانِ، نَامٍ/بِحَاجَةِ دَعْمٍ دَرَجَةٌ وَاحِدَةٌ).
+   - مُسْتَوَيَاتُ الدَّرَجَاتِ: (مُتَفَوِّقٌ 4 دَرَجَاتٍ، مُتَقَدِّمٌ 3 دَرَجَاتٍ، مُتَمَكِّنٌ دَرَجَتَانِ، نَامٍ دَرَجَةٌ وَاحِدَةٌ).
 6. بَطَاقَةُ التَّقْيِيمِ الذَّاتِيِّ وَتَقْيِيمِ الْأَقْرَانِ (Self & Peer Assessment Form).`;
       }
 
