@@ -1584,28 +1584,38 @@ export async function executeRubric(req: any, res: any) {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     const { subject, grade, assignmentTitle, maxScore, lang = 'ar' } = body || {};
     const isAr = lang !== 'en';
-    const total = maxScore || 20;
+    const total = Number(maxScore) || 20;
 
     const prompt = isAr
-      ? `أَنْتَ خَبِيرُ قِيَاسٍ وَتَقْوِيمٍ تَرْبَوِيٍّ وَإِعْدَادِ مَعَايِيرِ تَقْيِيمٍ وَمَنَاهِجَ.
-قُمْ بِصِيَاغَةِ "سُلَّمِ تَقْدِيرٍ لَفْظِيٍّ تَحْلِيلِيٍّ (Analytic Rubric)" مُفَصَّلٍ وَمُحْكَمٍ لِتَقْيِيمِ الْمَهَمَّةِ التَّالِيَةِ:
-- الْمَادَّةُ: ${subject || 'عَامٌّ'}
-- الصَّفُّ: ${grade || 'غَيْرُ مُحَدَّدٍ'}
-- عُنْوَانُ السُّؤَالِ أَوْ الْمَهَمَّةِ: ${assignmentTitle || 'تَقْيِيمٌ كِتَابِيٌّ / أَدَائِيٌّ'}
-- الدَّرَجَةُ الْإِجْمَالِيَّةُ الْكُلِّيَّةُ: ${total} دَرَجَةً.
+      ? `أَنْتَ كَبِيرُ خُبَرَاءِ الْقِيَاسِ وَالتَّقْوِيمِ التَّرْبَوِيِّ فِي أَعْرَقِ الْمُؤَسَّسَاتِ التَّعْلِيمِيَّةِ الدَّوْلِيَّةِ (أَكَادِيمِيَّةُ سَهْلَةَ & مَدَارِسُ الْفُرْقَانِ).
+مَهَمَّتُكَ: صِيَاغَةُ "سُلَّمِ تَقْدِيرٍ لَفْظِيٍّ تَحْلِيلِيٍّ احْتِرَافِيٍّ (Analytic Grading Rubric)" مَبْنِيٍّ عَلَى مَعَايِيرِ الْجَوْدَةِ التَّعْلِيمِيَّةِ لِتَقْيِيمِ التَّكْلِيفِ التَّالِي:
+- الْمَادَّةُ الدِّرَاسِيَّةُ: ${subject || 'اللُّغَةُ الْعَرَبِيَّةُ (الْكِتَابَةُ وَالتَّعْبِيرُ)'}
+- الصَّفُّ الدِّرَاسِيُّ: ${grade || 'مُتَوَسِّطٌ / ثَانَوِيٌّ'}
+- مَوْضُوعُ التَّكْلِيفِ أَوِ السُّؤَالِ: ${assignmentTitle || 'كِتَابَةُ فِقْرَةٍ أَوْ مَقَالٍ إِقْنَاعِيٍّ'}
+- الدَّرَجَةُ الْكُلِّيَّةُ الْمُسْتَحَقَّةُ: ${total} دَرَجَةً.
 
-الْمَطْلُوبُ:
-جَدْوَلٌ تَحْلِيلِيٌّ كَامِلٌ بِمَعَايِيرَ وَاضِحَةٍ وَمُسْتَوَيَاتِ أَدَاءٍ (مُمْتَازٌ، جَيِّدٌ جِدّاً، مَقْبُولٌ، يَحْتَاجُ تَحْسِيناً) مَعَ تَشْكِيلِ النُّصُوصِ كَامِلَةً (100%).
-أَخْرِجْ كُودَ HTML فَقَطْ بِدُونِ أَسْوَارِ كُودِ markdown.`
-      : `You are an expert educational assessment specialist.
-Create an analytic grading rubric for:
+الْمَعَايِيرُ التَّرْبَوِيَّةُ الْمُعْتَمَدَةُ (قَوَاعِدُ إِلْزَامِيَّةٌ 100%):
+1. صِغْ 4 إِلَى 5 مَعَايِيرَ تَقْيِيمٍ نَوْعِيَّةٍ دَقِيقَةٍ تُلَائِمُ مَوْضُوعَ التَّكْلِيفِ وَالْمَادَّةَ (مَثَلاً لِلْكِتَابَةِ الْعَرَبِيَّةِ: 1. الْمُحْتَوَى وَعُمْقُ الْأَفْكَارِ، 2. الْبِنَاءُ التَّنْظِيمِيُّ وَالتَّرَابُطُ، 3. الثَّرْوَةُ اللُّغَوِيَّةُ وَالْأُسْلُوبُ الْبَلَاغِيُّ، 4. الصِّحَّةُ النَّحْوِيَّةُ وَالصَّرْفِيَّةُ، 5. السَّلَامَةُ الْإِمْلَائِيَّةُ وَعَلَامَاتُ التَّرْقِيمِ وَالْخَطُّ).
+2. تَحْدِيدُ الدَّرَجَةِ الْقُصْوَى لِكُلِّ مِعْيَارٍ بِحَيْثُ يَكُونُ مَجْمُوعُهَا مَسَاوِياً لِـ ${total} دَرَجَةً تَمَاماً بِلَا أَيِّ زِيَادَةٍ أَوْ نُقْصَانٍ.
+3. صِيَاغَةُ 4 مُسْتَوَيَاتِ أَدَاءٍ لِكُلِّ مِعْيَارٍ مَعَ حِسَابِ الدَّرَجَاتِ بِدِقَّةٍ:
+   - مُتَمَيِّزٌ (100% من الدرجة): أداء إبداعي متقن خالٍ من الثغرات.
+   - مُتَقَدِّمٌ (جيد جداً / 75-80%): أداء سليم مع ملاحظات ثانوية لا تؤثر على الجوهر.
+   - مَقْبُولٌ (نامٍ / 50-60%): أداء حقق الحد الأدنى مع وجود أخطاء واضحة.
+   - بِحَاجَةٍ لِدَعْمٍ (أقل من 50%): قصور وضعف ظاهر يتطلب برنامجاً علاجياً.
+4. اكْتُبْ كُلَّ مِعْيَارٍ بِمُؤَشِّرَاتٍ إِجْرَائِيَّةٍ وَاقِعِيَّةٍ وَمَلْمُوسَةٍ لَا تَحْتَمِلُ اللَّبْسَ لِيَسْتَفِيدَ مِنْهَا الْمُعَلِّمُ وَالطَّالِبُ.
+5. صِغِ الْجَدْوَلَ فِي هَيْكَلِ HTML رَسْمِيٍّ فَائِقِ الْأَنَاقَةِ (#1e3a8a، #0f172a، #f8fafc) دُونَ أَيِّ كُتَلِ مَارْكْدَاوْن (\`\`\` أَوْ ###). ابْدَأْ بِـ <table... فَوْراً.`
+      : `You are a master educational measurement and assessment specialist for Sahlah Academy and Al-Furqan School.
+Generate a comprehensive Analytic Grading Rubric for:
 - Subject: ${subject || 'General'}
 - Grade: ${grade || 'Unspecified'}
-- Assignment Title: ${assignmentTitle || 'Written / Performance Task'}
-- Total Max Score: ${total} points.
-Return clean HTML table only without markdown fences.`;
+- Assignment: ${assignmentTitle || 'Written Task'}
+- Total Marks: ${total} points.
+Requirements:
+1. 4-5 domain-specific criteria with exact point allocation summing exactly to ${total}.
+2. 4 Performance levels (Exemplary, Proficient, Developing, Beginning) with clear behavioral descriptors.
+3. Output clean, elegant HTML table directly without markdown fences.`;
 
-    const response = await callGemini(prompt);
+    const response = await callGemini(prompt, { fast: true });
     const rubric = extractHtml(response.text || '');
     return res.status(200).json({ rubric });
   } catch (error: any) {
@@ -1629,26 +1639,40 @@ export async function executeGrade(req: any, res: any) {
     const cleanBase64 = imageFile.base64.replace(/^data:image\/[a-z]+;base64,/, '');
 
     const prompt = isAr
-      ? `أَنْتَ مُعَلِّمٌ خَبِيرٌ فِي التَّصْحِيحِ وَالتَّقْوِيمِ التَّرْبَوِيِّ الدَّقِيقِ.
-أَمَامَكَ صُورَةٌ لِإِجَابَةِ طَالِبٍ مَكْتُوبَةٍ بِخَطِّ الْيَدِ.
-مَعْلُومَاتُ التَّكْلِيفِ:
-- الْمَادَّةُ: ${subject}
-- الصَّفُّ: ${grade}
-- عُنْوَانُ التَّكْلِيفِ / الِاخْتِبَارِ: ${assignmentTitle}
-- الدَّرَجَةُ الْقُصْوَى: ${maxScore}
-${rubricOrModelAnswer ? `- سُلَّمُ التَّقْدِيرِ / الْإِجَابَةُ النَّمُوذَجِيَّةُ الْمَرْجِعِيَّةُ:\n${rubricOrModelAnswer}` : ''}
+      ? `أَنْتَ رَئِيسُ لِجَانِ التَّصْحِيحِ وَالْقِيَاسِ التَّرْبَوِيِّ فِي أَكَادِيمِيَّةِ سَهْلَةَ الدَّوْلِيَّةِ وَمَدَارِسِ الْفُرْقَانِ.
+أَمَامَكَ صُورَةٌ حَقِيقِيَّةٌ لِإِجَابَةِ طَالِبٍ مَكْتُوبَةٍ بِخَطِّ الْيَدِ.
+بَيَانَاتُ التَّكْلِيفِ:
+- الْمَادَّةُ: ${subject || 'اللغة العربية'}
+- الصَّفُّ: ${grade || 'غير محدد'}
+- عُنْوَانُ التَّكْلِيفِ: ${assignmentTitle || 'تعبير وكتابة مقال'}
+- الدَّرَجَةُ الْقُصْوَى: ${maxScore} دَرَجَةً.
+${rubricOrModelAnswer ? `\n📌 سُلَّمُ التَّقْدِيرِ وَالْمَعَايِيرُ الْمَرْجِعِيَّةُ الْمُلْزِمَةُ لِلتَّصْحِيحِ:\n${rubricOrModelAnswer}\nقَاعِدَةٌ صَارِمَةٌ: التَزِمْ التِزَاماً حَرْفِيّاً بِمَعَايِيرِ وَدَرَجَاتِ هَذَا السُّلَّمِ فِي رَصْدِ الدَّرَجَاتِ.\n` : ''}
 
-قُمْ بِقِرَاءَةِ خَطِّ الْيَدِ بِدِقَّةٍ مُتَنَاهِيَةٍ، وَتَصْحِيحِ كُلِّ جُزْءٍ وَتَقْدِيمِ التَّغْذِيَةِ الرَّاجِعَةِ وَالدَّرَجَةِ الْمُسْتَحَقَّةِ وَتَوْصِيَاتٍ عِلَاجِيَّةٍ مَشْكُولَةٍ تَشْكِيلاً تَامّاً (100%).
-أَخْرِجِ النَّتِيجَةَ كُودَ HTML نَظِيفٍ فَقَطْ بِدُونِ وُسُومِ markdown.`
-      : `You are an expert teacher grading a student handwritten submission.
-Context:
+الْمَطْلُوبُ إِخْرَاجُ "تَقْرِيرِ تَقْيِيمٍ وَتَصْحِيحٍ تَرْبَوِيٍّ رَسْمِيٍّ شَامِلٍ" بِكُودِ HTML نَظِيفٍ وَأَنِيقٍ (#1e3a8a، #0f172a، #10b981، #f8fafc) يَتَضَمَّنُ:
+1. صُنْدُوقَ النَّتِيجَةِ الْعَامَّةِ: الدَّرَجَةُ الْمُسْتَحَقَّةُ مِن ${maxScore}، النِّسْبَةُ الْمِئَوِيَّةُ، وَالتَّقْدِيرُ اللَّفْظِيُّ (مُتَمَيِّزٌ / مُتَقَدِّمٌ / مَقْبُولٌ / بِحَاجَةٍ لِدَعْمٍ).
+2. تَفْرِيغَ نَصِّ الطَّالِبِ الْمَكْتُوبِ بِخَطِّ الْيَدِ: اكْتُبْ مَا خَطَّهُ الطَّالِبُ نَصّاً كَمَا هُوَ دَاخِلَ صُنْدُوقٍ مُنَسَّقٍ.
+3. جَدْوَلَ رَصْدِ دَرَجَاتِ سُلَّمِ التَّقْدِيرِ (Rubric Score Breakdown):
+   - جَدْوَلٌ بِأَرْبَعَةِ أَعْمِدَةٍ: (الْمِعْيَارُ | الدَّرَجَةُ الْقُصْوَى | دَرَجَةُ الطَّالِبِ | التَّعْلِيلُ وَالشَّوَاهِدُ مِنَ الْوَرَقَةِ).
+4. جَدْوَلَ رَصْدِ وَتَصْوِيبِ الْأَخْطَاءِ (نَحْوِيَّةٌ، إِمْلَائِيَّةٌ، تَعْبِيرِيَّةٌ):
+   - أَعْمِدَةٌ: (الْخَطَأُ كَمَا كَتَبَهُ الطَّالِبُ | الصَّوَابُ النَّمُوذَجِيُّ | الْقَاعِدَةُ وَالتَّعْلِيلُ).
+5. التَّغْذِيَةَ الرَّاجِعَةَ النَّوْعِيَّةَ:
+   - ✨ أَبْرَزُ نِقَاطِ الْقُوَّةِ وَالتَّمَيُّزِ فِي إِجَابَةِ الطَّالِبِ.
+   - 🎯 فُرَصُ التَّحْسِينِ وَخُطَّةُ التَّطْوِيرِ الْعِلَاجِيَّةِ لِلطَّالِبِ.
+
+أَخْرِجْ كُودَ HTML فَقَطْ دُونَ أَيِّ كُتَلِ مَارْكْدَاوْن (\`\`\` أَوْ ###).`
+      : `You are the lead educational grading expert for Sahlah Academy and Al-Furqan School.
+Evaluate this student handwritten submission against the criteria:
 - Subject: ${subject}
 - Grade: ${grade}
 - Assignment: ${assignmentTitle}
 - Max Score: ${maxScore}
-${rubricOrModelAnswer ? `- Reference Rubric / Answer Key:\n${rubricOrModelAnswer}` : ''}
-
-Transcribe the handwriting carefully, grade each question, provide constructive feedback, calculate total score out of ${maxScore}, and suggest next steps.
+${rubricOrModelAnswer ? `- Reference Rubric:\n${rubricOrModelAnswer}` : ''}
+Generate a comprehensive, formal grading report in clean HTML including:
+1. Overall Score Box (${maxScore} max, percentage, and achievement level).
+2. Complete verbatim transcription of student's handwriting.
+3. Rubric Breakdown Table (Criterion, Max Score, Earned Score, Justification).
+4. Error Analysis & Correction Table (Student Error, Correct Form, Rule).
+5. Actionable Strengths and Next Steps.
 Return clean HTML only without markdown fences.`;
 
     const response = await callGemini([
