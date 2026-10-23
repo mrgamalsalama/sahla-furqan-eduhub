@@ -1,10 +1,26 @@
 import { useState, useEffect } from 'react';
 import {
   X, ChevronRight, ChevronLeft, Maximize2, Minimize2,
-  Volume2, MessageSquare, Sparkles, Eye, ListOrdered
+  Volume2, MessageSquare, Sparkles, Eye, ListOrdered,
+  Clock, Shuffle, Beaker, Video
 } from 'lucide-react';
 import type { GammaSlide, GammaTheme, GammaThemeId } from '@/lib/gammaPptx';
 import { GAMMA_THEMES } from '@/lib/gammaPptx';
+import ClassroomActivityTimer from './ClassroomActivityTimer';
+import RandomStudentPickerModal from './RandomStudentPickerModal';
+import InteractivePollCard from './InteractivePollCard';
+
+function getYouTubeEmbedUrl(url: string, start?: number, end?: number): string {
+  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+  if (match && match[1]) {
+    const id = match[1];
+    let embed = `https://www.youtube.com/embed/${id}?autoplay=0&rel=0&modestbranding=1`;
+    if (start) embed += `&start=${start}`;
+    if (end) embed += `&end=${end}`;
+    return embed;
+  }
+  return url;
+}
 
 interface GammaPresenterModalProps {
   isOpen: boolean;
@@ -26,6 +42,10 @@ export default function GammaPresenterModal({
   const [currentIndex, setCurrentIndex] = useState(initialSlideIndex);
   const [showNotes, setShowNotes] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Classroom Live Tools State
+  const [showTimer, setShowTimer] = useState(false);
+  const [showStudentPicker, setShowStudentPicker] = useState(false);
 
   // Click-to-reveal (Step-by-step point animation) state
   const [isStepMode, setIsStepMode] = useState(true);
@@ -158,6 +178,32 @@ export default function GammaPresenterModal({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Live Activity Timer Button */}
+          <button
+            type="button"
+            onClick={() => setShowTimer(!showTimer)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+              showTimer
+                ? 'bg-amber-500 text-slate-950 shadow-md ring-1 ring-amber-300'
+                : 'bg-white/10 text-slate-300 hover:text-white hover:bg-white/20'
+            }`}
+            title="مؤقت الأنشطة الصفية والعد التنازلي"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>مؤقت الأنشطة</span>
+          </button>
+
+          {/* Random Student Picker Button */}
+          <button
+            type="button"
+            onClick={() => setShowStudentPicker(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600/80 hover:bg-purple-600 text-white text-xs font-bold transition shadow-xs"
+            title="قرعة اختيار الطلاب العشوائية"
+          >
+            <Shuffle className="w-3.5 h-3.5" />
+            <span>قرعة الطلاب 🎯</span>
+          </button>
+
           {/* Step-by-Step Reveal Toggle */}
           <button
             type="button"
@@ -276,8 +322,67 @@ export default function GammaPresenterModal({
             </h2>
           </div>
 
-          {/* Slide Body with Step-by-Step Reveal */}
+          {/* Slide Body with Step-by-Step Reveal & Interactive Media */}
           <div className="my-auto py-2">
+            {/* 1. Formative Poll Card */}
+            {currentSlide.interactivePoll && (
+              <div onClick={(e) => e.stopPropagation()}>
+                <InteractivePollCard poll={currentSlide.interactivePoll} isPresenter />
+              </div>
+            )}
+
+            {/* 2. Interactive Simulation (PhET / GeoGebra) */}
+            {currentSlide.simulationEmbed && (
+              <div
+                className="my-3 rounded-2xl overflow-hidden border border-teal-500/40 bg-slate-950/80 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="px-4 py-2 bg-slate-900/90 flex items-center justify-between text-xs border-b border-white/10">
+                  <span className="font-bold text-teal-300 flex items-center gap-1.5">
+                    <Beaker className="w-4 h-4 text-teal-400" />
+                    <span>{currentSlide.simulationEmbed.titleAr} ({currentSlide.simulationEmbed.type.toUpperCase()})</span>
+                  </span>
+                  <span className="text-[11px] text-slate-400 font-semibold">محاكاة تفاعلية حية داخل العرض 🧪</span>
+                </div>
+                <iframe
+                  src={currentSlide.simulationEmbed.embedUrl}
+                  className="w-full h-80 sm:h-96 border-0"
+                  title={currentSlide.simulationEmbed.titleAr}
+                  allow="fullscreen; accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope"
+                />
+              </div>
+            )}
+
+            {/* 3. Safe Video Clip with Timestamps */}
+            {currentSlide.videoEmbed && (
+              <div
+                className="my-3 rounded-2xl overflow-hidden border border-rose-500/40 bg-slate-950/80 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="px-4 py-2 bg-slate-900/90 flex items-center justify-between text-xs border-b border-white/10">
+                  <span className="font-bold text-rose-300 flex items-center gap-1.5">
+                    <Video className="w-4 h-4 text-rose-400" />
+                    <span>{currentSlide.videoEmbed.title || 'مقطع فيديو تعليمي آمن'}</span>
+                  </span>
+                  <span className="text-[11px] text-slate-400 font-semibold">
+                    يبدأ: {currentSlide.videoEmbed.startSeconds || 0}ث | ينتهي: {currentSlide.videoEmbed.endSeconds || 'النهاية'}ث
+                  </span>
+                </div>
+                <iframe
+                  src={getYouTubeEmbedUrl(
+                    currentSlide.videoEmbed.url,
+                    currentSlide.videoEmbed.startSeconds,
+                    currentSlide.videoEmbed.endSeconds
+                  )}
+                  className="w-full h-80 sm:h-96 border-0"
+                  title={currentSlide.videoEmbed.title}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            )}
+
+            {/* 4. Slide Bullets / Points with Step-by-Step Reveal */}
             {currentSlide.points.length > 0 ? (
               <div className={`grid gap-3 sm:gap-4 ${currentSlide.points.length >= 3 && currentSlide.layout === 'grid' ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1'}`}>
                 {currentSlide.points.map((point, idx) => {
@@ -334,12 +439,12 @@ export default function GammaPresenterModal({
                   );
                 })}
               </div>
-            ) : (
+            ) : !currentSlide.interactivePoll && !currentSlide.simulationEmbed && !currentSlide.videoEmbed ? (
               <div
                 className="prose max-w-none text-base sm:text-lg"
                 dangerouslySetInnerHTML={{ __html: currentSlide.contentHtml }}
               />
-            )}
+            ) : null}
           </div>
 
           {/* Footer of Slide */}
@@ -429,6 +534,17 @@ export default function GammaPresenterModal({
           </div>
         </div>
       </div>
+
+      {/* Live Classroom Activity Timer */}
+      {showTimer && (
+        <ClassroomActivityTimer onClose={() => setShowTimer(false)} isFloating />
+      )}
+
+      {/* Random Student Picker Lucky Wheel Modal */}
+      <RandomStudentPickerModal
+        isOpen={showStudentPicker}
+        onClose={() => setShowStudentPicker(false)}
+      />
     </div>
   );
 }

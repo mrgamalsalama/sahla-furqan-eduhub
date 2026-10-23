@@ -2205,3 +2205,118 @@ export async function executePdfOcr(req: any, res: any) {
   }
 }
 
+/**
+ * In-Slide Presentation Copilot Handler:
+ * Transforms individual slide points (simplify, critical question, real-world example)
+ * or generates differentiated slide variants (remedial scaffolding vs gifted enrichment).
+ */
+export async function executePresentationCopilot(req: any, res: any) {
+  try {
+    const { action, pointText, slide, variant, subject = 'عام', grade = '', lang = 'ar' } = req.body || {};
+    const isAr = lang === 'ar';
+
+    if (action === 'differentiated_slide') {
+      const isRemedial = variant === 'remedial';
+      const prompt = isRemedial
+        ? `أنت خبير تربوي متخصص في تفريد التعليم وعلاج صعوبات التعلم.
+المهمة: توليد شريحة بوربوينت علاجية/داعمة (Remedial Scaffolding Slide) تبسط المفهوم الوارد في الشريحة التالية للمتعثرين وصغار السن.
+المادة: ${subject} | الصف: ${grade}
+الشريحة الأصلية:
+العنوان: ${slide?.title || ''}
+النقاط: ${(slide?.points || []).join(' - ')}
+
+الشروط:
+1. صياغة 2 إلى 3 نقاط بصرية مباشرة شديدة الوضوح والتسلسل.
+2. استخدام تمثيل مبسط أو تشبيه حسي قريب من ذهن الطالب.
+3. سيناريو شرح للمعلم يتضمن خطوة تمهيدية داعمة.
+4. إرجاع النتيجة بصيغة JSON حصراً بهذا الهيكل فقط بدون ماركداون:
+{
+  "title": "عنوان الشريحة العلاجية المبسطة",
+  "category": "دعم وتعزيز المفاهيم",
+  "layout": "split",
+  "points": ["نقطة 1", "نقطة 2", "نقطة 3"],
+  "teacherScript": "سيناريو توجيه المعلم للمتعثرين...",
+  "discussionPrompt": "سؤال تأكيدي للتحقق من الفهم..."
+}`
+        : `أنت خبير تربوي متخصص في رعاية الموهوبين والتعليم المتمايز.
+المهمة: توليد شريحة بوربوينت إثرائية متقدمة (Gifted & Talented Enrichment Slide) تعمق المفهوم بمستويات تفكير عليا (DOK 3 / DOK 4) للطلاب المتفوقين.
+المادة: ${subject} | الصف: ${grade}
+الشريحة الأصلية:
+العنوان: ${slide?.title || ''}
+النقاط: ${(slide?.points || []).join(' - ')}
+
+الشروط:
+1. صياغة 2 إلى 3 نقاط تمثل تحدياً استقصائياً، معضلة واقعية، أو تطبيقاً ابتكارياً مفتوح النهاية.
+2. الربط بالسياق المعاصر أو التكنولوجيا الحديثة.
+3. سيناريو شرح للمعلم لإدارة النقاش الفكري.
+4. إرجاع النتيجة بصيغة JSON حصراً بهذا الهيكل فقط بدون ماركداون:
+{
+  "title": "عنوان الشريحة الإثرائية المتقدمة",
+  "category": "إثراء وتحدي للموهوبين 🌟",
+  "layout": "split",
+  "points": ["تحدي استقصائي 1", "تطبيق تحليلي 2"],
+  "teacherScript": "سيناريو المعلم لإدارة العصف الذهني...",
+  "discussionPrompt": "سؤال تفكير ناقد مفتوح النهاية..."
+}`;
+
+      const aiResponse = await callGemini(prompt, { fast: true, model: 'gemini-3.8-flash' });
+      const cleanJson = (aiResponse.text || '')
+        .replace(/```json/gi, '')
+        .replace(/```/g, '')
+        .trim();
+      let generatedSlideData: any;
+      try {
+        generatedSlideData = JSON.parse(cleanJson);
+      } catch {
+        const jsonMatch = cleanJson.match(/\{[\s\S]*\}/);
+        if (jsonMatch) generatedSlideData = JSON.parse(jsonMatch[0]);
+      }
+
+      return res.status(200).json({
+        success: true,
+        slide: generatedSlideData || {
+          title: isRemedial ? `تبسيط: ${slide?.title || ''}` : `إثراء وتحدي: ${slide?.title || ''}`,
+          category: isRemedial ? 'دعم علاجي' : 'إثراء للموهوبين',
+          layout: 'split',
+          points: isRemedial ? ['فهم المفهوم خطوة بخطوة', 'مثال بصري مباشر'] : ['تحليل التأثير والأسباب', 'ابتكار حلول بديلة'],
+          teacherScript: isRemedial ? 'وجه الطلاب لتأمل المثال الحسي.' : 'اطرح التحدي ودع الطلاب يناقشون في مجموعات.',
+        },
+      });
+    }
+
+    // Point-level transformation
+    let prompt = '';
+    if (action === 'simplify') {
+      prompt = `أنت خبير تربوي. أعد صياغة النقطة التالية لتبسيطها تماماً للمتعثرين أو صغار السن، بلغة واضحة ومباشرة وموجزة جداً (جملة واحدة قوية)، دون أي مقدمات:
+السياق: درس ${subject} - ${slide?.title || ''}
+النقطة الأصلية: "${pointText}"
+أرجع النص المعاد صياغته فقط في سطر واحد بدون علامات تنصيص.`;
+    } else if (action === 'critical_question') {
+      prompt = `أنت معلم خبير في استراتيجيات التفكير الناقد. حول النقطة التعليمية التالية إلى "سؤال تفكير ناقد واستقصاء صفي" (Higher Order Inquiry Question) يثير النقاش والعصف الذهني:
+السياق: درس ${subject} - ${slide?.title || ''}
+النقطة الأصلية: "${pointText}"
+أرجع صيغة السؤال فقط في سطر واحد بدون مقدمات ولا علامات تنصيص.`;
+    } else if (action === 'real_world_example') {
+      prompt = `أنت معلم خبير. اربط النقطة التعليمية التالية بمثال تطبيقي واقعي معاصر من الحياة اليومية أو التكنولوجيا يلمسه الطالب:
+السياق: درس ${subject} - ${slide?.title || ''}
+النقطة الأصلية: "${pointText}"
+أرجع النقطة مدمجة مع المثال الواقعي المختصر في سطر واحد دون مقدمات.`;
+    } else {
+      return res.status(400).json({ error: 'إجراء غير مدعوم' });
+    }
+
+    const aiResponse = await callGemini(prompt, { fast: true, model: 'gemini-3.8-flash' });
+    const transformedText = (aiResponse.text || '').replace(/^["'«»]|["'«»]$/g, '').trim();
+
+    return res.status(200).json({
+      success: true,
+      transformedText: transformedText || pointText,
+    });
+  } catch (error: any) {
+    console.error('executePresentationCopilot error:', error);
+    const { status, message } = formatApiError(error);
+    return res.status(status).json({ error: message, details: error?.message });
+  }
+}
+
+

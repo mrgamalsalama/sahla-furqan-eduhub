@@ -88,6 +88,98 @@ export const GAMMA_THEMES: Record<GammaThemeId, GammaTheme> = {
   },
 };
 
+export interface SimulationEmbed {
+  id: string;
+  type: 'phet' | 'geogebra' | 'custom';
+  titleAr: string;
+  titleEn: string;
+  subject: string;
+  embedUrl: string;
+}
+
+export const CURATED_SIMULATIONS: SimulationEmbed[] = [
+  {
+    id: 'phet-circuit',
+    type: 'phet',
+    titleAr: 'مختبر الدوائر الكهربائية التفاعلي (PhET Circuit Lab)',
+    titleEn: 'Circuit Construction Kit DC',
+    subject: 'الفيزياء / العلوم',
+    embedUrl: 'https://phet.colorado.edu/sims/html/circuit-construction-kit-dc/latest/circuit-construction-kit-dc_all.html',
+  },
+  {
+    id: 'phet-matter',
+    type: 'phet',
+    titleAr: 'حالات المادة وحركة الجزيئات (PhET States of Matter)',
+    titleEn: 'States of Matter',
+    subject: 'الكيمياء / العلوم',
+    embedUrl: 'https://phet.colorado.edu/sims/html/states-of-matter/latest/states-of-matter_all.html',
+  },
+  {
+    id: 'phet-balance',
+    type: 'phet',
+    titleAr: 'الاتزان ونقطة الارتكاز والعزوم (PhET Balancing Act)',
+    titleEn: 'Balancing Act',
+    subject: 'الفيزياء / الرياضيات',
+    embedUrl: 'https://phet.colorado.edu/sims/html/balancing-act/latest/balancing-act_all.html',
+  },
+  {
+    id: 'phet-energy',
+    type: 'phet',
+    titleAr: 'حفظ الطاقة وتحولاتها (PhET Energy Skate Park)',
+    titleEn: 'Energy Skate Park Basics',
+    subject: 'الفيزياء',
+    embedUrl: 'https://phet.colorado.edu/sims/html/energy-skate-park-basics/latest/energy-skate-park-basics_all.html',
+  },
+  {
+    id: 'phet-fractions',
+    type: 'phet',
+    titleAr: 'مكافئات الكسور والمساحات (PhET Fraction Matcher)',
+    titleEn: 'Fraction Matcher',
+    subject: 'الرياضيات',
+    embedUrl: 'https://phet.colorado.edu/sims/html/fraction-matcher/latest/fraction-matcher_all.html',
+  },
+  {
+    id: 'geogebra-3d',
+    type: 'geogebra',
+    titleAr: 'الهندسة الفضائية والمجسمات (GeoGebra 3D Calculator)',
+    titleEn: 'GeoGebra 3D Calculator',
+    subject: 'الرياضيات / الهندسة',
+    embedUrl: 'https://www.geogebra.org/3d?embed',
+  },
+  {
+    id: 'geogebra-graphing',
+    type: 'geogebra',
+    titleAr: 'التمثيل البياني للدوال والتحليل (GeoGebra Graphing)',
+    titleEn: 'GeoGebra Graphing Calculator',
+    subject: 'الرياضيات',
+    embedUrl: 'https://www.geogebra.org/graphing?embed',
+  },
+  {
+    id: 'geogebra-geometry',
+    type: 'geogebra',
+    titleAr: 'الهندسة الإقليدية ورسم الزوايا (GeoGebra Geometry)',
+    titleEn: 'GeoGebra Geometry',
+    subject: 'الرياضيات',
+    embedUrl: 'https://www.geogebra.org/geometry?embed',
+  },
+];
+
+export interface VideoEmbed {
+  url: string;
+  title?: string;
+  startSeconds?: number;
+  endSeconds?: number;
+}
+
+export interface FormativePoll {
+  question: string;
+  options: string[];
+  correctIndex?: number;
+  explanation?: string;
+  revealed?: boolean;
+  qrUrl?: string;
+}
+
 export interface GammaSlide {
   id: string;
   index: number;
@@ -105,6 +197,11 @@ export interface GammaSlide {
   isBold?: boolean;
   isItalic?: boolean;
   align?: 'right' | 'center' | 'left' | 'justify';
+  // Advanced Educational Extensions
+  simulationEmbed?: SimulationEmbed;
+  videoEmbed?: VideoEmbed;
+  interactivePoll?: FormativePoll;
+  differentiationType?: 'remedial' | 'enrichment' | 'standard';
 }
 
 /**

@@ -14,6 +14,7 @@ import {
   executeDifferentiate,
   executeAddDokQuestion,
   executePdfOcr,
+  executePresentationCopilot,
 } from './api/_shared.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -36,6 +37,7 @@ app.post('/api/voice-to-lesson', executeVoiceToLesson);
 app.post('/api/differentiate', executeDifferentiate);
 app.post('/api/add-dok-question', executeAddDokQuestion);
 app.post('/api/pdf-ocr', executePdfOcr);
+app.post('/api/presentation-copilot', executePresentationCopilot);
 
 // Dev / Local Server with Vite
 async function startServer() {

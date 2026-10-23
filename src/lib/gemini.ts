@@ -406,3 +406,54 @@ export async function addDokQuestion(payload: {
 
   return response.json();
 }
+
+export type PointTransformAction = 'simplify' | 'critical_question' | 'real_world_example';
+
+export async function transformSlidePoint(payload: {
+  action: PointTransformAction;
+  pointText: string;
+  slide?: { title: string; points: string[] };
+  subject?: string;
+  grade?: string;
+  lang?: 'ar' | 'en';
+}): Promise<string> {
+  const response = await fetch('/api/presentation-copilot', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'تعذر تعديل النقطة بالذكاء الاصطناعي.');
+  }
+
+  const data = await response.json();
+  return data.transformedText || payload.pointText;
+}
+
+export async function generateDifferentiatedSlideVariant(payload: {
+  slide: { title: string; points: string[]; category?: string };
+  variant: 'remedial' | 'enrichment';
+  subject?: string;
+  grade?: string;
+  lang?: 'ar' | 'en';
+}): Promise<any> {
+  const response = await fetch('/api/presentation-copilot', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'differentiated_slide',
+      ...payload,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'تعذر توليد الشريحة المتمايزة.');
+  }
+
+  const data = await response.json();
+  return data.slide;
+}
+

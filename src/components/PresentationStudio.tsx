@@ -1,27 +1,44 @@
 import { useState, useRef } from 'react';
 import {
-  Presentation, Sparkles, Loader2, AlertCircle, Sliders,
+  Sparkles, Loader2, AlertCircle, Sliders,
   Play, Download, Plus, Trash2, Copy, ArrowUp, ArrowDown,
   Edit3, Check, Palette, BookOpen, BookmarkPlus,
   Image as ImageIcon, Bold, Italic, AlignRight, AlignCenter,
-  AlignLeft, Type, Layout, ShieldCheck, ChevronDown, RefreshCw,
-  Upload
+  AlignLeft, Type, Layout, ShieldCheck, ChevronDown,
+  Upload, Printer, FileArchive, Beaker, Video, HelpCircle,
+  Wand2
 } from 'lucide-react';
+import { saveAs } from 'file-saver';
 import type { LessonSettings, OutputType, GenerationResult, UploadedFile } from '@/types';
 import { SUBJECT_OPTIONS, GRADES_AR, GRADES_EN } from '@/types';
 import { getLessonSettings, saveLessonSettings, saveLesson } from '@/lib/storage';
-import { generateContent } from '@/lib/gemini';
+import {
+  generateContent,
+  transformSlidePoint,
+  generateDifferentiatedSlideVariant,
+  type PointTransformAction
+} from '@/lib/gemini';
 import type { UILang } from '@/lib/i18n';
 import {
   GAMMA_THEMES,
   parseHtmlToGammaSlides,
   exportGammaSlidesToPptx
 } from '@/lib/gammaPptx';
-import type { GammaSlide, GammaThemeId } from '@/lib/gammaPptx';
+import type {
+  GammaSlide,
+  GammaThemeId,
+  SimulationEmbed,
+  VideoEmbed,
+  FormativePoll
+} from '@/lib/gammaPptx';
 import { extractThemeFromPptx } from '@/lib/pptxThemeExtractor';
 import type { ExtractedPptxTheme } from '@/lib/pptxThemeExtractor';
+import { generateStudentHandoutPdf } from '@/lib/studentHandoutPdf';
+import { exportSlidesToImageZip } from '@/lib/slideImageExporter';
 import GammaPresenterModal from './GammaPresenterModal';
 import ImagePickerModal from './ImagePickerModal';
+import InteractiveEmbedModal from './InteractiveEmbedModal';
+import InteractivePollCard from './InteractivePollCard';
 import SourceMaterialUpload from './SourceMaterialUpload';
 import AiLoadingDhikr from './AiLoadingDhikr';
 import { saveCloudResource, getCurrentUser } from '@/lib/supabase';
@@ -96,12 +113,221 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
   const [savedFeedback, setSavedFeedback] = useState(false);
   const [files, setFiles] = useState<UploadedFile[]>([]);
 
+  // Educational Extensions State
+  const [isEmbedModalOpen, setIsEmbedModalOpen] = useState(false);
+  const [embeddingSlideId, setEmbeddingSlideId] = useState<string | null>(null);
+
+  // In-Slide AI Copilot State
+  const [copilotLoadingPoint, setCopilotLoadingPoint] = useState<string | null>(null);
+  const [activeCopilotMenuPoint, setActiveCopilotMenuPoint] = useState<string | null>(null);
+  const [differentiatingSlideId, setDifferentiatingSlideId] = useState<string | null>(null);
+
+  // Student Handout & Image Zip Export States
+  const [exportingHandoutPdf, setExportingHandoutPdf] = useState(false);
+  const [exportingImageZip, setExportingImageZip] = useState(false);
+  const [imageZipProgress, setImageZipProgress] = useState<{ current: number; total: number } | null>(null);
+
   const themeConfig = (selectedTheme === 'custom' && customTheme)
     ? customTheme
     : (GAMMA_THEMES[selectedTheme] || GAMMA_THEMES.navy);
 
   const ps = settings.presentationSettings || {};
   const currentActiveSlide = slides[activeSlideIndex] || slides[0];
+
+  // In-Slide AI Copilot Handlers
+  async function handleTransformPoint(slideId: string, pointIndex: number, action: PointTransformAction) {
+    const slide = slides.find((s) => s.id === slideId);
+    if (!slide) return;
+    const currentPointText = slide.points[pointIndex];
+    if (!currentPointText) return;
+
+    const pointKey = `${slideId}-${pointIndex}`;
+    setCopilotLoadingPoint(pointKey);
+    setActiveCopilotMenuPoint(null);
+    setError(null);
+
+    try {
+      const transformed = await transformSlidePoint({
+        action,
+        pointText: currentPointText,
+        slide: { title: slide.title, points: slide.points },
+        subject: settings.subject,
+        grade: settings.grade,
+        lang: isAr ? 'ar' : 'en',
+      });
+
+      if (transformed && transformed.trim()) {
+        updateSlidePoint(slideId, pointIndex, transformed.trim());
+      }
+    } catch (err: any) {
+      console.error('Point transformation failed:', err);
+      setError(isAr ? 'تعذر تكييف النقطة بالذكاء الاصطناعي. يرجى المحاولة مرة أخرى.' : 'Failed to transform point.');
+    } finally {
+      setCopilotLoadingPoint(null);
+    }
+  }
+
+  async function handleGenerateDifferentiatedSlide(slideId: string, variant: 'remedial' | 'enrichment') {
+    const slide = slides.find((s) => s.id === slideId);
+    if (!slide) return;
+
+    setDifferentiatingSlideId(slideId);
+    setError(null);
+
+    try {
+      const generated = await generateDifferentiatedSlideVariant({
+        slide: { title: slide.title, points: slide.points, category: slide.category },
+        variant,
+        subject: settings.subject,
+        grade: settings.grade,
+        lang: isAr ? 'ar' : 'en',
+      });
+
+      if (generated) {
+        const newSlide: GammaSlide = {
+          id: `diff-${Date.now()}`,
+          index: slide.index + 1,
+          title: generated.title || (variant === 'remedial' ? `تبسيط ودعم: ${slide.title}` : `إثراء وتحدي: ${slide.title}`),
+          category: generated.category || (variant === 'remedial' ? 'دعم علاجي' : 'إثراء للموهوبين 🌟'),
+          layout: generated.layout || 'split',
+          contentHtml: '',
+          points: generated.points || (variant === 'remedial' ? ['تبسيط خطوة بخطوة', 'مثال بصري مباشر'] : ['تحدي استقصائي', 'تطبيق متقدم']),
+          teacherScript: generated.teacherScript || '',
+          discussionPrompt: generated.discussionPrompt || '',
+          differentiationType: variant,
+          fontFamily: slide.fontFamily || 'Cairo',
+          fontSize: slide.fontSize || 16,
+          align: 'right',
+        };
+
+        // Insert right after current slide
+        const currentIndex = slides.findIndex((s) => s.id === slideId);
+        const nextIndex = currentIndex !== -1 ? currentIndex + 1 : slides.length;
+        setSlides((prev) => {
+          const updated = [...prev];
+          updated.splice(nextIndex, 0, newSlide);
+          return updated.map((s, idx) => ({ ...s, index: idx + 1 }));
+        });
+        setActiveSlideIndex(nextIndex);
+      }
+    } catch (err: any) {
+      console.error('Differentiated slide generation failed:', err);
+      setError(isAr ? 'تعذر توليد شريحة التمايز، يرجى المحاولة بعد قليل.' : 'Failed to generate differentiated slide.');
+    } finally {
+      setDifferentiatingSlideId(null);
+    }
+  }
+
+  // Media Embed Handlers
+  function handleOpenEmbedModal(slideId?: string) {
+    const targetId = slideId || currentActiveSlide?.id;
+    if (!targetId) return;
+    setEmbeddingSlideId(targetId);
+    setIsEmbedModalOpen(true);
+  }
+
+  function handleAttachSimulation(sim: SimulationEmbed) {
+    if (!embeddingSlideId) return;
+    setSlides((prev) =>
+      prev.map((s) => (s.id === embeddingSlideId ? { ...s, simulationEmbed: sim } : s))
+    );
+  }
+
+  function handleAttachVideo(video: VideoEmbed) {
+    if (!embeddingSlideId) return;
+    setSlides((prev) =>
+      prev.map((s) => (s.id === embeddingSlideId ? { ...s, videoEmbed: video } : s))
+    );
+  }
+
+  function handleRemoveSimulation(slideId: string) {
+    setSlides((prev) =>
+      prev.map((s) => (s.id === slideId ? { ...s, simulationEmbed: undefined } : s))
+    );
+  }
+
+  function handleRemoveVideo(slideId: string) {
+    setSlides((prev) =>
+      prev.map((s) => (s.id === slideId ? { ...s, videoEmbed: undefined } : s))
+    );
+  }
+
+  // Formative Poll Handlers
+  function handleTogglePoll(slideId: string) {
+    setSlides((prev) =>
+      prev.map((s) => {
+        if (s.id !== slideId) return s;
+        if (s.interactivePoll) {
+          return { ...s, interactivePoll: undefined };
+        }
+        return {
+          ...s,
+          interactivePoll: {
+            question: `سؤال تفاعلي للتحقق من فهم (${s.title}): ما النتيجة المترتبة على ذلك؟`,
+            options: [
+              'الخيار الأول: يمثل التطبيق المباشر للمفهوم',
+              'الخيار الثاني: فرضية بديلة تحتاج إلى تدقيق',
+              'الخيار الثالث: استنتاج معاكس للظاهرة',
+              'الخيار الرابع: تعميم غير دقيق'
+            ],
+            correctIndex: 0,
+            explanation: 'الخيار (أ) هو الصحيح لأنه يتوافق تماماً مع القاعدة العلمية والشرح المقدم في الدرس.',
+            revealed: false,
+          },
+        };
+      })
+    );
+  }
+
+  function updateSlidePoll(slideId: string, poll: FormativePoll) {
+    setSlides((prev) =>
+      prev.map((s) => (s.id === slideId ? { ...s, interactivePoll: poll } : s))
+    );
+  }
+
+  // Student Handout PDF Export
+  async function handleExportStudentHandoutPdf() {
+    if (slides.length === 0) return;
+    setExportingHandoutPdf(true);
+    setError(null);
+    try {
+      const blob = await generateStudentHandoutPdf(slides, {
+        lessonTitle: settings.lessonTitle || 'مذكرة_الدرس',
+        subject: settings.subject || 'العلوم',
+        grade: settings.grade || 'المرحلة',
+        institution: settings.institution,
+        teacherName: settings.teacherName,
+      });
+      const cleanTitle = (settings.lessonTitle || 'درس').replace(/[\/\\?%*:|"<>]/g, '_');
+      saveAs(blob, `${cleanTitle}_مذكرة_الطالب_Cornell.pdf`);
+    } catch (err: any) {
+      console.error('Handout export error:', err);
+      setError(isAr ? 'تعذر تصدير مذكرة الطالب PDF.' : 'Failed to export handout PDF.');
+    } finally {
+      setExportingHandoutPdf(false);
+    }
+  }
+
+  // High-Res Images ZIP Export
+  async function handleExportImageZip() {
+    if (slides.length === 0) return;
+    setExportingImageZip(true);
+    setImageZipProgress({ current: 1, total: slides.length });
+    setError(null);
+    try {
+      await exportSlidesToImageZip(
+        slides,
+        settings.lessonTitle || 'عرض_تقديمي',
+        (current, total) => setImageZipProgress({ current, total })
+      );
+    } catch (err: any) {
+      console.error('Image zip export error:', err);
+      setError(isAr ? 'تعذر تصدير صور الشرائح، تأكد من وضوح شاشة العرض.' : 'Failed to export slide images.');
+    } finally {
+      setExportingImageZip(false);
+      setImageZipProgress(null);
+    }
+  }
 
   // Handle PPTX theme upload & extraction
   async function handlePptxThemeUpload(uploadedFiles: FileList | null) {
@@ -945,8 +1171,8 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2">
+              {/* Action & Export Buttons */}
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={addNewSlide}
@@ -954,6 +1180,45 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
                 >
                   <Plus className="w-4 h-4" />
                   <span>شريحة جديدة</span>
+                </button>
+
+                {/* Printable Student Handout PDF */}
+                <button
+                  type="button"
+                  onClick={handleExportStudentHandoutPdf}
+                  disabled={exportingHandoutPdf}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition disabled:opacity-50"
+                  title="تصدير مذكرة الطالب المطبوعة (Cornell Notes Handout)"
+                >
+                  {exportingHandoutPdf ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                  ) : (
+                    <Printer className="w-4 h-4 text-indigo-700" />
+                  )}
+                  <span>مذكرة الطالب (PDF)</span>
+                </button>
+
+                {/* High-Res Images ZIP Export */}
+                <button
+                  type="button"
+                  onClick={handleExportImageZip}
+                  disabled={exportingImageZip}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition disabled:opacity-50"
+                  title="تصدير الشرائح كصور جاهزة للواتساب ومدرستي وكلاسيرا"
+                >
+                  {exportingImageZip ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-teal-600" />
+                      <span>
+                        {imageZipProgress ? `تحويل (${imageZipProgress.current}/${imageZipProgress.total})...` : 'تجهيز الصور...'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <FileArchive className="w-4 h-4 text-emerald-700" />
+                      <span>صور (ZIP للواتساب)</span>
+                    </>
+                  )}
                 </button>
 
                 <button
@@ -1005,7 +1270,7 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
             </div>
 
             {/* Microsoft PowerPoint Tools Ribbon (Formatting active slide) */}
-            <div className="flex flex-wrap items-center gap-3 pt-1 text-xs">
+            <div className="flex flex-wrap items-center gap-2.5 pt-1 text-xs">
               <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
                 أدوات التنسيق (الشريحة {activeSlideIndex + 1}):
               </span>
@@ -1114,11 +1379,72 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
               <button
                 type="button"
                 onClick={() => handleOpenImagePicker(currentActiveSlide?.id)}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold border border-teal-200 transition"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold border border-teal-200 transition"
               >
                 <ImageIcon className="w-3.5 h-3.5" />
-                <span>{currentActiveSlide?.imageUrl ? 'تغيير صورة الشريحة 🖼️' : 'إدراج صورة من الإنترنت 🖼️'}</span>
+                <span>{currentActiveSlide?.imageUrl ? 'تغيير الصورة 🖼️' : 'إدراج صورة 🖼️'}</span>
               </button>
+
+              {/* Insert Simulation or Video Embed Button */}
+              <button
+                type="button"
+                onClick={() => handleOpenEmbedModal(currentActiveSlide?.id)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-800 font-bold border border-indigo-200 transition"
+                title="تضمين محاكاة علمية تفاعلية من PhET أو GeoGebra أو فيديو آمن"
+              >
+                <Beaker className="w-3.5 h-3.5 text-indigo-600" />
+                <span>تضمين محاكاة / فيديو 🧪</span>
+              </button>
+
+              {/* Formative Poll Toggle Button */}
+              <button
+                type="button"
+                onClick={() => handleTogglePoll(currentActiveSlide?.id)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-bold border transition ${
+                  currentActiveSlide?.interactivePoll
+                    ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                    : 'bg-purple-50 hover:bg-purple-100 text-purple-900 border-purple-200'
+                }`}
+                title="إضافة كرت تصويت صفي تفاعلي مع كشف الحل ورمز QR"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span>{currentActiveSlide?.interactivePoll ? 'إلغاء كرت التصويت' : 'إضافة تصويت صفي 📊'}</span>
+              </button>
+
+              {/* Generate Differentiated Slide (Remedial or Enrichment) */}
+              <div className="relative group/diff">
+                <button
+                  type="button"
+                  disabled={differentiatingSlideId === currentActiveSlide?.id}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 text-amber-900 font-bold border border-amber-300 transition disabled:opacity-50"
+                >
+                  {differentiatingSlideId === currentActiveSlide?.id ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-700" />
+                  ) : (
+                    <Wand2 className="w-3.5 h-3.5 text-amber-700" />
+                  )}
+                  <span>شريحة تمايز ذكية 🪄</span>
+                  <ChevronDown className="w-3 h-3 text-amber-700" />
+                </button>
+
+                {/* Dropdown Menu */}
+                <div className="absolute top-full right-0 mt-1 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl p-1.5 hidden group-hover/diff:block z-30 animate-in fade-in">
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateDifferentiatedSlide(currentActiveSlide?.id, 'remedial')}
+                    className="w-full text-right p-2 rounded-xl hover:bg-emerald-50 text-emerald-950 font-bold text-xs flex items-center justify-between"
+                  >
+                    <span>🟢 شريحة علاجية مبسطة (للمتعثرين)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateDifferentiatedSlide(currentActiveSlide?.id, 'enrichment')}
+                    className="w-full text-right p-2 rounded-xl hover:bg-purple-50 text-purple-950 font-bold text-xs flex items-center justify-between"
+                  >
+                    <span>🟣 شريحة إثرائية وتحدي (للموهوبين)</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1129,6 +1455,7 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
               return (
                 <div
                   key={slide.id}
+                  data-slide-card="true"
                   onClick={() => setActiveSlideIndex(idx)}
                   className={`rounded-3xl shadow-sm border transition-all duration-200 overflow-hidden cursor-pointer ${
                     isActive ? 'ring-2 ring-indigo-500 shadow-md' : 'hover:border-slate-300'
@@ -1155,6 +1482,19 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
                       <span className="text-xs opacity-70 font-semibold">
                         {slide.category}
                       </span>
+
+                      {/* Differentiation Badge */}
+                      {slide.differentiationType === 'remedial' && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                          🟢 مسار علاجي داعم
+                        </span>
+                      )}
+                      {slide.differentiationType === 'enrichment' && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 font-bold">
+                          🌟 مسار إثرائي وتحدي
+                        </span>
+                      )}
+
                       {slide.imageUrl && (
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center gap-1">
                           <ShieldCheck className="w-3 h-3" />
@@ -1164,6 +1504,18 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
                     </div>
 
                     <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEmbedModal(slide.id);
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-black/10 transition text-xs font-bold flex items-center gap-1 text-indigo-600"
+                        title="إدراج محاكاة أو فيديو"
+                      >
+                        <Beaker className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">محاكاة</span>
+                      </button>
                       <button
                         type="button"
                         onClick={(e) => {
@@ -1236,8 +1588,65 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
                     </div>
                   </div>
 
-                  {/* Card Content Area with Image Support */}
+                  {/* Card Content Area with Image & Media Support */}
                   <div className="p-6 sm:p-10">
+                    {/* Embedded Formative Poll */}
+                    {slide.interactivePoll && (
+                      <div className="mb-6" onClick={(e) => e.stopPropagation()}>
+                        <InteractivePollCard
+                          poll={slide.interactivePoll}
+                          onUpdate={(updated) => updateSlidePoll(slide.id, updated)}
+                        />
+                      </div>
+                    )}
+
+                    {/* Embedded Simulation Card */}
+                    {slide.simulationEmbed && (
+                      <div className="mb-6 rounded-2xl border border-teal-500/40 bg-slate-900/10 p-4" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-bold text-teal-600 flex items-center gap-1.5">
+                            <Beaker className="w-4 h-4" />
+                            <span>محاكاة مدمجة: {slide.simulationEmbed.titleAr}</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSimulation(slide.id)}
+                            className="text-xs text-rose-500 hover:text-rose-700 font-bold"
+                          >
+                            إزالة المحاكاة ✕
+                          </button>
+                        </div>
+                        <iframe
+                          src={slide.simulationEmbed.embedUrl}
+                          className="w-full h-64 rounded-xl border border-black/10"
+                          title={slide.simulationEmbed.titleAr}
+                          allow="fullscreen"
+                        />
+                      </div>
+                    )}
+
+                    {/* Embedded Video Card */}
+                    {slide.videoEmbed && (
+                      <div className="mb-6 rounded-2xl border border-rose-500/40 bg-slate-900/10 p-4" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-bold text-rose-600 flex items-center gap-1.5">
+                            <Video className="w-4 h-4" />
+                            <span>مقطع فيديو آمن: {slide.videoEmbed.title || 'فيديو تعليمي'} ({slide.videoEmbed.startSeconds || 0}ث - {slide.videoEmbed.endSeconds || 'نهاية'}ث)</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveVideo(slide.id)}
+                            className="text-xs text-rose-500 hover:text-rose-700 font-bold"
+                          >
+                            إزالة الفيديو ✕
+                          </button>
+                        </div>
+                        <p className="text-xs text-slate-500">
+                          سيتم تشغيل الفيديو تلقائياً بالمواقيت المحددة أثناء وضع العرض الصفي الكامل.
+                        </p>
+                      </div>
+                    )}
+
                     {editingSlideId === slide.id ? (
                       <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
                         <div>
@@ -1290,7 +1699,7 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-                        {/* Text Content Column with Live WYSIWYG Editing */}
+                        {/* Text Content Column with Live WYSIWYG Editing & Point Copilot */}
                         <div className={slide.imageUrl ? 'md:col-span-7' : 'md:col-span-12'}>
                           <div className="flex items-center justify-between gap-2 mb-4">
                             <h3
@@ -1313,49 +1722,112 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
                           {slide.points.length > 0 ? (
                             <div className="space-y-3">
                               <div className={`grid gap-3.5 ${slide.points.length >= 3 && slide.layout === 'grid' ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1'}`}>
-                                {slide.points.map((pt, pIdx) => (
-                                  <div
-                                    key={pIdx}
-                                    className="p-3.5 sm:p-4 rounded-2xl transition group/pt relative"
-                                    style={{
-                                      backgroundColor: themeConfig.isDark ? '#1E293B60' : '#F8FAFC',
-                                      border: `1px solid ${themeConfig.isDark ? '#334155' : '#E2E8F0'}`,
-                                    }}
-                                  >
-                                    <div className="flex items-start gap-2.5">
-                                      <span
-                                        className="w-5 h-5 rounded-md font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 text-white"
-                                        style={{ backgroundColor: `#${themeConfig.accentHex}` }}
-                                      >
-                                        {pIdx + 1}
-                                      </span>
-                                      <p
-                                        contentEditable
-                                        suppressContentEditableWarning
-                                        onBlur={(e) => updateSlidePoint(slide.id, pIdx, e.currentTarget.textContent || '')}
-                                        className="leading-relaxed font-medium flex-1 outline-none hover:bg-black/5 focus:bg-white focus:text-slate-900 focus:ring-1 focus:ring-teal-400 px-2 py-1 rounded-lg transition cursor-text"
-                                        style={{
-                                          fontSize: `${slide.fontSize || 15}px`,
-                                          textAlign: slide.align || 'right',
-                                        }}
-                                        title="انقر لتعديل النقطة مباشرة"
-                                      >
-                                        {pt}
-                                      </p>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          deleteSlidePoint(slide.id, pIdx);
-                                        }}
-                                        className="opacity-0 group-hover/pt:opacity-100 text-slate-400 hover:text-rose-500 p-1 transition shrink-0"
-                                        title="حذف هذه النقطة"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
+                                {slide.points.map((pt, pIdx) => {
+                                  const pointKey = `${slide.id}-${pIdx}`;
+                                  const isLoadingThisPoint = copilotLoadingPoint === pointKey;
+                                  const isMenuOpen = activeCopilotMenuPoint === pointKey;
+
+                                  return (
+                                    <div
+                                      key={pIdx}
+                                      className="p-3.5 sm:p-4 rounded-2xl transition group/pt relative"
+                                      style={{
+                                        backgroundColor: themeConfig.isDark ? '#1E293B60' : '#F8FAFC',
+                                        border: `1px solid ${themeConfig.isDark ? '#334155' : '#E2E8F0'}`,
+                                      }}
+                                    >
+                                      <div className="flex items-start gap-2.5">
+                                        <span
+                                          className="w-5 h-5 rounded-md font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 text-white"
+                                          style={{ backgroundColor: `#${themeConfig.accentHex}` }}
+                                        >
+                                          {pIdx + 1}
+                                        </span>
+
+                                        <p
+                                          contentEditable
+                                          suppressContentEditableWarning
+                                          onBlur={(e) => updateSlidePoint(slide.id, pIdx, e.currentTarget.textContent || '')}
+                                          className={`leading-relaxed font-medium flex-1 outline-none hover:bg-black/5 focus:bg-white focus:text-slate-900 focus:ring-1 focus:ring-teal-400 px-2 py-1 rounded-lg transition cursor-text ${
+                                            isLoadingThisPoint ? 'opacity-40 animate-pulse' : ''
+                                          }`}
+                                          style={{
+                                            fontSize: `${slide.fontSize || 15}px`,
+                                            textAlign: slide.align || 'right',
+                                          }}
+                                          title="انقر لتعديل النقطة مباشرة"
+                                        >
+                                          {pt}
+                                        </p>
+
+                                        {/* Point AI Copilot Action Menu */}
+                                        <div className="relative shrink-0 flex items-center gap-1">
+                                          <button
+                                            type="button"
+                                            disabled={isLoadingThisPoint}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setActiveCopilotMenuPoint(isMenuOpen ? null : pointKey);
+                                            }}
+                                            className="opacity-0 group-hover/pt:opacity-100 p-1 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition flex items-center gap-1 border border-indigo-200"
+                                            title="مساعد الذكاء الاصطناعي للنص"
+                                          >
+                                            {isLoadingThisPoint ? (
+                                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            ) : (
+                                              <Wand2 className="w-3.5 h-3.5" />
+                                            )}
+                                          </button>
+
+                                          {/* Dropdown Menu */}
+                                          {isMenuOpen && (
+                                            <div
+                                              className="absolute top-full left-0 mt-1 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl p-2 z-30 text-slate-900 text-xs animate-in fade-in space-y-1"
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
+                                              <div className="text-[10px] font-bold text-slate-400 px-2 py-1 border-b border-slate-100">
+                                                🪄 مساعد الذكاء الاصطناعي للنص
+                                              </div>
+                                              <button
+                                                type="button"
+                                                onClick={() => handleTransformPoint(slide.id, pIdx, 'simplify')}
+                                                className="w-full text-right p-2 rounded-xl hover:bg-emerald-50 text-emerald-950 font-bold transition flex items-center gap-1.5"
+                                              >
+                                                <span>🟢 تبسيط الصياغة (للمتعثرين)</span>
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => handleTransformPoint(slide.id, pIdx, 'critical_question')}
+                                                className="w-full text-right p-2 rounded-xl hover:bg-blue-50 text-blue-950 font-bold transition flex items-center gap-1.5"
+                                              >
+                                                <span>🔵 تحويل لسؤال تفكير ناقد</span>
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => handleTransformPoint(slide.id, pIdx, 'real_world_example')}
+                                                className="w-full text-right p-2 rounded-xl hover:bg-purple-50 text-purple-950 font-bold transition flex items-center gap-1.5"
+                                              >
+                                                <span>🟣 ربط بمثال واقعي معاصر</span>
+                                              </button>
+                                            </div>
+                                          )}
+
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              deleteSlidePoint(slide.id, pIdx);
+                                            }}
+                                            className="opacity-0 group-hover/pt:opacity-100 text-slate-400 hover:text-rose-500 p-1 transition"
+                                            title="حذف هذه النقطة"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      </div>
                                     </div>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
 
                               <button
@@ -1467,6 +1939,16 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
         }}
         onSelectImage={handleSelectImage}
         currentImageUrl={slides.find((s) => s.id === pickingImageSlideId)?.imageUrl}
+      />
+
+      {/* INTERACTIVE MEDIA & SIMULATION EMBED MODAL */}
+      <InteractiveEmbedModal
+        isOpen={isEmbedModalOpen}
+        onClose={() => setIsEmbedModalOpen(false)}
+        onSelectSimulation={handleAttachSimulation}
+        onSelectVideo={handleAttachVideo}
+        currentSimulation={currentActiveSlide?.simulationEmbed}
+        currentVideo={currentActiveSlide?.videoEmbed}
       />
 
       {/* 🌿 شاشة انتظار الذكاء الاصطناعي مع الأذكار والصلاة على النبي ﷺ */}
