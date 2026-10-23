@@ -1,7 +1,8 @@
 import {
   Home, CalendarDays, ClipboardList, Layers, Presentation, FileQuestion, FileCode2,
   FileCheck2, Library, Globe, Compass, Edit3, Target, ChevronRight, ChevronLeft,
-  Sparkles, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, X
+  Sparkles, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, X,
+  Briefcase, FileText
 } from 'lucide-react';
 import type { View } from '@/types';
 import type { UILang } from '@/lib/i18n';
@@ -120,6 +121,13 @@ export default function Sidebar({
           icon: FileCheck2,
           badge: { ar: 'AI', en: 'AI', color: 'bg-teal-500/20 text-teal-700 border-teal-300' },
         },
+        {
+          view: 'pdf-editor',
+          labelAr: 'محرر ومحول PDF الذكي',
+          labelEn: 'Smart PDF Studio',
+          icon: FileText,
+          badge: { ar: 'Word/PDF', en: 'Word/PDF', color: 'bg-indigo-500/20 text-indigo-700 border-indigo-300' },
+        },
       ],
     },
     {
@@ -127,6 +135,13 @@ export default function Sidebar({
       titleAr: 'المكتبة والمصادر',
       titleEn: 'Library & Community',
       items: [
+        {
+          view: 'resources',
+          labelAr: 'حقيبتي ومصادري',
+          labelEn: 'My Resources',
+          icon: Briefcase,
+          badge: { ar: 'سحابي', en: 'Cloud', color: 'bg-emerald-500/20 text-emerald-700 border-emerald-300' },
+        },
         {
           view: 'library',
           labelAr: 'مكتبتي التعليمية',

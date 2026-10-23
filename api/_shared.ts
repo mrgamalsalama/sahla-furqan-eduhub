@@ -2135,3 +2135,73 @@ Requirements:
     return res.status(status).json({ error: message, details: error?.message });
   }
 }
+
+/**
+ * Execute PDF OCR / Arabic Page Extraction:
+ * Extracts rich, formatted Arabic text with diacritics, tables, and paragraphs from a PDF page canvas snapshot.
+ */
+export async function executePdfOcr(req: any, res: any) {
+  try {
+    const body = req.body || {};
+    const { imageBase64, pageNumber, targetAction = 'extract_arabic' } = body;
+
+    if (!imageBase64) {
+      return res.status(400).json({ error: 'صورة الصفحة غير متوفرة' });
+    }
+
+    const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
+
+    const prompt = `أنت خبير تربوي وتقني متخصص في رقمنة وفك تشفير المستندات المدرسية والكتب وكشوف الدرجات والتقارير ثنائية اللغة (العربية والإنجليزية).
+أمامك صورة عالية الدقة لصفحة من مستند تعليمي أو كشف درجات أو كتاب مدرسي (صفحة رقم ${pageNumber || 1}).
+
+المطلوب بدقة متناهية:
+1. الجداول وكشوف الدرجات والتقييمات (Assessments & Grade Cards):
+   - إذا كانت الصفحة تحتوي على جدول درجات أو تقييمات، ابنِ جدول HTML كامل وأنيق:
+     <table border="1" style="width:100%; border-collapse:collapse; margin:14px 0;">
+       <thead><tr style="background:#f1f5f9; font-weight:bold;">...</tr></thead>
+       <tbody>...</tbody>
+     </table>
+   - رتّب الأعمدة بدقة طبقاً للمستند الأصلي (مثل: التقييم | وقت الاستحقاق | تم التصحيح | الدرجة | النسبة المئوية % | التقدير).
+   - حافظ على كافة الصفوف والدرجات والتواريخ (مثل: Attendance T1، المشروع الأول، الاختبار الأول، الواجبات، النتيجة النهائية).
+
+2. فك التشفير وعكس الحروف المشوهة (Disjointed/Reversed Arabic):
+   - بعض برامج تصدير ملفات الـ PDF المدرسية تطبع الحروف العربية مقلوبة أو مقطعة ومتباعدة (مثل "ب ل ا ط ل ا" أو ":بلاطلا" أو "مسامييقتلا" أو "ع ر ض ل د ر ج ت ح س ب ا ل ف ئ").
+   - حوّلها فوراً وبلا استثناء إلى لغة عربية فصحى سليمة 100% متصلة ومفهومة (مثل: "اسم الطالب"، "التقييمات"، "الدرجة"، "عرض الدرجات حسب الفئة").
+
+3. النصوص المزدوجة (عربي + إنجليزي):
+   - حافظ على الكلمات والأكواد الإنجليزية بدقة (مثل: Hassan, Ola، Grade 4 Arabic Native (US)، W6 T1، Attendance T1، Quizzes، إلخ) مع محاذاة النص والجدول بطريقة متناسقة للقراءة من اليمين لليسار (dir="rtl").
+
+4. استخدم وسوم HTML قياسية جاهزة لمحرر Word (استخدم <h2>, <h3>, <p>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <strong>).
+5. ممنوع وضع أي مقدمات أو اعتذارات أو كتل ماركداون (\`\`\`html). ابدأ بكود الـ HTML النظيف فوراً.`;
+
+    const contents: any[] = [
+      prompt,
+      {
+        inlineData: {
+          mimeType: 'image/jpeg',
+          data: cleanBase64,
+        },
+      },
+    ];
+
+    const response = await callGemini(contents, { fast: true });
+    let html = extractHtml(response.text || '');
+    html = html
+      .replace(/^```html\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+
+    return res.status(200).json({
+      success: true,
+      html,
+      rawText: html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+      pageNumber,
+    });
+  } catch (error: any) {
+    console.error('executePdfOcr error:', error);
+    const { status, message } = formatApiError(error);
+    return res.status(status).json({ error: message, details: error?.message });
+  }
+}
+

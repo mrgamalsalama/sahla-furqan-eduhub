@@ -221,6 +221,57 @@ export default function CommunityPage({
     }
   }
 
+  // إذا لم يكن المعلم مسجلاً دخوله، لا يظهر محتوى المجتمع والمكتبة العامة إلا بعد تسجيل الدخول
+  if (!user) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-16 text-center space-y-6 animate-fade-in">
+        <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-900 to-indigo-950 text-white flex items-center justify-center mx-auto shadow-xl border border-blue-700/50">
+          <Globe className="w-10 h-10 text-teal-300" />
+        </div>
+
+        <div className="space-y-2 max-w-xl mx-auto">
+          <span className="text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-900 font-bold border border-blue-200">
+            {isAr ? '🔒 مجتمع تعليمي خاص بمعلمي سهلة والفرقان' : '🔒 Verified Educator Community Only'}
+          </span>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+            {isAr ? 'المكتبة العامة ومجتمع المعلمين' : 'Educator Community & Public Library'}
+          </h1>
+          <p className="text-sm text-slate-600 leading-relaxed">
+            {isAr
+              ? 'هذا القسم مخصص حصرياً لأسرة ومعلمي أكاديمية سهلة الدولية ومدارس الفرقان. يرجى تسجيل الدخول بحسابك أو إنشاء حساب جديد للوصول إلى آلاف الدروس وأوراق العمل والاختبارات المشتركة، والتفاعل والمشاركة مع زملائك المعلمين.'
+              : 'This community library is reserved exclusively for educators. Please sign in or register to browse, clone, and share teaching resources.'}
+          </p>
+        </div>
+
+        <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={onSignIn}
+            className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-blue-900 via-indigo-900 to-blue-950 hover:from-blue-800 hover:to-indigo-900 text-white text-sm font-bold rounded-2xl shadow-lg transition active:scale-95 flex items-center justify-center gap-2"
+          >
+            <LogIn className="w-4 h-4 text-teal-300" />
+            <span>{isAr ? 'تسجيل الدخول / إنشاء حساب المعلم' : 'Sign In / Register'}</span>
+          </button>
+        </div>
+
+        <div className="pt-8 border-t border-slate-200 max-w-lg mx-auto grid grid-cols-3 gap-4 text-center">
+          <div className="p-3 bg-white rounded-2xl border border-slate-200/80 shadow-2xs">
+            <p className="text-base font-black text-blue-950">+1500</p>
+            <p className="text-[11px] font-semibold text-slate-500">{isAr ? 'خطط معتمدة' : 'Lesson Plans'}</p>
+          </div>
+          <div className="p-3 bg-white rounded-2xl border border-slate-200/80 shadow-2xs">
+            <p className="text-base font-black text-emerald-700">+3200</p>
+            <p className="text-[11px] font-semibold text-slate-500">{isAr ? 'أوراق عمل بلوم' : 'Worksheets'}</p>
+          </div>
+          <div className="p-3 bg-white rounded-2xl border border-slate-200/80 shadow-2xs">
+            <p className="text-base font-black text-indigo-700">+800</p>
+            <p className="text-[11px] font-semibold text-slate-500">{isAr ? 'بنوك اختبارات' : 'Exam Banks'}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-8 animate-fade-in">
       {/* Hero Banner */}

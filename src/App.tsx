@@ -18,7 +18,9 @@ import PerformanceTaskStudio from '@/components/PerformanceTaskStudio';
 import WeeklyStatementStudio from '@/components/WeeklyStatementStudio';
 import FooterBarakahRibbon from '@/components/FooterBarakahRibbon';
 import EducatorWellnessModal from '@/components/EducatorWellnessModal';
-import type { View, OutputType, GenerationResult, SavedLesson } from '@/types';
+import MyResourcesPage from '@/components/MyResourcesPage';
+import PdfEditorStudio from '@/components/PdfEditorStudio';
+import type { View, OutputType, GenerationResult, SavedLesson, TeacherResource } from '@/types';
 import { getUILang, saveUILang } from '@/lib/i18n';
 import type { UILang } from '@/lib/i18n';
 import { getCurrentUser, signOut, supabase } from '@/lib/supabase';
@@ -38,6 +40,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
+  const [selectedPdfResource, setSelectedPdfResource] = useState<TeacherResource | null>(null);
 
   // Sidebar collapse & mobile drawer state
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
@@ -306,6 +309,38 @@ export default function App() {
                 uiLang={uiLang}
                 user={user}
                 onSignIn={() => handleOpenAuthModal('signin')}
+              />
+            )}
+
+            {view === 'resources' && (
+              <MyResourcesPage
+                uiLang={uiLang}
+                user={user}
+                onSignIn={() => handleOpenAuthModal('signin')}
+                onNavigate={setView}
+                onOpenInPdfEditor={(res) => {
+                  setSelectedPdfResource(res);
+                  setView('pdf-editor');
+                }}
+                onUseInStudio={(res, target) => {
+                  if (res.textContent) {
+                    localStorage.setItem('eduhub_pending_source_text', res.textContent);
+                  }
+                  setView(target);
+                }}
+              />
+            )}
+
+            {view === 'pdf-editor' && (
+              <PdfEditorStudio
+                initialResource={selectedPdfResource}
+                onBack={() => setView('resources')}
+                onNavigate={setView}
+                onOpenGeneratedPlan={(sourceText) => {
+                  localStorage.setItem('eduhub_pending_source_text', sourceText);
+                  setView('lesson-plan');
+                }}
+                uiLang={uiLang}
               />
             )}
           </div>

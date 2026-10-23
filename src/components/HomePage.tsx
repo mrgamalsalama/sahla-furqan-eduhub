@@ -2,11 +2,12 @@ import { useState } from 'react';
 import {
   ClipboardList, Layers, Presentation, FileQuestion, FileCode2,
   FileCheck2, Sparkles, ArrowLeft, ArrowRight, Globe, Mic, Compass, Wand2,
-  CalendarDays
+  CalendarDays, FileText, Briefcase
 } from 'lucide-react';
 import type { View, GenerationResult, OutputType } from '@/types';
 import { INSTITUTIONS } from '@/types';
 import type { UILang } from '@/lib/i18n';
+import { getTeacherResources } from '@/lib/storage';
 import VoiceToLessonModal from '@/components/VoiceToLessonModal';
 
 interface HomePageProps {
@@ -115,6 +116,28 @@ export default function HomePage({ onOpenResult, uiLang, onNavigate }: HomePageP
       color: 'from-purple-600 to-violet-800',
     },
     {
+      id: 'pdf-editor',
+      title: isAr ? 'محرر ومحول PDF وكتب المناهج الذكي' : 'Smart Arabic PDF Studio',
+      subtitle: isAr ? 'تحرير وتعديل كأنك في Word' : 'Edit PDFs like Word',
+      description: isAr
+        ? 'فتح وتعديل كتب المنهج المدرسية الكبيرة بنطاق الصفحات، واستخراج النصوص العربية بدقة كاملة، وتحويل الصفحات بنقرة زر إلى خطط دروس أو أوراق عمل أو اختبارات.'
+        : 'Edit large textbooks with page chunking, flawless Arabic text OCR, and 1-click transformation to lesson plans or exams.',
+      icon: FileText,
+      color: 'from-indigo-600 to-blue-900',
+      badge: isAr ? 'جديد ومبهر ✨' : 'Innovative ✨',
+    },
+    {
+      id: 'resources',
+      title: isAr ? 'حقيبتي ومصادري التعليمية' : 'My Cloud Resources Locker',
+      subtitle: isAr ? 'مستودع الكتب والملفات السحابي' : 'Centralized Textbook Hub',
+      description: isAr
+        ? 'مستودعك الشامل لكافة الملفات والكتب المرفوعة في المنصة، مع إمكانية استرجاعها واستخدامها في أي وقت ومشاركتها مع مجتمع المعلمين.'
+        : 'Your personal cloud vault for all uploaded textbooks, documents, and teaching assets.',
+      icon: Briefcase,
+      color: 'from-emerald-700 to-teal-900',
+      badge: isAr ? 'سحابي 🎒' : 'Locker 🎒',
+    },
+    {
       id: 'community',
       title: isAr ? 'المكتبة العامة ومجتمع المعلمين' : 'Public Community Hub',
       subtitle: isAr ? 'مشاركة وتداول الدروس والاختبارات' : 'Shared Hub & Discussions',
@@ -167,6 +190,67 @@ export default function HomePage({ onOpenResult, uiLang, onNavigate }: HomePageP
           </div>
         </div>
       </div>
+
+      {/* 🎒 أحدث الكتب والمصادر في حقيبتك السحابية */}
+      {(() => {
+        const recentResources = getTeacherResources().slice(0, 3);
+        if (recentResources.length === 0) return null;
+        return (
+          <div className="mb-8 p-4 sm:p-5 bg-gradient-to-r from-emerald-50 via-teal-50/50 to-slate-50 rounded-3xl border border-emerald-200/80 shadow-2xs">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Briefcase className="w-5 h-5 text-emerald-700" />
+                <h3 className="text-xs sm:text-sm font-extrabold text-slate-900">
+                  {isAr ? '🎒 أحدث الكتب والمصادر في حقيبتك السحابية:' : '🎒 Recent Resources in Your Locker:'}
+                </h3>
+              </div>
+              {onNavigate && (
+                <button
+                  type="button"
+                  onClick={() => onNavigate('resources')}
+                  className="text-xs text-emerald-700 hover:text-emerald-900 font-bold hover:underline flex items-center gap-1"
+                >
+                  <span>{isAr ? 'استعراض كامل الحقيبة' : 'View Full Locker'}</span>
+                  <Arrow className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {recentResources.map((res) => (
+                <div
+                  key={res.id}
+                  className="p-3 bg-white rounded-2xl border border-slate-200 hover:border-emerald-500 shadow-2xs transition flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-slate-900 truncate" title={res.name}>{res.name}</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">{res.type.toUpperCase()} • {new Date(res.createdAt).toLocaleDateString(isAr ? 'ar-EG' : 'en-US')}</p>
+                  </div>
+                  {onNavigate && res.type === 'pdf' ? (
+                    <button
+                      type="button"
+                      onClick={() => onNavigate('pdf-editor')}
+                      className="p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold transition shrink-0"
+                      title={isAr ? 'تعديل في محرر PDF' : 'Edit'}
+                    >
+                      <FileText className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onNavigate?.('lesson-plan')}
+                      className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold transition shrink-0"
+                      title={isAr ? 'تحضير درس' : 'Plan'}
+                    >
+                      <Sparkles className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Studios Grid */}
       <div className="mb-12">

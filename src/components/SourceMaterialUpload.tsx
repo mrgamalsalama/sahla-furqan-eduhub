@@ -1,10 +1,12 @@
 import { useState, useRef } from 'react';
 import {
   Upload, X, FileText, Presentation, File, Image as ImageIcon,
-  Sparkles, Check, Eye, Loader2, Info
+  Sparkles, Check, Eye, Loader2, Info, Briefcase
 } from 'lucide-react';
 import type { UploadedFile } from '@/types';
 import { parseDocumentFile } from '@/lib/documentParser';
+import { autoSaveUploadedResource } from '@/lib/storage';
+import ResourcePickerModal from '@/components/ResourcePickerModal';
 import type { UILang } from '@/lib/i18n';
 
 interface SourceMaterialUploadProps {
@@ -53,6 +55,7 @@ export default function SourceMaterialUpload({
   const [isDragging, setIsDragging] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [previewingFile, setPreviewingFile] = useState<UploadedFile | null>(null);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
 
   const quickSuggestions = isAr ? QUICK_SUGGESTIONS_AR : QUICK_SUGGESTIONS_EN;
 
@@ -64,6 +67,8 @@ export default function SourceMaterialUpload({
       for (const file of Array.from(fileList)) {
         const parsed = await parseDocumentFile(file);
         parsedFiles.push(parsed);
+        // حفظ الملف تلقائياً في حقيبة ومصادر المعلم السحابية
+        autoSaveUploadedResource(parsed);
       }
       onFilesChange([...files, ...parsedFiles]);
     } catch (err) {
@@ -139,12 +144,26 @@ export default function SourceMaterialUpload({
           </p>
         </div>
 
-        {files.length > 0 && (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200">
-            <Check className="w-3.5 h-3.5" />
-            <span>{isAr ? `${files.length} ملفات مرفوعة` : `${files.length} files attached`}</span>
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsPickerOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold transition shadow-2xs"
+            title={isAr ? 'اختيار كتاب أو ملف من حقيبتك السحابية مباشرة' : 'Choose from locker'}
+          >
+            <Briefcase className="w-3.5 h-3.5 text-emerald-600" />
+            <span>{isAr ? '🎒 اختيار من حقيبتي السحابية' : '🎒 Choose from Locker'}</span>
+          </button>
+          {files.length > 0 && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-200">
+              <Check className="w-3.5 h-3.5" />
+              <span>{isAr ? `${files.length} ملفات مرفوعة` : `${files.length} files attached`}</span>
+            </span>
+          )}
+        </div>
       </div>
 
       {/* 2. Drag & Drop Upload Zone */}
@@ -345,6 +364,16 @@ export default function SourceMaterialUpload({
           </div>
         </div>
       )}
+
+      {/* نافذة اختيار ملف من حقيبة المعلم السحابية */}
+      <ResourcePickerModal
+        isOpen={isPickerOpen}
+        onClose={() => setIsPickerOpen(false)}
+        onSelect={(pickedFile) => {
+          onFilesChange([...files, pickedFile]);
+        }}
+        uiLang={uiLang}
+      />
     </div>
   );
 }

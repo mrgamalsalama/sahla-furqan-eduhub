@@ -12,6 +12,8 @@ export type View =
   | 'weekly-statement'
   | 'editor'
   | 'library'
+  | 'resources'
+  | 'pdf-editor'
   | 'community'
   | 'benchmark';
 
@@ -237,6 +239,29 @@ export interface UploadedFile {
   mimeType: string;
   textContent?: string;
   size?: number;
+}
+
+export interface TeacherResource {
+  id: string;
+  name: string;
+  title: string;
+  type: 'pdf' | 'word' | 'powerpoint' | 'image' | 'excel' | 'text' | 'other';
+  size: number;
+  createdAt: number;
+  updatedAt?: number;
+  userId?: string;
+  userName?: string;
+  userEmail?: string;
+  subject?: string;
+  grade?: string;
+  dataUrl?: string;
+  base64?: string;
+  mimeType?: string;
+  textContent?: string;
+  pageCount?: number;
+  isPublic?: boolean;
+  tags?: string[];
+  source?: 'upload' | 'pdf-studio' | 'lesson-plan' | 'worksheet' | 'exam' | 'manual';
 }
 
 export interface SavedLesson {

@@ -13,6 +13,7 @@ import {
   executeVoiceToLesson,
   executeDifferentiate,
   executeAddDokQuestion,
+  executePdfOcr,
 } from './api/_shared.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -34,6 +35,7 @@ app.post('/api/translate', executeTranslate);
 app.post('/api/voice-to-lesson', executeVoiceToLesson);
 app.post('/api/differentiate', executeDifferentiate);
 app.post('/api/add-dok-question', executeAddDokQuestion);
+app.post('/api/pdf-ocr', executePdfOcr);
 
 // Dev / Local Server with Vite
 async function startServer() {
