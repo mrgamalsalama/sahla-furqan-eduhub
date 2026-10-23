@@ -2,7 +2,7 @@ import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import Groq, { toFile } from 'groq-sdk';
 import fs from 'node:fs';
 import path from 'node:path';
-import { SAHLAH_LOGO, FURQAN_LOGO } from './logos.js';
+import { SAHLAH_LOGO, FURQAN_LOGO } from './_logos.js';
 
 // Clean Institution Headers
 function getInstitutionHeader(settings: any, outputType?: string): string {

@@ -1,4 +1,4 @@
-import { executeGrade } from './_shared.js';
+import { executeGrade, executeRubric } from './_shared.js';
 
 export const config = {
   api: {
@@ -18,6 +18,15 @@ export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
   try {
+    const isRubricRequest =
+      req.url?.includes('rubric') ||
+      req.query?.action === 'rubric' ||
+      req.body?.customCriteriaText !== undefined ||
+      (!req.body?.imageFile && req.body?.assignmentTitle);
+
+    if (isRubricRequest) {
+      return await executeRubric(req, res);
+    }
     return await executeGrade(req, res);
   } catch (err: any) {
     return res.status(500).json({ error: err?.message || 'Server error' });

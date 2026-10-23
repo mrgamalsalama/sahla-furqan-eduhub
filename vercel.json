@@ -2,11 +2,18 @@
   "version": 2,
   "functions": {
     "api/**": {
-      "maxDuration": 60,
-      "memory": 1024
+      "maxDuration": 60
     }
   },
   "rewrites": [
+    {
+      "source": "/api/rubric",
+      "destination": "/api/grade"
+    },
+    {
+      "source": "/api/add-dok-question",
+      "destination": "/api/differentiate"
+    },
     {
       "source": "/api/(.*)",
       "destination": "/api/$1"

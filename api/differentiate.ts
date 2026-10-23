@@ -1,4 +1,4 @@
-import { executeDifferentiate } from './_shared.js';
+import { executeDifferentiate, executeAddDokQuestion } from './_shared.js';
 
 export const config = {
   api: {
@@ -22,5 +22,18 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  return executeDifferentiate(req, res);
+  try {
+    const isAddDokRequest =
+      req.url?.includes('add-dok-question') ||
+      req.query?.action === 'add-dok-question' ||
+      req.body?.sourceQuestion !== undefined ||
+      req.body?.dokLevel !== undefined;
+
+    if (isAddDokRequest) {
+      return await executeAddDokQuestion(req, res);
+    }
+    return await executeDifferentiate(req, res);
+  } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Server error' });
+  }
 }
