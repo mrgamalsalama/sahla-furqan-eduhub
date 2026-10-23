@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Presentation, Sparkles, Loader2, AlertCircle, Sliders,
   Play, Download, Plus, Trash2, Copy, ArrowUp, ArrowDown,
   Edit3, Check, Palette, BookOpen, BookmarkPlus,
   Image as ImageIcon, Bold, Italic, AlignRight, AlignCenter,
-  AlignLeft, Type, Layout, ShieldCheck, ChevronDown, RefreshCw
+  AlignLeft, Type, Layout, ShieldCheck, ChevronDown, RefreshCw,
+  Upload
 } from 'lucide-react';
 import type { LessonSettings, OutputType, GenerationResult, UploadedFile } from '@/types';
 import { SUBJECT_OPTIONS, GRADES_AR, GRADES_EN } from '@/types';
@@ -17,6 +18,8 @@ import {
   exportGammaSlidesToPptx
 } from '@/lib/gammaPptx';
 import type { GammaSlide, GammaThemeId } from '@/lib/gammaPptx';
+import { extractThemeFromPptx } from '@/lib/pptxThemeExtractor';
+import type { ExtractedPptxTheme } from '@/lib/pptxThemeExtractor';
 import GammaPresenterModal from './GammaPresenterModal';
 import ImagePickerModal from './ImagePickerModal';
 import SourceMaterialUpload from './SourceMaterialUpload';
@@ -56,6 +59,11 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
   });
 
   const [selectedTheme, setSelectedTheme] = useState<GammaThemeId>('navy');
+  const [customTheme, setCustomTheme] = useState<ExtractedPptxTheme | null>(null);
+  const [cloningTheme, setCloningTheme] = useState(false);
+  const [clonedSuccessNotice, setClonedSuccessNotice] = useState<string | null>(null);
+  const pptxThemeInputRef = useRef<HTMLInputElement>(null);
+
   const [presentationTone, setPresentationTone] = useState<string>('interactive');
 
   // Generator states
@@ -88,9 +96,90 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
   const [savedFeedback, setSavedFeedback] = useState(false);
   const [files, setFiles] = useState<UploadedFile[]>([]);
 
-  const themeConfig = GAMMA_THEMES[selectedTheme] || GAMMA_THEMES.navy;
+  const themeConfig = (selectedTheme === 'custom' && customTheme)
+    ? customTheme
+    : (GAMMA_THEMES[selectedTheme] || GAMMA_THEMES.navy);
+
   const ps = settings.presentationSettings || {};
   const currentActiveSlide = slides[activeSlideIndex] || slides[0];
+
+  // Handle PPTX theme upload & extraction
+  async function handlePptxThemeUpload(uploadedFiles: FileList | null) {
+    if (!uploadedFiles || uploadedFiles.length === 0) return;
+    const file = uploadedFiles[0];
+    if (!file.name.toLowerCase().endsWith('.pptx')) {
+      setError(isAr ? 'يرجى اختيار ملف بوربوينت صالح بصيغة .pptx' : 'Please select a valid .pptx file');
+      return;
+    }
+
+    setCloningTheme(true);
+    setError(null);
+    try {
+      const extracted = await extractThemeFromPptx(file);
+      setCustomTheme(extracted);
+      setSelectedTheme('custom');
+      setClonedSuccessNotice(
+        isAr
+          ? `تم استنساخ ثيم (${file.name}) بنجاح! الألوان والخطوط والشعار مفعّلة الآن للعرض بالكامل.`
+          : `Cloned theme from (${file.name}) successfully!`
+      );
+      setTimeout(() => setClonedSuccessNotice(null), 5000);
+    } catch (err: any) {
+      console.error('PPTX theme extraction error:', err);
+      setError(isAr ? 'تعذر استخراج الثيم من ملف البوربوينت. تأكد أنه ملف غير تالف.' : 'Failed to clone PPTX theme');
+    } finally {
+      setCloningTheme(false);
+    }
+  }
+
+  // Live in-place WYSIWYG editing handlers
+  function updateSlideTitle(slideId: string, newTitle: string) {
+    if (!newTitle.trim()) return;
+    setSlides((prev) =>
+      prev.map((s) => (s.id === slideId ? { ...s, title: newTitle.trim() } : s))
+    );
+  }
+
+  function updateSlidePoint(slideId: string, pointIndex: number, newText: string) {
+    setSlides((prev) =>
+      prev.map((s) => {
+        if (s.id !== slideId) return s;
+        const newPoints = [...s.points];
+        if (newText.trim().length === 0) {
+          newPoints.splice(pointIndex, 1);
+        } else {
+          newPoints[pointIndex] = newText.trim();
+        }
+        return { ...s, points: newPoints };
+      })
+    );
+  }
+
+  function addSlidePoint(slideId: string) {
+    setSlides((prev) =>
+      prev.map((s) => {
+        if (s.id !== slideId) return s;
+        return { ...s, points: [...s.points, 'نقطة تعليمية جديدة (انقر للتعديل المباشر)'] };
+      })
+    );
+  }
+
+  function deleteSlidePoint(slideId: string, pointIndex: number) {
+    setSlides((prev) =>
+      prev.map((s) => {
+        if (s.id !== slideId) return s;
+        const newPoints = [...s.points];
+        newPoints.splice(pointIndex, 1);
+        return { ...s, points: newPoints };
+      })
+    );
+  }
+
+  function updateSlideNotes(slideId: string, newNotes: string) {
+    setSlides((prev) =>
+      prev.map((s) => (s.id === slideId ? { ...s, teacherScript: newNotes.trim() } : s))
+    );
+  }
 
   // 1. Generate Outline (Gamma-style Step 1)
   function handleGenerateOutline() {
@@ -290,7 +379,13 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
       const schoolName = settings.institution === 'furqan'
         ? 'مدارس الفرقان العالمية'
         : 'أكاديمية سهلة الدولية';
-      await exportGammaSlidesToPptx(slides, selectedTheme, settings.lessonTitle || 'عرض_تقديمي_Gamma', schoolName);
+      await exportGammaSlidesToPptx(
+        slides,
+        selectedTheme,
+        settings.lessonTitle || 'عرض_تقديمي_Gamma',
+        schoolName,
+        customTheme || undefined
+      );
       setExportSuccess(true);
       setTimeout(() => setExportSuccess(false), 3500);
     } catch (err: unknown) {
@@ -536,8 +631,115 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
                     </button>
                   );
                 })}
+
+                {/* Cloned Custom Theme Swatch */}
+                {customTheme && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTheme('custom')}
+                    className={`p-2 rounded-xl border text-center transition-all flex flex-col items-center gap-1 ${
+                      selectedTheme === 'custom'
+                        ? 'border-teal-500 ring-2 ring-teal-400 bg-teal-50/50 shadow-xs'
+                        : 'border-dashed border-teal-300 hover:border-teal-400 bg-teal-50/20'
+                    }`}
+                    title={customTheme.nameAr}
+                  >
+                    <div
+                      className="w-5 h-5 rounded-full border border-black/20 shadow-2xs flex items-center justify-center text-[8px]"
+                      style={{ backgroundColor: `#${customTheme.bgHex}` }}
+                    >
+                      ✨
+                    </div>
+                    <span className="text-[10px] font-bold text-teal-800 truncate w-full">
+                      ثيمي المستنسخ
+                    </span>
+                  </button>
+                )}
               </div>
             </div>
+          </div>
+
+          {/* PPTX Theme Cloner Card */}
+          <div className="pt-2">
+            <input
+              ref={pptxThemeInputRef}
+              type="file"
+              accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+              className="hidden"
+              onChange={(e) => handlePptxThemeUpload(e.target.files)}
+            />
+
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-50 via-purple-50 to-teal-50 border border-indigo-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-xl bg-indigo-600 text-white shadow-xs shrink-0 mt-0.5">
+                  <Palette className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-xs sm:text-sm font-extrabold text-slate-900">
+                      {isAr ? 'استنساخ تصميم وثيم من ملف PowerPoint خاص بك (.pptx)' : 'Clone theme from your PPTX file'}
+                    </h4>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-900 font-bold">
+                      {isAr ? 'ميزة حصرية' : 'Exclusive'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                    {isAr
+                      ? 'ارفع أي ملف بوربوينت قديم عندك له تصميم أو ألوان أو شعار خاص بمدرستك؛ سيقوم النظام بقراءة الخطوط والألوان وشعار المدرسة وتطبيقها على العرض الجديد كلياً!'
+                      : 'Upload an existing PPTX file to extract its colors, fonts, and school logo for your new presentation.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {customTheme ? (
+                  <div className="flex items-center gap-2">
+                    <div className="text-right">
+                      <span className="text-[11px] font-bold text-emerald-800 block">
+                        ✓ تم استخراج الثيم:
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-mono truncate max-w-[120px] block" title={customTheme.sourceFileName}>
+                        {customTheme.sourceFileName}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => pptxThemeInputRef.current?.click()}
+                      disabled={cloningTheme}
+                      className="px-3 py-2 rounded-xl bg-white hover:bg-slate-50 text-indigo-900 text-xs font-bold border border-indigo-200 transition shadow-2xs"
+                    >
+                      {isAr ? 'تغيير الملف' : 'Change'}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={cloningTheme}
+                    onClick={() => pptxThemeInputRef.current?.click()}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-900 hover:bg-indigo-800 text-white text-xs font-bold transition shadow-xs disabled:opacity-50"
+                  >
+                    {cloningTheme ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-teal-300" />
+                        <span>{isAr ? 'جاري فحص واستخراج الثيم...' : 'Extracting...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4 text-teal-300" />
+                        <span>{isAr ? 'رفع ملف PPTX لاستنساخ ثيمه' : 'Upload PPTX Theme'}</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {clonedSuccessNotice && (
+              <div className="mt-2.5 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2 animate-in fade-in">
+                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{clonedSuccessNotice}</span>
+              </div>
+            )}
           </div>
 
           {/* Source Material Upload & Teacher Instructions */}
@@ -710,6 +912,36 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
                       </button>
                     );
                   })}
+
+                  {customTheme && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTheme('custom')}
+                      title={customTheme.nameAr}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 ${
+                        selectedTheme === 'custom'
+                          ? 'bg-slate-900 text-white shadow-xs ring-1 ring-teal-400'
+                          : 'bg-teal-50 text-teal-900 hover:bg-teal-100 border border-teal-300'
+                      }`}
+                    >
+                      <span
+                        className="w-2.5 h-2.5 rounded-full border border-black/10"
+                        style={{ backgroundColor: `#${customTheme.bgHex}` }}
+                      />
+                      <span>✨ ثيمي المستنسخ</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => pptxThemeInputRef.current?.click()}
+                    disabled={cloningTheme}
+                    className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-[11px] font-bold transition flex items-center gap-1 border border-indigo-200"
+                    title="استنساخ ثيم من ملف بوربوينت آخر"
+                  >
+                    <Upload className="w-3 h-3 text-indigo-600" />
+                    <span>{cloningTheme ? 'جاري الفحص...' : 'استنساخ ثيم PPTX'}</span>
+                  </button>
                 </div>
               </div>
 
@@ -1058,47 +1290,85 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-                        {/* Text Content Column */}
+                        {/* Text Content Column with Live WYSIWYG Editing */}
                         <div className={slide.imageUrl ? 'md:col-span-7' : 'md:col-span-12'}>
-                          <h3
-                            className={`text-xl sm:text-2xl font-extrabold tracking-tight mb-5 ${
-                              slide.isBold ? 'font-black' : ''
-                            } ${slide.isItalic ? 'italic' : ''}`}
-                            style={{ textAlign: slide.align || 'right' }}
-                          >
-                            {slide.title}
-                          </h3>
+                          <div className="flex items-center justify-between gap-2 mb-4">
+                            <h3
+                              contentEditable
+                              suppressContentEditableWarning
+                              onBlur={(e) => updateSlideTitle(slide.id, e.currentTarget.textContent || '')}
+                              className={`text-xl sm:text-2xl font-extrabold tracking-tight flex-1 outline-none hover:bg-black/5 focus:bg-white/80 focus:text-slate-900 focus:ring-2 focus:ring-teal-400 p-1.5 rounded-xl transition cursor-text ${
+                                slide.isBold ? 'font-black' : ''
+                              } ${slide.isItalic ? 'italic' : ''}`}
+                              style={{ textAlign: slide.align || 'right' }}
+                              title="انقر لتعديل عنوان الشريحة مباشرة"
+                            >
+                              {slide.title}
+                            </h3>
+                            <span className="text-[10px] text-teal-700 font-bold bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full shrink-0 hidden sm:inline-block">
+                              ✍️ تحرير مباشر
+                            </span>
+                          </div>
 
                           {slide.points.length > 0 ? (
-                            <div className={`grid gap-3.5 ${slide.points.length >= 3 && slide.layout === 'grid' ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1'}`}>
-                              {slide.points.map((pt, pIdx) => (
-                                <div
-                                  key={pIdx}
-                                  className="p-4 rounded-2xl transition"
-                                  style={{
-                                    backgroundColor: themeConfig.isDark ? '#1E293B60' : '#F8FAFC',
-                                    border: `1px solid ${themeConfig.isDark ? '#334155' : '#E2E8F0'}`,
-                                  }}
-                                >
-                                  <div className="flex items-start gap-3">
-                                    <span
-                                      className="w-5 h-5 rounded-md font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 text-white"
-                                      style={{ backgroundColor: `#${themeConfig.accentHex}` }}
-                                    >
-                                      {pIdx + 1}
-                                    </span>
-                                    <p
-                                      className="leading-relaxed font-medium"
-                                      style={{
-                                        fontSize: `${slide.fontSize || 15}px`,
-                                        textAlign: slide.align || 'right',
-                                      }}
-                                    >
-                                      {pt}
-                                    </p>
+                            <div className="space-y-3">
+                              <div className={`grid gap-3.5 ${slide.points.length >= 3 && slide.layout === 'grid' ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1'}`}>
+                                {slide.points.map((pt, pIdx) => (
+                                  <div
+                                    key={pIdx}
+                                    className="p-3.5 sm:p-4 rounded-2xl transition group/pt relative"
+                                    style={{
+                                      backgroundColor: themeConfig.isDark ? '#1E293B60' : '#F8FAFC',
+                                      border: `1px solid ${themeConfig.isDark ? '#334155' : '#E2E8F0'}`,
+                                    }}
+                                  >
+                                    <div className="flex items-start gap-2.5">
+                                      <span
+                                        className="w-5 h-5 rounded-md font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 text-white"
+                                        style={{ backgroundColor: `#${themeConfig.accentHex}` }}
+                                      >
+                                        {pIdx + 1}
+                                      </span>
+                                      <p
+                                        contentEditable
+                                        suppressContentEditableWarning
+                                        onBlur={(e) => updateSlidePoint(slide.id, pIdx, e.currentTarget.textContent || '')}
+                                        className="leading-relaxed font-medium flex-1 outline-none hover:bg-black/5 focus:bg-white focus:text-slate-900 focus:ring-1 focus:ring-teal-400 px-2 py-1 rounded-lg transition cursor-text"
+                                        style={{
+                                          fontSize: `${slide.fontSize || 15}px`,
+                                          textAlign: slide.align || 'right',
+                                        }}
+                                        title="انقر لتعديل النقطة مباشرة"
+                                      >
+                                        {pt}
+                                      </p>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          deleteSlidePoint(slide.id, pIdx);
+                                        }}
+                                        className="opacity-0 group-hover/pt:opacity-100 text-slate-400 hover:text-rose-500 p-1 transition shrink-0"
+                                        title="حذف هذه النقطة"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
+                                ))}
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  addSlidePoint(slide.id);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-current/30 hover:border-current hover:bg-black/5 text-xs font-bold transition opacity-70 hover:opacity-100"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>{isAr ? 'إضافة نقطة جديدة للشريحة' : 'Add point'}</span>
+                              </button>
                             </div>
                           ) : (
                             <div
@@ -1185,6 +1455,7 @@ export default function PresentationStudio({ onOpenResult, uiLang }: Presentatio
         slides={slides}
         themeId={selectedTheme}
         initialSlideIndex={activeSlideIndex}
+        customTheme={customTheme || undefined}
       />
 
       {/* IMAGE PICKER MODAL */}

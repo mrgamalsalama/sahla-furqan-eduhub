@@ -2,7 +2,7 @@ import pptxgen from 'pptxgenjs';
 import { saveAs } from 'file-saver';
 import { getRecommendedImageForSlide } from './educationalImages';
 
-export type GammaThemeId = 'obsidian' | 'emerald' | 'navy' | 'ivory' | 'sunset';
+export type GammaThemeId = 'obsidian' | 'emerald' | 'navy' | 'ivory' | 'sunset' | 'custom';
 
 export interface GammaTheme {
   id: GammaThemeId;
@@ -16,6 +16,8 @@ export interface GammaTheme {
   accentSecondaryHex: string;
   borderHex: string;
   isDark: boolean;
+  fontFamily?: string;
+  logoBase64?: string;
 }
 
 export const GAMMA_THEMES: Record<GammaThemeId, GammaTheme> = {
@@ -283,6 +285,31 @@ async function fetchImageAsBase64Safe(url?: string): Promise<string | null> {
 }
 
 /**
+ * Dynamically computes optimal font size & line spacing to prevent Arabic text overflow in PPTX
+ */
+function calculateOptimalFontSize(points: string[], hasImage: boolean): {
+  fontSize: number;
+  lineSpacing: number;
+} {
+  const totalLength = points.reduce((acc, p) => acc + p.length, 0);
+  const count = points.length;
+
+  if (count <= 2 && totalLength < 120) {
+    return { fontSize: hasImage ? 16 : 18, lineSpacing: 1.35 };
+  } else if (count <= 3 && totalLength < 250) {
+    return { fontSize: hasImage ? 14 : 16, lineSpacing: 1.3 };
+  } else if (count <= 4 && totalLength < 380) {
+    return { fontSize: hasImage ? 12.5 : 14, lineSpacing: 1.22 };
+  } else if (count <= 5 && totalLength < 500) {
+    return { fontSize: hasImage ? 11.5 : 12.5, lineSpacing: 1.18 };
+  } else if (totalLength >= 600 || count > 6) {
+    return { fontSize: 10.5, lineSpacing: 1.12 };
+  } else {
+    return { fontSize: 12.5, lineSpacing: 1.2 };
+  }
+}
+
+/**
  * Export Gamma Slides directly to genuine Microsoft PowerPoint (.pptx) file
  * with embedded real educational images, custom formatting, and teacher notes.
  */
@@ -290,13 +317,14 @@ export async function exportGammaSlidesToPptx(
   slides: GammaSlide[],
   themeId: GammaThemeId = 'navy',
   title = 'عرض تقديمي تفاعلي',
-  schoolName = 'أكاديمية سهلة & مدارس الفرقان'
+  schoolName = 'أكاديمية سهلة & مدارس الفرقان',
+  customTheme?: GammaTheme
 ): Promise<void> {
   if (!slides || slides.length === 0) {
     throw new Error('لا توجد شرائح لتصديرها');
   }
 
-  const theme = GAMMA_THEMES[themeId] || GAMMA_THEMES.navy;
+  const theme = (themeId === 'custom' && customTheme) ? customTheme : (GAMMA_THEMES[themeId] || GAMMA_THEMES.navy);
   const pptx = new pptxgen();
 
   pptx.layout = 'LAYOUT_16x9';
@@ -312,7 +340,7 @@ export async function exportGammaSlidesToPptx(
 
   slides.forEach((slide, idx) => {
     const s = pptx.addSlide();
-    const fontFace = slide.fontFamily || 'Cairo';
+    const fontFace = slide.fontFamily || theme.fontFamily || 'Cairo';
     const isRtl = slide.align !== 'left';
     const base64Img = imageBase64List[idx];
 
@@ -339,10 +367,25 @@ export async function exportGammaSlidesToPptx(
       const textWidth = base64Img ? '46%' : '84%';
       const textX = base64Img ? '48%' : '8%';
 
+      // Embed Custom Extracted Logo if present
+      if (theme.logoBase64) {
+        try {
+          s.addImage({
+            data: theme.logoBase64,
+            x: textX,
+            y: '7%',
+            w: '14%',
+            h: '8%',
+          });
+        } catch {
+          // Gracefully continue
+        }
+      }
+
       // Top school badge
       s.addText(schoolName, {
         x: textX,
-        y: '16%',
+        y: theme.logoBase64 ? '17%' : '16%',
         w: textWidth,
         h: '8%',
         fontSize: 14,
@@ -359,23 +402,27 @@ export async function exportGammaSlidesToPptx(
         y: '26%',
         w: textWidth,
         h: '28%',
-        fontSize: 30,
+        fontSize: 28,
         bold: true,
         color: theme.isDark ? 'FFFFFF' : theme.textHex,
         align: 'right',
         fontFace,
         rtl: true,
+        wrap: true,
+        autoFit: true,
       } as any);
 
       // Bullets / Learning Goals
       if (slide.points.length > 0) {
+        const { fontSize: optimalSize, lineSpacing } = calculateOptimalFontSize(slide.points.slice(0, 4), Boolean(base64Img));
         const bulletsText = slide.points.slice(0, 4).map((p) => ({
           text: `•  ${p}\n`,
           options: {
-            fontSize: 15,
+            fontSize: optimalSize,
             color: theme.isDark ? 'E2E8F0' : theme.subtextHex,
             fontFace,
             rtl: true,
+            lineSpacingMultiple: lineSpacing,
           } as any,
         }));
 
@@ -386,6 +433,8 @@ export async function exportGammaSlidesToPptx(
           h: '32%',
           align: 'right',
           valign: 'top',
+          wrap: true,
+          autoFit: true,
         });
       }
     } else {
@@ -404,6 +453,8 @@ export async function exportGammaSlidesToPptx(
         align: slide.align || 'right',
         fontFace,
         rtl: isRtl,
+        wrap: true,
+        autoFit: true,
       } as any);
 
       // Slide index badge
@@ -463,18 +514,22 @@ export async function exportGammaSlidesToPptx(
         }
       }
 
-      // Add Text Points
+      // Add Text Points with dynamic optimal sizing to prevent overflow
       if (slide.points.length > 0) {
+        const { fontSize: optimalSize, lineSpacing } = calculateOptimalFontSize(slide.points, hasImg);
+        const finalFontSize = slide.fontSize || optimalSize;
+
         const textObjects = slide.points.map((pt) => ({
           text: `•  ${pt}\n`,
           options: {
-            fontSize: slide.fontSize || 15,
+            fontSize: finalFontSize,
             color: theme.isDark ? 'E2E8F0' : theme.textHex,
             fontFace,
             bold: slide.isBold || false,
             italic: slide.isItalic || false,
-            lineSpacingMultiple: 1.3,
+            lineSpacingMultiple: lineSpacing,
             rtl: isRtl,
+            breakLine: true,
           },
         }));
 
@@ -485,6 +540,8 @@ export async function exportGammaSlidesToPptx(
           h: '66%',
           align: slide.align || 'right',
           valign: 'top',
+          autoFit: true,
+          wrap: true,
         });
       }
     }
