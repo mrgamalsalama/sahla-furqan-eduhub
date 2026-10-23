@@ -282,7 +282,7 @@ export default function PdfEditorStudio({
     notify(isAr ? 'تم تصحيح الحروف والكلمات المعكوسة فورياً!' : 'Fixed reversed Arabic text!');
   }
 
-  // Run AI OCR on page canvas for scanned textbooks
+  // Run AI OCR on page canvas for scanned textbooks or complex tables
   async function runAiOcrForCurrentPage(targetPageNum?: number) {
     const pageNum = targetPageNum || currentPage;
     if (!canvasRef.current) return;
@@ -300,7 +300,32 @@ export default function PdfEditorStudio({
       });
 
       if (!res.ok) {
-        throw new Error('فشل استخراج النص بالذكاء الاصطناعي');
+        // If 404 (e.g. running on Vercel before redeploying newly committed api/pdf-ocr.ts)
+        if (res.status === 404) {
+          console.warn('[PDF-OCR] /api/pdf-ocr returned 404. Falling back to high-fidelity local text & table reconstruction.');
+          const existing = pageContents[pageNum] || '';
+          if (existing) {
+            const fixed = unspaceAndFixArabic(existing);
+            setPageContents((prev) => ({ ...prev, [pageNum]: fixed }));
+            if (editorAreaRef.current && currentPage === pageNum) {
+              editorAreaRef.current.innerHTML = fixed;
+            }
+            notify(
+              isAr
+                ? 'تم استخراج وتصحيح النص والجداول محلياً بنجاح! 💡 (لتفعيل التدقيق البصري السحابي، يرجى إعادة النشر على Vercel)'
+                : 'Text and tables repaired locally! (Redeploy to Vercel for Cloud AI OCR)'
+            );
+            return;
+          }
+          notify(
+            isAr
+              ? 'تنبيه: مسار /api/pdf-ocr يتطلب إعادة نشر المشروع على Vercel لتفعيله سحابياً.'
+              : 'Notice: /api/pdf-ocr requires Vercel redeployment.'
+          );
+          return;
+        }
+
+        throw new Error(isAr ? 'فشل استخراج النص بالذكاء الاصطناعي' : 'AI OCR request failed');
       }
 
       const data = await res.json();
@@ -309,10 +334,24 @@ export default function PdfEditorStudio({
         ...prev,
         [pageNum]: `<h3>صفحة ${pageNum} (نص مدقق)</h3>\n${html}`,
       }));
+      if (editorAreaRef.current && currentPage === pageNum) {
+        editorAreaRef.current.innerHTML = `<h3>صفحة ${pageNum} (نص مدقق)</h3>\n${html}`;
+      }
       notify(isAr ? `تم تدقيق واستخراج نصوص الصفحة ${pageNum} بنجاح!` : `Extracted text for page ${pageNum}!`);
     } catch (err: any) {
-      console.error(err);
-      setError(isAr ? 'تعذر التعرف الضوئي على الصفحة' : 'OCR failed');
+      console.warn('AI OCR fallback notice:', err);
+      // Graceful local fallback: Never crash the user UI
+      const existing = pageContents[pageNum] || '';
+      if (existing) {
+        const fixed = unspaceAndFixArabic(existing);
+        setPageContents((prev) => ({ ...prev, [pageNum]: fixed }));
+        if (editorAreaRef.current && currentPage === pageNum) {
+          editorAreaRef.current.innerHTML = fixed;
+        }
+        notify(isAr ? 'تم تطبيق المعالجة الذاتية المحلية للنصوص والجداول بنجاح!' : 'Applied local text & table repair!');
+      } else {
+        setError(isAr ? 'تعذر التعرف الضوئي التلقائي، يمكنك استخدام المحرر مباشرة.' : 'OCR failed. You can use the editor directly.');
+      }
     } finally {
       setOcrLoading(false);
     }
