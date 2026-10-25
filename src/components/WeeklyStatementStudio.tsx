@@ -3,8 +3,8 @@ import {
   Calendar, Clock, CheckCircle2, AlertTriangle, FileText, Download,
   Printer, Copy, Edit3, ExternalLink, Sparkles, RefreshCw, Trash2, Plus,
   Layers, School, Check, X, Info, User,
-  ChevronRight, BookOpen, Eye, EyeOff, Lock, Unlock, History, ShieldCheck, Database,
-  FolderArchive, KeyRound, ArrowRight, ArrowLeft
+  ChevronRight, ChevronLeft, BookOpen, Eye, EyeOff, Lock, Unlock, History, ShieldCheck, Database,
+  FolderArchive, KeyRound, ArrowRight, ArrowLeft, Save, Send, LogOut
 } from 'lucide-react';
 import type {
   WeeklyStatementDocument, WeeklySubjectDailyPlan, WeeklyQuizItem,
@@ -79,7 +79,7 @@ export default function WeeklyStatementStudio({
   );
 
   // ── Active Tabs in Master View ──
-  const [activeMasterTab, setActiveMasterTab] = useState<'editor' | 'quizzes' | 'preview' | 'value'>('preview');
+  const [activeMasterTab, setActiveMasterTab] = useState<'editor' | 'quizzes' | 'preview'>('preview');
   const [activeMasterDay, setActiveMasterDay] = useState<number>(1);
 
   // ── Feedback & State ──
@@ -120,6 +120,23 @@ export default function WeeklyStatementStudio({
   const [batchProgress, setBatchProgress] = useState<BatchExportProgress | null>(null);
   const [batchShiftChoice, setBatchShiftChoice] = useState<ShiftType | 'both'>('mena');
 
+
+  // ── Role-based & HOD Authentication (Passcode: Sahlah2027) ──
+  const [isHodAuthenticated, setIsHodAuthenticated] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('sahlah_hod_authenticated') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [isHodPinModalOpen, setIsHodPinModalOpen] = useState(false);
+  const [hodPinInput, setHodPinInput] = useState('');
+  const [hodPinError, setHodPinError] = useState('');
+  const [showHodPinText, setShowHodPinText] = useState(false);
+
+  // ── Daily Tabs Mode & Live Consolidated Preview Modal for Teachers ──
+  const [activeTeacherDay, setActiveTeacherDay] = useState<number>(1);
+  const [isConsolidatedPreviewOpen, setIsConsolidatedPreviewOpen] = useState(false);
 
   // Sandboxed-safe Toast and Confirmation Modal states
   const [toast, setToast] = useState<{
@@ -840,6 +857,129 @@ export default function WeeklyStatementStudio({
   }, [docData, gradeDays]);
 
   // -------------------------------------------------------------
+  // HOD / Admin Hub Authentication & Batch Actions (PIN: Sahlah2027)
+  // -------------------------------------------------------------
+  function handleSwitchToHodMode() {
+    if (isHodAuthenticated) {
+      setViewMode('master');
+    } else {
+      setHodPinInput('');
+      setHodPinError('');
+      setIsHodPinModalOpen(true);
+    }
+  }
+
+  function handleVerifyHodPin(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    if (hodPinInput.trim() === 'Sahlah2027') {
+      setIsHodAuthenticated(true);
+      try {
+        sessionStorage.setItem('sahlah_hod_authenticated', 'true');
+      } catch {}
+      setIsHodPinModalOpen(false);
+      setViewMode('master');
+      showToast(isAr ? 'تم التحقق بنجاح! مرحباً بك في لوحة رئيس القسم والإدارة' : 'Welcome to HOD & Administration Hub', 'success');
+    } else {
+      setHodPinError(isAr ? 'الرقم السري غير صحيح. يرجى إدخال رمز رئيس القسم (Sahlah2027)' : 'Invalid PIN code. Please try again.');
+    }
+  }
+
+  function handleHodLogout() {
+    setIsHodAuthenticated(false);
+    try {
+      sessionStorage.removeItem('sahlah_hod_authenticated');
+    } catch {}
+    setViewMode('teacher');
+    showToast(isAr ? 'تم قفل لوحة الإدارة والعودة لواجهة المعلم' : 'HOD Hub locked. Switched to Teacher mode', 'info');
+  }
+
+  function handleHodApproveAllSubjects() {
+    setConfirmModal({
+      isOpen: true,
+      title: isAr ? 'اعتماد التقرير النهائي للمرحلة بالكامل' : 'Approve & Publish Entire Stage',
+      message: isAr
+        ? `هل تريد اعتماد التقرير النهائي لصف (${selectedGrade}) بالكامل لجميع المواد وقفلها للنشر؟`
+        : `Approve and lock all subjects for ${selectedGrade} for final publication?`,
+      confirmText: isAr ? 'نعم، اعتماد وقفل التقرير النهائي' : 'Yes, Approve All',
+      confirmColor: 'emerald',
+      onConfirm: () => {
+        const updatedStatuses: Record<string, WeeklySubjectStatus> = { ...(docData.subjectStatuses || {}) };
+        const nowStr = new Date().toISOString();
+        STANDARD_SUBJECTS.forEach((sub) => {
+          updatedStatuses[sub.id] = {
+            subjectId: sub.id,
+            is_locked: true,
+            status: 'submitted',
+            locked_at: nowStr,
+            submitted_by: 'رئيس القسم (HOD Final Approval)',
+          };
+        });
+        const updatedDoc: WeeklyStatementDocument = {
+          ...docData,
+          subjectStatuses: updatedStatuses,
+          updatedAt: Date.now(),
+        };
+        setDocData(updatedDoc);
+        saveWeeklyStatement(updatedDoc, selectedWeekNumber);
+        setGradeSubjectStatuses(updatedStatuses);
+        setConfirmModal(null);
+        showToast(
+          isAr
+            ? `🎉 تم اعتماد التقرير النهائي لصف (${selectedGrade}) بالكامل وقفل جميع المواد للنشر!`
+            : `All subjects for ${selectedGrade} approved & published!`,
+          'success'
+        );
+      },
+    });
+  }
+
+  // ── Executive All Stages K-12 Progress for HOD Hub ──
+  const allGradesReadiness = useMemo(() => {
+    return GRADES_EN.map((grade) => {
+      const loadedDoc = loadWeeklyStatement(grade, selectedWeekNumber, selectedShift);
+      const days = getDaysForGrade(grade);
+      let totalFields = 0;
+      let filledFields = 0;
+      let approvedCount = 0;
+
+      STANDARD_SUBJECTS.forEach((sub) => {
+        const isLocked = Boolean(
+          loadedDoc.subjectStatuses?.[sub.id]?.is_locked &&
+          loadedDoc.subjectStatuses?.[sub.id]?.status === 'submitted'
+        );
+        if (isLocked) approvedCount++;
+      });
+
+      for (const dayItem of days) {
+        const d = dayItem.dayNumber;
+        const subjects = loadedDoc.days[d] || [];
+        subjects.forEach((sub) => {
+          totalFields++;
+          const isLocked = Boolean(
+            loadedDoc.subjectStatuses?.[sub.subjectId]?.is_locked &&
+            loadedDoc.subjectStatuses?.[sub.subjectId]?.status === 'submitted'
+          );
+          const isFilled = isLocked || sub.isNoSession || (sub.contentTopic && sub.contentTopic.trim().length > 0);
+          if (isFilled) filledFields++;
+        });
+      }
+
+      const percentage = totalFields > 0 ? Math.round((filledFields / totalFields) * 100) : 0;
+      const isCompleted = percentage >= 95;
+      const isNotStarted = percentage === 0;
+
+      return {
+        grade,
+        percentage,
+        filledFields,
+        totalFields,
+        approvedCount,
+        status: (isCompleted ? 'completed' : isNotStarted ? 'not_started' : 'in_progress') as 'completed' | 'not_started' | 'in_progress',
+      };
+    });
+  }, [selectedWeekNumber, selectedShift, docData]);
+
+  // -------------------------------------------------------------
   // Master View Actions: Presets & Automation
   // -------------------------------------------------------------
   function handleResetWithSample() {
@@ -1103,7 +1243,7 @@ export default function WeeklyStatementStudio({
   // RENDER
   // -------------------------------------------------------------
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6" dir={isAr ? 'rtl' : 'ltr'}>
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-6 pb-32" dir={isAr ? 'rtl' : 'ltr'}>
       
       {/* 🌿 دعاء بداية التحضير وتجديد النية */}
       <div className="mb-4 p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 flex items-center justify-between gap-3 text-emerald-900 text-xs sm:text-sm font-bold shadow-2xs">
@@ -1151,55 +1291,63 @@ export default function WeeklyStatementStudio({
             </p>
           </div>
 
-          {/* Action Center: K-12 Export, View Switcher & Close Page */}
+          {/* Action Center: Role-Based Controls (Teacher vs HOD Hub) */}
           <div className="flex flex-wrap items-center gap-3 shrink-0">
-            {/* Direct K to 12 Batch Export Button */}
-            <button
-              type="button"
-              onClick={() => setIsBatchK12ModalOpen(true)}
-              className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black text-xs sm:text-sm shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 border border-emerald-400/30"
-              title={isAr ? 'تصدير كامل المراحل من الروضة حتى الصف 12 في ملفات Word و PDF منفصلة داخل مجلد مضغوط' : 'Export all stages K-12 in Word & PDF into separate folders'}
-            >
-              <FolderArchive className="w-4 h-4 text-amber-300 shrink-0" />
-              <span>{isAr ? '📦 تصدير كافة المراحل (K to 12)' : '📦 Export K to 12 (All)'}</span>
-            </button>
+            {/* HOD-Only Actions: Bulk Export & Lock */}
+            {viewMode === 'master' && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsBatchK12ModalOpen(true)}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black text-xs sm:text-sm shadow-lg hover:shadow-xl transition-all border border-emerald-400/30"
+                  title={isAr ? 'تصدير كامل المراحل من الروضة حتى الصف 12 في ملفات Word و PDF منفصلة داخل مجلد مضغوط' : 'Export all stages K-12 in Word & PDF into separate folders'}
+                >
+                  <FolderArchive className="w-4 h-4 text-amber-300 shrink-0" />
+                  <span>{isAr ? '📦 تصدير كافة المراحل (K to 12)' : '📦 Export K-12'}</span>
+                </button>
 
-            {/* Direct Single Grade Export Modal Opener Button */}
-            <button
-              type="button"
-              onClick={() => handleOpenExportModal()}
-              className="flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs sm:text-sm shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5"
-            >
-              <Download className="w-4 h-4 text-slate-950" />
-              <span>{isAr ? 'تصدير التقرير' : 'Export'}</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenExportModal()}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs sm:text-sm shadow-lg transition-all"
+                >
+                  <Download className="w-4 h-4 text-slate-950" />
+                  <span>{isAr ? 'تصدير التقرير' : 'Export'}</span>
+                </button>
+              </>
+            )}
 
-            {/* Mode Switcher */}
-            <div className="flex items-center gap-1 bg-slate-800/80 p-1.5 rounded-2xl border border-slate-700">
+            {/* Role-Based Mode Switcher Tabs */}
+            <div className="flex items-center gap-1 bg-slate-800/90 p-1.5 rounded-2xl border border-slate-700 shadow-inner">
               <button
                 type="button"
                 onClick={() => setViewMode('teacher')}
-                className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl transition text-xs font-extrabold ${
+                className={`flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl transition text-xs font-black ${
                   viewMode === 'teacher'
                     ? 'bg-teal-600 text-white shadow-md'
-                    : 'text-slate-300 hover:bg-slate-700/50'
+                    : 'text-slate-300 hover:bg-slate-700/60'
                 }`}
               >
                 <User className="w-3.5 h-3.5 text-teal-300" />
-                <span>{isAr ? 'المعلم' : 'Teacher'}</span>
+                <span>{isAr ? 'واجهة المعلم' : 'Teacher View'}</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => setViewMode('master')}
-                className={`flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl transition text-xs font-extrabold ${
+                onClick={handleSwitchToHodMode}
+                className={`flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl transition text-xs font-black ${
                   viewMode === 'master'
-                    ? 'bg-blue-600 text-white shadow-md'
-                    : 'text-slate-300 hover:bg-slate-700/50'
+                    ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400/30'
+                    : 'text-slate-300 hover:bg-slate-700/60'
                 }`}
+                title={isAr ? 'لوحة رئيس القسم والإدارة (محمية برقم سري Sahlah2027)' : 'HOD Hub (Protected by PIN)'}
               >
-                <Layers className="w-3.5 h-3.5 text-blue-300" />
-                <span>{isAr ? 'المرحلة' : 'Master'}</span>
+                {isHodAuthenticated ? (
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                ) : (
+                  <Lock className="w-3.5 h-3.5 text-amber-300" />
+                )}
+                <span>{isAr ? 'لوحة رئيس القسم والإدارة' : 'HOD / Admin Hub'}</span>
               </button>
             </div>
 
@@ -1814,92 +1962,202 @@ export default function WeeklyStatementStudio({
             </div>
           </div>
 
-          {/* Teacher Day-by-Day Cards (Day 1 to Day 5) */}
-          <div className="space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-teal-600" />
-                <span>
-                  {isAr
-                    ? `توزيع خطة الأسبوع لمادة (${currentSubjectDef.nameAr}) - (${gradeDays.length} أيام: ${isElementaryOrMiddle ? 'الإثنين إلى الخميس' : 'الأحد إلى الخميس'}):`
-                    : `Weekly Plan for ${currentSubjectDef.nameEn} (${gradeDays.length} Days: ${isElementaryOrMiddle ? 'Mon - Thu' : 'Sun - Thu'}):`}
-                </span>
-              </h3>
-              <span className="text-xs font-bold text-teal-800 bg-teal-100/70 px-3 py-1 rounded-lg">
-                {isElementaryOrMiddle
-                  ? (isAr ? 'مرحلة رياض الأطفال حتى 8: 4 أيام دراسية فقط' : 'KG to Grade 8: 4 Days Only (Mon-Thu)')
-                  : (isAr ? 'مرحلة ثانوية (9-12): 5 أيام دراسية' : 'High School (9-12): 5 Days (Sun-Thu)')}
-              </span>
-            </div>
+          {/* Teacher Day-by-Day Daily Tabs System */}
+          {(() => {
+            const activeDayNum = gradeDays.some((d) => d.dayNumber === activeTeacherDay)
+              ? activeTeacherDay
+              : (gradeDays[0]?.dayNumber || 1);
 
-            {gradeDays.map((dayItem) => {
-              const dayNum = dayItem.dayNumber;
-              const dayPlan = teacherDaysPlan[dayNum] || {
-                id: `day${dayNum}-${selectedSubjectId}`,
-                day: dayNum,
-                subjectId: selectedSubjectId,
-                subjectName: isArabicSub ? currentSubjectDef.nameAr : currentSubjectDef.nameEn,
-                genderCohort: selectedCohort,
-                nativeCohort: selectedNativeCohort,
-                isNoSession: false,
-                contentTopic: '',
-                homework: '',
-                optionalEnrichment: '',
-              };
-              const { autoNote } = getTimetableSessionStatus(
-                selectedShift,
-                selectedGrade,
-                dayNum,
-                selectedSubjectId,
-                selectedCohort,
-                selectedNativeCohort
-              );
+            const currentDayIndex = gradeDays.findIndex((d) => d.dayNumber === activeDayNum);
+            const activeDayItem = gradeDays[currentDayIndex] || gradeDays[0];
+            const prevDayItem = currentDayIndex > 0 ? gradeDays[currentDayIndex - 1] : null;
+            const nextDayItem = currentDayIndex < gradeDays.length - 1 ? gradeDays[currentDayIndex + 1] : null;
 
-              return (
-                <div
-                  key={dayNum}
-                  className={`rounded-2xl border transition-all duration-200 ${
-                    dayPlan.isNoSession
-                      ? 'bg-slate-50/90 border-slate-200 p-4'
-                      : isSubjectLocked
-                      ? 'bg-emerald-50/30 border-emerald-300 shadow-xs p-5'
-                      : 'bg-white border-teal-200 shadow-sm hover:border-teal-400 p-5'
-                  }`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                    <div className="flex items-center gap-2.5">
-                      <span className={`w-8 h-8 rounded-xl font-black text-sm flex items-center justify-center ${
-                        dayPlan.isNoSession ? 'bg-slate-200 text-slate-600' : isSubjectLocked ? 'bg-emerald-600 text-white' : 'bg-teal-600 text-white'
+            const activeDayPlan = teacherDaysPlan[activeDayNum] || {
+              id: `day${activeDayNum}-${selectedSubjectId}`,
+              day: activeDayNum,
+              subjectId: selectedSubjectId,
+              subjectName: isArabicSub ? currentSubjectDef.nameAr : currentSubjectDef.nameEn,
+              genderCohort: selectedCohort,
+              nativeCohort: selectedNativeCohort,
+              isNoSession: false,
+              contentTopic: '',
+              homework: '',
+              optionalEnrichment: '',
+            };
+
+            const { autoNote } = getTimetableSessionStatus(
+              selectedShift,
+              selectedGrade,
+              activeDayNum,
+              selectedSubjectId,
+              selectedCohort,
+              selectedNativeCohort
+            );
+
+            return (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-extrabold text-slate-800 flex items-center gap-2">
+                      <BookOpen className="w-5 h-5 text-teal-600" />
+                      <span>
+                        {isAr
+                          ? `توزيع خطة الأسبوع لمادة (${currentSubjectDef.nameAr}) - اختيار اليوم للتحضير:`
+                          : `Weekly Plan for ${currentSubjectDef.nameEn} - Select Day:`}
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {isAr
+                        ? 'اضغط على اليوم للانتقال المباشر وتعديل المحتوى، وتوضح الشارة حالة كل يوم (🟢 مكتمل | ⚪ لا حصة | 🔴 مطلوب)'
+                        : 'Click a day to edit. Badges show completion status.'}
+                    </p>
+                  </div>
+
+                  <span className="text-xs font-bold text-teal-800 bg-teal-100/70 px-3 py-1 rounded-lg">
+                    {isElementaryOrMiddle
+                      ? (isAr ? 'مرحلة رياض الأطفال حتى 8: 4 أيام دراسية فقط (الإثنين - الخميس)' : 'KG to Grade 8: 4 Days (Mon-Thu)')
+                      : (isAr ? 'مرحلة ثانوية (9-12): 5 أيام دراسية (الأحد - الخميس)' : 'High School (9-12): 5 Days (Sun-Thu)')}
+                  </span>
+                </div>
+
+                {/* Daily Tabs Strip */}
+                <div className="bg-slate-100/90 p-2 rounded-2xl border border-slate-200 shadow-2xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2">
+                    {gradeDays.map((dayItem) => {
+                      const dayNum = dayItem.dayNumber;
+                      const dayPlan = teacherDaysPlan[dayNum] || {
+                        id: `day${dayNum}-${selectedSubjectId}`,
+                        day: dayNum,
+                        subjectId: selectedSubjectId,
+                        subjectName: isArabicSub ? currentSubjectDef.nameAr : currentSubjectDef.nameEn,
+                        genderCohort: selectedCohort,
+                        nativeCohort: selectedNativeCohort,
+                        isNoSession: false,
+                        contentTopic: '',
+                        homework: '',
+                        optionalEnrichment: '',
+                      };
+                      const isNoSession = Boolean(dayPlan.isNoSession);
+                      const hasContent = Boolean(dayPlan.contentTopic && dayPlan.contentTopic.trim().length > 0);
+                      const isCurrentActive = activeDayNum === dayNum;
+
+                      return (
+                        <button
+                          key={dayNum}
+                          type="button"
+                          onClick={() => setActiveTeacherDay(dayNum)}
+                          className={`relative flex flex-col p-3 rounded-xl transition-all text-start border ${
+                            isCurrentActive
+                              ? 'bg-white text-slate-900 border-teal-500 shadow-md ring-2 ring-teal-400/30'
+                              : 'bg-white/60 hover:bg-white text-slate-600 border-slate-200/80 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className={`w-6 h-6 rounded-lg text-xs font-black flex items-center justify-center ${
+                              isCurrentActive ? 'bg-teal-600 text-white' : 'bg-slate-200 text-slate-700'
+                            }`}>
+                              {dayNum}
+                            </span>
+
+                            {isNoSession ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700">
+                                ⚪ {isAr ? 'لا حصة' : 'No Sess.'}
+                              </span>
+                            ) : hasContent ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                🟢 {isAr ? 'مكتمل' : 'Filled'}
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 animate-pulse">
+                                🔴 {isAr ? 'مطلوب' : 'Needed'}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="font-extrabold text-xs truncate text-slate-900">
+                            {isAr ? dayItem.nameAr : dayItem.nameEn}
+                          </div>
+                          <div className="text-[11px] text-slate-400 font-medium">
+                            {dayItem.shortEn}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Active Day Card */}
+                <div className={`rounded-2xl border transition-all duration-200 ${
+                  activeDayPlan.isNoSession
+                    ? 'bg-slate-50/90 border-slate-200 p-5'
+                    : isSubjectLocked
+                    ? 'bg-emerald-50/30 border-emerald-300 shadow-xs p-6'
+                    : 'bg-white border-teal-300 shadow-md p-6'
+                }`}>
+                  {/* Card Header & Day Navigation */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <span className={`w-10 h-10 rounded-2xl font-black text-base flex items-center justify-center shadow-xs ${
+                        activeDayPlan.isNoSession ? 'bg-slate-200 text-slate-600' : isSubjectLocked ? 'bg-emerald-600 text-white' : 'bg-teal-600 text-white'
                       }`}>
-                        {dayNum}
+                        {activeDayNum}
                       </span>
                       <div>
-                        <div className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5">
-                          <span>{isAr ? `اليوم ${dayNum}: ${dayItem.nameAr}` : `Day ${dayNum}: ${dayItem.nameEn}`}</span>
-                          <span className="text-xs text-slate-500 font-semibold">({dayItem.shortEn})</span>
+                        <div className="font-black text-base text-slate-900 flex items-center gap-2">
+                          <span>{isAr ? `اليوم ${activeDayNum}: ${activeDayItem.nameAr}` : `Day ${activeDayNum}: ${activeDayItem.nameEn}`}</span>
+                          <span className="text-xs text-slate-500 font-bold">({activeDayItem.shortEn})</span>
                           {isSubjectLocked && (
-                            <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-black border border-emerald-300 flex items-center gap-1">
+                            <span className="px-2.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-black border border-emerald-300 flex items-center gap-1">
                               <Lock className="w-2.5 h-2.5" />
-                              <span>{isAr ? 'مقفل وضع القراءة فقط' : 'Read-only'}</span>
+                              <span>{isAr ? 'وضع القراءة فقط' : 'Read-only'}</span>
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-slate-500">
+                        <div className="text-xs text-slate-500 font-semibold">
                           {currentSubjectDef.nameEn} - {currentSubjectDef.nameAr}
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      {dayPlan.isNoSession ? (
+                    {/* Day Navigation & No-Session Switch */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Previous Day */}
+                      <button
+                        type="button"
+                        disabled={!prevDayItem}
+                        onClick={() => prevDayItem && setActiveTeacherDay(prevDayItem.dayNumber)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs disabled:opacity-30 disabled:pointer-events-none transition"
+                        title={prevDayItem ? (isAr ? `الانتقال إلى ${prevDayItem.nameAr}` : `Go to ${prevDayItem.nameEn}`) : undefined}
+                      >
+                        <ChevronRight className="w-4 h-4 rtl:rotate-0 ltr:rotate-180" />
+                        <span>{isAr ? 'اليوم السابق' : 'Prev Day'}</span>
+                      </button>
+
+                      {/* Next Day */}
+                      <button
+                        type="button"
+                        disabled={!nextDayItem}
+                        onClick={() => nextDayItem && setActiveTeacherDay(nextDayItem.dayNumber)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs disabled:opacity-30 disabled:pointer-events-none transition"
+                        title={nextDayItem ? (isAr ? `الانتقال إلى ${nextDayItem.nameAr}` : `Go to ${nextDayItem.nameEn}`) : undefined}
+                      >
+                        <span>{isAr ? 'اليوم التالي' : 'Next Day'}</span>
+                        <ChevronLeft className="w-4 h-4 rtl:rotate-0 ltr:rotate-180" />
+                      </button>
+
+                      <div className="h-4 w-px bg-slate-200 mx-1 hidden sm:block" />
+
+                      {/* Session Status Pill / Toggle */}
+                      {activeDayPlan.isNoSession ? (
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-slate-600 bg-slate-200/80 px-3 py-1 rounded-full">
+                          <span className="text-xs font-bold text-slate-600 bg-slate-200/80 px-3 py-1.5 rounded-full">
                             🚫 {isAr ? 'لا توجد حصة (تعبئة تلقائية وفق الجدول)' : 'No Session (Auto Timetable)'}
                           </span>
                           {!isSubjectLocked && (
                             <button
                               type="button"
-                              onClick={() => handleToggleTeacherNoSession(dayNum)}
+                              onClick={() => handleToggleTeacherNoSession(activeDayNum)}
                               className="text-xs text-teal-700 hover:text-teal-900 font-bold underline px-2 py-1"
                             >
                               {isAr ? 'تعديل استثنائي' : 'Manual Override'}
@@ -1908,14 +2166,14 @@ export default function WeeklyStatementStudio({
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-black text-emerald-800 bg-emerald-100 border border-emerald-300 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-2xs">
-                            📌 {isAr ? 'حصة مقررة بالجدول (يجب إدخال المحتوى والدرس)' : 'Teaching Day (Fill Content)'}
+                          <span className="text-xs font-black text-emerald-800 bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-full flex items-center gap-1.5 shadow-2xs">
+                            📌 {isAr ? 'حصة مقررة بالجدول (يجب إدخال المحتوى)' : 'Teaching Day'}
                           </span>
                           {!isSubjectLocked && (
                             <button
                               type="button"
-                              onClick={() => handleToggleTeacherNoSession(dayNum)}
-                              className="text-xs text-slate-400 hover:text-slate-700 font-medium px-2 py-0.5 rounded border border-slate-200 hover:bg-slate-50 transition"
+                              onClick={() => handleToggleTeacherNoSession(activeDayNum)}
+                              className="text-xs text-slate-500 hover:text-slate-800 font-medium px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-100 transition"
                             >
                               {isAr ? 'تعيين: لا توجد حصة' : 'Mark as No Session'}
                             </button>
@@ -1926,18 +2184,17 @@ export default function WeeklyStatementStudio({
                   </div>
 
                   {/* If No Session, show clean muted summary */}
-                  {dayPlan.isNoSession ? (
-                    <div className="mt-3 text-xs text-slate-600 flex items-center gap-2 bg-slate-100/70 p-3 rounded-xl border border-slate-200">
+                  {activeDayPlan.isNoSession ? (
+                    <div className="mt-4 text-xs text-slate-600 flex items-center gap-2 bg-slate-100/80 p-3.5 rounded-xl border border-slate-200">
                       <Info className="w-4 h-4 text-slate-400 shrink-0" />
                       <span>
                         {isAr ? 'العبارة المعتمدة في التقرير:' : 'Note in statement:'}{' '}
-                        <strong className="text-slate-800 font-mono font-bold">"{dayPlan.contentTopic || autoNote || 'No Session'}"</strong>
+                        <strong className="text-slate-800 font-mono font-bold">"{activeDayPlan.contentTopic || autoNote || 'No Session'}"</strong>
                       </span>
                     </div>
                   ) : (
                     /* Active Session Input Fields */
-                    <div className="mt-4 space-y-4">
-                      
+                    <div className="mt-5 space-y-4">
                       {/* Content / Topic */}
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
@@ -1946,14 +2203,14 @@ export default function WeeklyStatementStudio({
                             <span>{isAr ? 'المحتوى والدرس (Content / Topic):' : 'Content / Topic:'}</span>
                           </label>
 
-                          {/* Quick Insert Snippet Buttons (Only active when not locked) */}
+                          {/* Quick Insert Snippet Buttons */}
                           {!isSubjectLocked && (
                             <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setZoomModalDay(dayNum);
-                                  setZoomModalInput(dayPlan.zoomUrl || '');
+                                  setZoomModalDay(activeDayNum);
+                                  setZoomModalInput(activeDayPlan.zoomUrl || '');
                                 }}
                                 className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium transition"
                               >
@@ -1962,9 +2219,9 @@ export default function WeeklyStatementStudio({
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const current = dayPlan.contentTopic || '';
+                                  const current = activeDayPlan.contentTopic || '';
                                   const prefix = isArabicSub ? 'حصة مسجلة عبر المنصة.\n' : 'Recorded Session:\n';
-                                  handleTeacherDayChange(dayNum, { contentTopic: prefix + current });
+                                  handleTeacherDayChange(activeDayNum, { contentTopic: prefix + current });
                                 }}
                                 className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition"
                               >
@@ -1973,9 +2230,9 @@ export default function WeeklyStatementStudio({
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const current = dayPlan.contentTopic || '';
+                                  const current = activeDayPlan.contentTopic || '';
                                   const note = `Girls: \nBoys: `;
-                                  handleTeacherDayChange(dayNum, { contentTopic: current ? `${current}\n${note}` : note });
+                                  handleTeacherDayChange(activeDayNum, { contentTopic: current ? `${current}\n${note}` : note });
                                 }}
                                 className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition"
                               >
@@ -1987,9 +2244,9 @@ export default function WeeklyStatementStudio({
 
                         <textarea
                           rows={3}
-                          value={dayPlan.contentTopic || ''}
+                          value={activeDayPlan.contentTopic || ''}
                           disabled={isSubjectLocked}
-                          onChange={(e) => handleTeacherDayChange(dayNum, { contentTopic: e.target.value })}
+                          onChange={(e) => handleTeacherDayChange(activeDayNum, { contentTopic: e.target.value })}
                           dir={isArabicSub ? 'rtl' : 'ltr'}
                           placeholder={
                             isArabicSub
@@ -2006,7 +2263,6 @@ export default function WeeklyStatementStudio({
 
                       {/* Homework & Enrichment Grid */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        
                         {/* Homework */}
                         <div>
                           <div className="flex items-center justify-between mb-1.5">
@@ -2016,7 +2272,7 @@ export default function WeeklyStatementStudio({
                             {!isSubjectLocked && (
                               <button
                                 type="button"
-                                onClick={() => handleTeacherDayChange(dayNum, { homework: isArabicSub ? 'لا يوجد واجب' : 'No HW' })}
+                                onClick={() => handleTeacherDayChange(activeDayNum, { homework: isArabicSub ? 'لا يوجد واجب' : 'No HW' })}
                                 className="text-[11px] text-teal-700 hover:underline font-medium"
                               >
                                 {isAr ? '+ لا يوجد واجب' : '+ No HW'}
@@ -2025,9 +2281,9 @@ export default function WeeklyStatementStudio({
                           </div>
                           <textarea
                             rows={2}
-                            value={dayPlan.homework || ''}
+                            value={activeDayPlan.homework || ''}
                             disabled={isSubjectLocked}
-                            onChange={(e) => handleTeacherDayChange(dayNum, { homework: e.target.value })}
+                            onChange={(e) => handleTeacherDayChange(activeDayNum, { homework: e.target.value })}
                             dir={isArabicSub ? 'rtl' : 'ltr'}
                             placeholder={isAr ? 'مثال: حل تدريبات ص 18 بالكتاب المدرسي' : 'e.g. Solve CW Booklet p.17+18'}
                             className={`w-full rounded-xl border p-2.5 text-xs shadow-2xs ${
@@ -2047,7 +2303,7 @@ export default function WeeklyStatementStudio({
                             {!isSubjectLocked && (
                               <button
                                 type="button"
-                                onClick={() => handleTeacherDayChange(dayNum, { optionalEnrichment: 'Optional Quiz on LMS' })}
+                                onClick={() => handleTeacherDayChange(activeDayNum, { optionalEnrichment: 'Optional Quiz on LMS' })}
                                 className="text-[11px] text-teal-700 hover:underline font-medium"
                               >
                                 + Optional Quiz
@@ -2056,9 +2312,9 @@ export default function WeeklyStatementStudio({
                           </div>
                           <textarea
                             rows={2}
-                            value={dayPlan.optionalEnrichment || ''}
+                            value={activeDayPlan.optionalEnrichment || ''}
                             disabled={isSubjectLocked}
-                            onChange={(e) => handleTeacherDayChange(dayNum, { optionalEnrichment: e.target.value })}
+                            onChange={(e) => handleTeacherDayChange(activeDayNum, { optionalEnrichment: e.target.value })}
                             dir={isArabicSub ? 'rtl' : 'ltr'}
                             placeholder={isAr ? 'مثال: كويز إثرائي اختياري عبر المنصة' : 'e.g. Reading Booklet p.31-32 + Optional Quiz'}
                             className={`w-full rounded-xl border p-2.5 text-xs shadow-2xs ${
@@ -2071,17 +2327,17 @@ export default function WeeklyStatementStudio({
                       </div>
 
                       {/* Zoom Link Quick Display */}
-                      {dayPlan.zoomUrl && (
-                        <div className="flex items-center justify-between bg-blue-50/70 p-2 rounded-xl border border-blue-200 text-xs text-blue-900">
+                      {activeDayPlan.zoomUrl && (
+                        <div className="flex items-center justify-between bg-blue-50/70 p-2.5 rounded-xl border border-blue-200 text-xs text-blue-900">
                           <div className="flex items-center gap-2 truncate">
                             <ExternalLink className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                             <span className="font-semibold">{isAr ? 'رابط الحصة:' : 'Zoom:'}</span>
-                            <span className="font-mono text-[11px] truncate">{dayPlan.zoomUrl}</span>
+                            <span className="font-mono text-[11px] truncate">{activeDayPlan.zoomUrl}</span>
                           </div>
                           {!isSubjectLocked && (
                             <button
                               type="button"
-                              onClick={() => handleTeacherDayChange(dayNum, { zoomUrl: '' })}
+                              onClick={() => handleTeacherDayChange(activeDayNum, { zoomUrl: '' })}
                               className="text-blue-500 hover:text-rose-600 font-bold px-2 py-0.5"
                             >
                               {isAr ? 'إزالة' : 'Remove'}
@@ -2089,13 +2345,12 @@ export default function WeeklyStatementStudio({
                           )}
                         </div>
                       )}
-
                     </div>
                   )}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })()}
 
           {/* Teacher Subject Quizzes Card */}
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
@@ -2200,44 +2455,32 @@ export default function WeeklyStatementStudio({
           </div>
 
 
-          {/* Quick Action Navigation Footer */}
-          <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+          {/* Reassuring Teacher Summary Card */}
+          <div className="flex flex-wrap items-center justify-between gap-4 p-5 rounded-2xl bg-white border border-teal-200/80 shadow-xs">
             <div className="flex items-center gap-3">
               <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="text-xs font-bold text-slate-700">
-                {isAr
-                  ? `تم حفظ خطة (${currentSubjectDef.nameAr}) في تقرير ${selectedGrade} - ${selectedShift === 'us' ? 'فترة أمريكا' : 'فترة الشرق الأوسط'}`
-                  : `Plan saved to ${selectedGrade} statement (${selectedShift.toUpperCase()})`}
-              </span>
+              <div>
+                <span className="text-xs font-black text-slate-800 block">
+                  {isAr
+                    ? `خطة (${currentSubjectDef.nameAr}) لصف ${selectedGrade} محفوظة ومحدثة فورياً.`
+                    : `Plan for ${currentSubjectDef.nameEn} (${selectedGrade}) is saved and synced.`}
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  {isAr
+                    ? 'يمكنك معاينة ما كتبه المعلمون الآخرون للتأكد من توازن الواجبات دون أي تضارب.'
+                    : 'Preview what other teachers have entered to balance daily homework loads.'}
+                </span>
+              </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               <button
                 type="button"
-                onClick={handleOpenResetWeekModal}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition"
-                title={isAr ? 'تفريغ محتوى الأسبوع بالكامل (محمي برقم سري إداري)' : 'Reset All Week Content (PIN Protected)'}
+                onClick={() => setIsConsolidatedPreviewOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-extrabold text-xs border border-blue-200 shadow-2xs transition"
               >
-                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                <span>{isAr ? 'تفريغ محتوى الأسبوع' : 'Reset Week'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleOpenExportModal(selectedShift)}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition shadow-sm"
-              >
-                <Download className="w-4 h-4 text-teal-400" />
-                <span>{isAr ? 'تصدير التقرير المعتمد' : 'Export Statement'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setViewMode('master')}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md transition"
-              >
-                <span>{isAr ? 'معاينة التقرير المجمع للمرحلة (Master)' : 'View Master Grade Statement'}</span>
-                <ChevronRight className="w-4 h-4 rtl:rotate-180" />
+                <Eye className="w-4 h-4 text-blue-600" />
+                <span>{isAr ? 'معاينة ما كتبه الزملاء (المجمع)' : 'View Colleagues Entries'}</span>
               </button>
             </div>
           </div>
@@ -2246,10 +2489,217 @@ export default function WeeklyStatementStudio({
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* VIEW 2: Master Grade Statement & Supervision Tracker */}
+      {/* Sticky Bottom Action Bar for Teacher Mode */}
+      {/* ------------------------------------------------------------- */}
+      {viewMode === 'teacher' && (
+        <div className="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-[0_-6px_25px_rgba(0,0,0,0.08)] py-3 px-4 sm:px-8">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+            {/* Auto-save & Status indicator */}
+            <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-start">
+              <div className="flex items-center gap-2">
+                {saveStatus === 'saving' ? (
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-amber-800 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl shadow-2xs">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                    <span>{isAr ? 'جاري الحفظ التلقائي...' : 'Auto-saving...'}</span>
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl shadow-2xs">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{isAr ? 'تم الحفظ تلقائياً الآن' : 'Auto-saved'}</span>
+                  </span>
+                )}
+
+                {isSubjectLocked ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-black text-emerald-800 bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-xl">
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>{isAr ? 'معتمد ومقفل' : 'Submitted'}</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-xl">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>{isAr ? 'مسودة قيد التعديل' : 'Draft'}</span>
+                  </span>
+                )}
+              </div>
+
+              <span className="hidden md:inline-block text-xs font-extrabold text-slate-700 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                {currentSubjectDef.nameAr} - {selectedGrade} ({selectedShift === 'us' ? 'أمريكا' : 'الشرق الأوسط'})
+              </span>
+            </div>
+
+            {/* Teacher Actions */}
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              {/* Teacher can inspect master statement anytime to see colleagues' work */}
+              <button
+                type="button"
+                onClick={() => setIsConsolidatedPreviewOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-extrabold text-xs border border-blue-200 transition"
+                title={isAr ? 'الاطلاع على ما كتبه الزملاء في المواد الأخرى ومراجعة توازن الواجبات' : 'View what colleagues entered'}
+              >
+                <Eye className="w-4 h-4 text-blue-600" />
+                <span>{isAr ? 'معاينة ما كتبه الزملاء' : 'Colleagues'}</span>
+              </button>
+
+              {/* Manual Save */}
+              {!isSubjectLocked && (
+                <button
+                  type="button"
+                  onClick={() => handleSaveDoc(docData)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs border border-slate-300 transition"
+                  title={isAr ? 'حفظ يدوي فوري' : 'Manual Save'}
+                >
+                  <Save className="w-4 h-4 text-slate-600" />
+                  <span>{isAr ? 'حفظ يدوي' : 'Save'}</span>
+                </button>
+              )}
+
+              {/* Submit for HOD Review or Request Unlock */}
+              {isSubjectLocked ? (
+                <button
+                  type="button"
+                  onClick={handleOpenUnlockModal}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs shadow-sm transition"
+                >
+                  <Unlock className="w-4 h-4 text-slate-950" />
+                  <span>{isAr ? 'طلب تعديل / فتح القفل' : 'Request Unlock'}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleSubmitAndLock}
+                  disabled={isSubmittingLock}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black text-xs shadow-md transition disabled:opacity-50"
+                  title={isAr ? 'إرسال التقرير لرئيس القسم للاعتماد وقفل التعديل' : 'Submit for HOD Review & Lock'}
+                >
+                  <Send className="w-4 h-4 text-emerald-200" />
+                  <span>{isSubmittingLock ? (isAr ? 'جاري الإرسال...' : 'Submitting...') : (isAr ? 'إرسال للاعتماد (Submit for Review)' : 'Submit for Review')}</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* VIEW 2: Master Grade Statement & HOD Admin Hub */}
       {/* ------------------------------------------------------------- */}
       {viewMode === 'master' && (
         <div className="space-y-6">
+
+          {/* HOD K-12 Supervision & Status Matrix */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-black text-slate-900">
+                      {isAr ? 'لوحة المتابعة والاعتماد الشاملة لجميع المراحل (K-12 Supervision Hub)' : 'K-12 Supervision & Approval Hub'}
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      {isAr
+                        ? `متابعة حالة الإنجاز للأسبوع الدراسي ${selectedWeekNumber} عبر كافة المراحل (من الروضة حتى الصف 12)`
+                        : `Readiness status across all grades (Kindergarten to Grade 12) for Week ${selectedWeekNumber}`}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* HOD Quick Actions Toolbar */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleHodApproveAllSubjects}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black text-xs shadow-md transition"
+                  title={isAr ? `اعتماد التقرير النهائي لصف ${selectedGrade} بالكامل وقفل جميع المواد` : 'Approve & Publish Current Stage'}
+                >
+                  <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                  <span>{isAr ? `اعتماد نهائي لـ (${selectedGrade})` : `Approve ${selectedGrade}`}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsBatchK12ModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm transition"
+                  title={isAr ? 'تصدير كامل المراحل K to 12 دفعة واحدة' : 'Batch Export K-12'}
+                >
+                  <FolderArchive className="w-4 h-4 text-amber-300" />
+                  <span>{isAr ? 'تصدير K to 12' : 'Batch K-12'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleHodLogout}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs transition"
+                  title={isAr ? 'قفل لوحة رئيس القسم والإدارة والعودة لواجهة المعلم' : 'Lock HOD Hub and Logout'}
+                >
+                  <LogOut className="w-3.5 h-3.5 text-rose-600" />
+                  <span>{isAr ? 'قفل اللوحة' : 'Lock Hub'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* K-12 Stage Cards Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-2.5">
+              {allGradesReadiness.map((item) => {
+                const isCurrentGrade = item.grade === selectedGrade;
+                return (
+                  <button
+                    key={item.grade}
+                    type="button"
+                    onClick={() => setSelectedGrade(item.grade)}
+                    className={`p-3 rounded-2xl border text-start transition-all relative ${
+                      isCurrentGrade
+                        ? 'bg-blue-50/80 border-blue-500 shadow-sm ring-2 ring-blue-400/40'
+                        : 'bg-white hover:bg-slate-50 border-slate-200/90 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-black text-xs text-slate-900 truncate">
+                        {item.grade}
+                      </span>
+                      {item.status === 'completed' ? (
+                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800">
+                          🟢 {isAr ? 'منجز' : '100%'}
+                        </span>
+                      ) : item.status === 'in_progress' ? (
+                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800">
+                          🟡 {item.percentage}%
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500">
+                          ⚪ {isAr ? 'لم يبدأ' : '0%'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Mini progress bar */}
+                    <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden mb-1">
+                      <div
+                        className={`h-full transition-all duration-300 ${
+                          item.status === 'completed'
+                            ? 'bg-emerald-500'
+                            : item.status === 'in_progress'
+                            ? 'bg-amber-500'
+                            : 'bg-slate-300'
+                        }`}
+                        style={{ width: `${item.percentage}%` }}
+                      />
+                    </div>
+
+                    <div className="text-[10px] text-slate-500 font-medium flex items-center justify-between">
+                      <span>{item.filledFields}/{item.totalFields}</span>
+                      {item.approvedCount > 0 && (
+                        <span className="text-emerald-700 font-bold">🔒 {item.approvedCount}</span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
           {/* Readiness Tracker Dashboard */}
           <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
@@ -2560,18 +3010,6 @@ export default function WeeklyStatementStudio({
                   <Calendar className="w-3.5 h-3.5 text-amber-600" />
                   <span>{isAr ? `كويزات المرحلة (${docData.quizzes?.length || 0})` : `Quizzes (${docData.quizzes?.length || 0})`}</span>
                 </button>
-
-                <button
-                  onClick={() => setActiveMasterTab('value')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-xs transition ${
-                    activeMasterTab === 'value'
-                      ? 'bg-white text-slate-900 shadow-2xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>{isAr ? '🌿 قيمة الأسبوع التربوية' : '🌿 Weekly Core Value'}</span>
-                </button>
               </div>
 
               {/* Master Header Export Buttons */}
@@ -2758,105 +3196,7 @@ export default function WeeklyStatementStudio({
               </div>
             )}
 
-            {/* TAB CONTENT 4: Educational Value */}
-            {activeMasterTab === 'value' && (
-              <div className="space-y-5 bg-gradient-to-br from-emerald-50/70 via-teal-50/40 to-slate-50 p-6 sm:p-8 rounded-3xl border border-emerald-200 shadow-sm animate-fade-in">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100/80 text-emerald-800 text-xs font-bold mb-2">
-                      <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>{isAr ? 'تزكية النفوس وبناء الشخصية' : 'Moral & Character Development'}</span>
-                    </div>
-                    <h3 className="font-black text-base sm:text-lg text-emerald-950 flex items-center gap-2">
-                      <span>{isAr ? 'قيمة الأسبوع التربوية (حديث شريف / قيمة أخلاقية)' : 'Weekly Educational Core Value'}</span>
-                    </h3>
-                    <p className="text-xs sm:text-sm text-emerald-800/80 mt-1 font-medium">
-                      {isAr
-                        ? 'تظهر هذه القيمة المباركة في أسفل ترويسة التقرير الأسبوعي المعتمد لجميع أولياء الأمور وفي ملفات Word و PDF لتجديد نية المعلم والطلاب وغرس القيم الأصيلة.'
-                        : 'This value is prominently placed at the bottom of the weekly statement for parents and in exported Word & PDF files.'}
-                    </p>
-                  </div>
-                </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-2">
-                    {isAr ? 'نص الحديث الشريف أو القيمة التربوية المعتمدة لهذا الأسبوع:' : 'Core Value / Hadith text for this week:'}
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={docData.weeklyEducationalValue || ''}
-                    onChange={(e) => {
-                      const updated = {
-                        ...docData,
-                        weeklyEducationalValue: e.target.value,
-                        updatedAt: Date.now(),
-                      };
-                      setDocData(updated);
-                      saveWeeklyStatement(updated);
-                    }}
-                    placeholder={isAr ? 'اكتب حديثاً شريفاً أو قيمة تربوية (مثل: «إِنَّمَا بُعِثْتُ لِأُتَمِّمَ مَكَارِمَ الْأَخْلَاقِ»)...' : 'Enter a hadith or core value...'}
-                    className="w-full text-xs sm:text-sm p-4 rounded-2xl border border-emerald-300 bg-white focus:ring-2 focus:ring-emerald-500 font-serif font-bold text-slate-900 leading-relaxed shadow-xs"
-                  />
-                </div>
-
-                <div className="space-y-2.5">
-                  <div className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                    <span>{isAr ? 'نماذج وقيم تربوية نبوية جاهزة للاختيار المباشر بنقرة زر:' : 'Preset Recommended Values:'}</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                    {[
-                      {
-                        title: isAr ? 'مكارم الأخلاق وحسن المعاملة' : 'Good Manners',
-                        text: '«إِنَّمَا بُعِثْتُ لِأُتَمِّمَ مَكَارِمَ الْأَخْلَاقِ» — فضل العلم والأخلاق الفاضلة',
-                      },
-                      {
-                        title: isAr ? 'فضل طلب العلم والاجتهاد' : 'Seeking Knowledge',
-                        text: '«مَنْ سَلَكَ طَرِيقًا يَلْتَمِسُ فِيهِ عِلْمًا سَهَّلَ اللَّهُ لَهُ بِهِ طَرِيقًا إِلَى الْجَنَّةِ»',
-                      },
-                      {
-                        title: isAr ? 'إتقان العمل والإحسان' : 'Mastery & Ihsan',
-                        text: '«إِنَّ اللَّهَ يُحِبُّ إِذَا عَمِلَ أَحَدُكُمْ عَمَلًا أَنْ يُتْقِنَهُ»',
-                      },
-                      {
-                        title: isAr ? 'التعاون والمحبة بين الطلاب' : 'Cooperation & Kindness',
-                        text: '«تَهَادَوْا تَحَابُّوا» — التعاون والمودة بين الزملاء والأقران',
-                      },
-                      {
-                        title: isAr ? 'الصدق والأمانة' : 'Honesty & Trust',
-                        text: '«عَلَيْكُمْ بِالصِّدْقِ، فَإِنَّ الصِّدْقَ يَهْدِي إِلَى الْبِرِّ»',
-                      },
-                      {
-                        title: isAr ? 'توقير المعلم وبر الوالدين' : 'Respecting Teachers & Parents',
-                        text: '«لَيْسَ مِنَّا مَنْ لَمْ يُجِلَّ كَبِيرَنَا، وَيَرْحَمْ صَغِيرَنَا، وَيَعْرِفْ لِعَالِمِنَا حَقَّهُ»',
-                      },
-                    ].map((preset, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => {
-                          const updated = {
-                            ...docData,
-                            weeklyEducationalValue: preset.text,
-                            updatedAt: Date.now(),
-                          };
-                          setDocData(updated);
-                          saveWeeklyStatement(updated);
-                        }}
-                        className="p-3.5 text-start rounded-2xl border border-emerald-200 bg-white hover:bg-emerald-100/60 hover:border-emerald-400 transition shadow-2xs group active:scale-[0.99]"
-                      >
-                        <div className="text-xs font-bold text-emerald-950 mb-1 group-hover:text-emerald-700">
-                          {preset.title}
-                        </div>
-                        <div className="text-[11px] text-slate-600 font-serif leading-relaxed line-clamp-2">
-                          {preset.text}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
 
           </div>
         </div>
@@ -3798,6 +4138,315 @@ export default function WeeklyStatementStudio({
                     ? (isAr ? 'جاري تجهيز وتنزيل الحزمة...' : 'Generating Archive...')
                     : (isAr ? 'بدء تنزيل الحزمة (Word & PDF)' : 'Download Batch ZIP')}
                 </span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* HOD PIN Verification Modal (Passcode: Sahlah2027) */}
+      {/* ------------------------------------------------------------- */}
+      {isHodPinModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-5 text-start overflow-hidden">
+            
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white font-bold flex items-center justify-center shrink-0 shadow-md">
+                  <KeyRound className="w-6 h-6 text-amber-300" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base sm:text-lg">
+                    {isAr ? 'لوحة رئيس القسم والإدارة' : 'HOD / Admin Hub'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {isAr ? 'الصفحة محمية برقم سري مخصص للمشرفين التربويين' : 'Protected area for HOD & Admin'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsHodPinModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleVerifyHodPin} className="space-y-4">
+              <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-2xl text-xs text-blue-950 leading-relaxed flex items-center gap-2.5">
+                <Lock className="w-4 h-4 text-blue-600 shrink-0" />
+                <span>
+                  {isAr
+                    ? 'يرجى إدخال الرقم السري المعتمد للوصول إلى لوحة الإدارة ومتابعة كافة المراحل وتصدير الحزم الشاملة (Sahlah2027).'
+                    : 'Enter the authorized PIN (Sahlah2027) to access the HOD & Admin Hub.'}
+                </span>
+              </div>
+
+              <div>
+                <label className="text-xs font-black text-slate-800 block mb-1.5">
+                  {isAr ? 'الرقم السري (PIN Code):' : 'PIN Code:'}
+                </label>
+                <div className="relative">
+                  <input
+                    type={showHodPinText ? 'text' : 'password'}
+                    value={hodPinInput}
+                    onChange={(e) => {
+                      setHodPinInput(e.target.value);
+                      if (hodPinError) setHodPinError('');
+                    }}
+                    autoFocus
+                    placeholder="Sahlah2027"
+                    className="w-full rounded-xl border border-slate-300 py-2.5 ps-3 pe-10 text-sm font-bold text-slate-900 bg-white focus:ring-2 focus:ring-blue-500 shadow-2xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowHodPinText(!showHodPinText)}
+                    className="absolute inset-y-0 end-0 pe-3 flex items-center text-slate-400 hover:text-slate-600"
+                  >
+                    {showHodPinText ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                {hodPinError && (
+                  <p className="text-xs font-bold text-rose-600 flex items-center gap-1 mt-2">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{hodPinError}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsHodPinModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-100 transition"
+                >
+                  {isAr ? 'إلغاء' : 'Cancel'}
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={!hodPinInput.trim()}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs shadow-md transition disabled:opacity-40"
+                >
+                  <KeyRound className="w-4 h-4 text-amber-300" />
+                  <span>{isAr ? 'تسجيل الدخول للوحة' : 'Verify & Enter'}</span>
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* Teacher Live Consolidated Preview Modal (معاينة ما كتبه الزملاء) */}
+      {/* ------------------------------------------------------------- */}
+      {isConsolidatedPreviewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-3 sm:p-6 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-5xl w-full h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden text-start">
+            
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between gap-4 bg-slate-50/80">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-bold shadow-xs">
+                  <Eye className="w-5 h-5 text-teal-200" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base sm:text-lg flex items-center gap-2">
+                    <span>{isAr ? `معاينة التقرير المجمع للمرحلة: (${selectedGrade})` : `Consolidated Stage Statement: (${selectedGrade})`}</span>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold">
+                      {selectedShift === 'us' ? 'فترة أمريكا' : 'فترة الشرق الأوسط'}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {isAr
+                      ? `الأسبوع الدراسي ${selectedWeekNumber} (${currentWeek.headerDate}) • يمكنك الاطلاع على مدخلات كافة المواد للتأكد من توازن الواجبات`
+                      : `Week ${selectedWeekNumber} (${currentWeek.headerDate}) • Live view of all subject inputs`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={refreshCurrentDocument}
+                  className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-200 transition"
+                  title={isAr ? 'تحديث البيانات فورياً' : 'Refresh'}
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsConsolidatedPreviewOpen(false)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Helper Banner */}
+            <div className="px-5 py-2.5 bg-emerald-50/70 border-b border-emerald-100 flex items-center gap-2 text-xs text-emerald-900">
+              <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>
+                {isAr
+                  ? 'هذه المعاينة الحية تمكّنك كمعلم من قراءة ما أدرجه زملاؤك في نفس المرحلة حتى لا تتراكم الواجبات أو الاختبارات في نفس اليوم.'
+                  : 'This live preview allows you to check what colleagues entered to coordinate homework and quiz schedules.'}
+              </span>
+            </div>
+
+            {/* Scrollable Document Table Content */}
+            <div className="flex-1 overflow-auto p-5 bg-slate-100/50">
+              <div className="bg-white rounded-2xl shadow-xs border border-slate-200 p-4 space-y-6">
+                
+                {/* Header Table Info */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 text-xs text-slate-600">
+                  <div className="font-black text-slate-900 text-sm">
+                    {isAr ? 'مدارس سهلة والفرقان الدولية' : 'Sahla & Furqan International Schools'}
+                  </div>
+                  <div className="font-bold">
+                    {docData.weekRangeText || currentWeek.rangeText}
+                  </div>
+                  <div className="font-bold text-teal-800">
+                    {ACADEMIC_YEAR}
+                  </div>
+                </div>
+
+                {/* Grade Subjects Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-slate-800 border-collapse border border-slate-300">
+                    <thead>
+                      <tr className="bg-slate-800 text-white font-bold text-center">
+                        <th className="p-2.5 border border-slate-300 w-36">
+                          {isAr ? 'المادة الدراسية' : 'Subject'}
+                        </th>
+                        {gradeDays.map((d) => (
+                          <th key={d.dayNumber} className="p-2.5 border border-slate-300 min-w-[140px]">
+                            <div>{isAr ? d.nameAr : d.nameEn}</div>
+                            <div className="text-[10px] text-teal-300 font-normal">Day {d.dayNumber}</div>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {STANDARD_SUBJECTS.map((sub) => {
+                        const isSelectedCurrent = sub.id === selectedSubjectId;
+                        const status = docData.subjectStatuses?.[sub.id];
+                        const isLocked = Boolean(status?.is_locked && status?.status === 'submitted');
+
+                        return (
+                          <tr
+                            key={sub.id}
+                            className={`border-b border-slate-200 transition ${
+                              isSelectedCurrent ? 'bg-teal-50/60 font-semibold' : 'hover:bg-slate-50/60'
+                            }`}
+                          >
+                            <td className="p-3 border border-slate-300 align-top bg-slate-50/80">
+                              <div className="font-extrabold text-slate-900">
+                                {isAr ? sub.nameAr : sub.nameEn}
+                              </div>
+                              <div className="text-[10px] text-slate-500">
+                                {sub.nameEn}
+                              </div>
+                              {isLocked ? (
+                                <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                  <Lock className="w-2.5 h-2.5" />
+                                  <span>{isAr ? 'معتمد' : 'Locked'}</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                  <Clock className="w-2.5 h-2.5" />
+                                  <span>{isAr ? 'مسودة' : 'Draft'}</span>
+                                </span>
+                              )}
+                            </td>
+
+                            {gradeDays.map((d) => {
+                              const dayNum = d.dayNumber;
+                              const plans = docData.days[dayNum] || [];
+                              const p = plans.find((item) => item.subjectId === sub.id);
+                              const isNoSession = Boolean(p?.isNoSession);
+                              const content = p?.contentTopic || '';
+                              const homework = p?.homework || '';
+
+                              return (
+                                <td key={dayNum} className="p-2.5 border border-slate-300 align-top text-[11px] leading-relaxed">
+                                  {isNoSession ? (
+                                    <div className="text-center py-2 text-slate-400 font-bold bg-slate-100/60 rounded">
+                                      {content || 'لا توجد حصة'}
+                                    </div>
+                                  ) : content || homework ? (
+                                    <div className="space-y-1.5">
+                                      {content && (
+                                        <div>
+                                          <span className="font-bold text-slate-900 block">{content}</span>
+                                        </div>
+                                      )}
+                                      {homework && (
+                                        <div className="p-1 rounded bg-amber-50/80 border border-amber-200 text-amber-950 text-[10px]">
+                                          <span className="font-bold">{isAr ? 'واجب: ' : 'HW: '}</span>
+                                          <span>{homework}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="text-center py-2 text-slate-300 text-[10px] italic">
+                                      {isAr ? 'لم يُدخل بعد' : 'Not entered'}
+                                    </div>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Quizzes Table if available */}
+                {(docData.quizzes || []).length > 0 && (
+                  <div className="pt-3 border-t border-slate-200 space-y-2">
+                    <h4 className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                      <Calendar className="w-4 h-4 text-teal-600" />
+                      <span>{isAr ? 'جدول الكويزات والاختبارات الأسبوعية:' : 'Weekly Quizzes:'}</span>
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                      {docData.quizzes.map((quiz) => (
+                        <div key={quiz.id} className="p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                          <div className="flex items-center justify-between font-bold text-slate-900">
+                            <span>{quiz.subject}</span>
+                            <span className="text-[11px] font-mono text-teal-700 bg-teal-50 px-1.5 rounded">{quiz.date}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-600 mt-0.5">{quiz.topics}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-200 bg-white flex items-center justify-between gap-3">
+              <span className="text-xs text-slate-500 font-medium">
+                {isAr ? 'للتصدير الرسمي بصيغتي Word و PDF، يرجى التوجه للوحة رئيس القسم والإدارة.' : 'For official Word/PDF export, please use the HOD Hub.'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsConsolidatedPreviewOpen(false)}
+                className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs transition"
+              >
+                {isAr ? 'إغلاق المعاينة' : 'Close Preview'}
               </button>
             </div>
 

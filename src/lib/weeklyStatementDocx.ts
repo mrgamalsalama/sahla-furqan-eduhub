@@ -505,31 +505,7 @@ export async function generateWeeklyStatementDocxBlob(docData: WeeklyStatementDo
               ]
             : []),
 
-          // Weekly Educational & Moral Core Value (if present)
-          ...(docData.weeklyEducationalValue
-            ? [
-                new Paragraph({ text: '', spacing: { before: 240, after: 60 } }),
-                new Paragraph({
-                  alignment: AlignmentType.CENTER,
-                  children: [
-                    new TextRun({
-                      text: '🌿 قِيمَةُ الْأُسْبُوعِ التَّرْبَوِيَّةِ / Weekly Educational Value\n',
-                      bold: true,
-                      size: 20,
-                      color: '166534',
-                    }),
-                    new TextRun({
-                      text: docData.weeklyEducationalValue,
-                      bold: true,
-                      size: 22,
-                      color: '14532D',
-                      font: 'Traditional Arabic',
-                    }),
-                  ],
-                  spacing: { before: 100, after: 100 },
-                }),
-              ]
-            : []),
+
         ],
       },
     ],

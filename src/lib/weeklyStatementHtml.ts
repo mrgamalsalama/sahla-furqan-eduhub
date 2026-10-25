@@ -205,17 +205,7 @@ export function generateWeeklyStatementHtml(docData: WeeklyStatementDocument): s
       <!-- Weekly Quiz Schedule -->
       ${quizTableHtml}
 
-      <!-- Weekly Educational & Moral Core Value -->
-      ${docData.weeklyEducationalValue ? `
-        <div style="margin-top: 24px; padding: 12px 18px; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px; text-align: center; page-break-inside: avoid;">
-          <div style="font-weight: 800; color: #166534; font-size: 0.88rem; margin-bottom: 4px;">
-            🌿 قِيمَةُ الْأُسْبُوعِ التَّرْبَوِيَّةِ / Weekly Educational Value
-          </div>
-          <div style="font-size: 0.96rem; font-weight: 700; color: #14532d; font-family: 'Amiri', 'Traditional Arabic', 'Cairo', serif; line-height: 1.6;">
-            ${docData.weeklyEducationalValue}
-          </div>
-        </div>
-      ` : ''}
+
 
       <!-- Print Styling -->
       <style>
