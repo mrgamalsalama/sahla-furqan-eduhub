@@ -99,12 +99,47 @@ export function saveTeacherResource(res: import('@/types').TeacherResource): voi
   } else {
     resources.unshift({ ...res, createdAt: res.createdAt || Date.now(), updatedAt: Date.now() });
   }
-  localStorage.setItem(RESOURCES_KEY, JSON.stringify(resources));
+
+  // Attempt to save with graceful fallback if localStorage quota exceeded
+  try {
+    localStorage.setItem(RESOURCES_KEY, JSON.stringify(resources));
+  } catch (err: any) {
+    console.warn('localStorage quota exceeded while saving teacher resources. Trimming heavy payloads...', err);
+
+    // Step 1: Strip bulky dataUrl/base64 from older resources to keep metadata and texts intact
+    const trimmed = resources.map((r, i) => {
+      if (i > 0 && (r.dataUrl || r.base64)) {
+        return { ...r, dataUrl: undefined, base64: undefined };
+      }
+      return r;
+    });
+
+    try {
+      localStorage.setItem(RESOURCES_KEY, JSON.stringify(trimmed));
+    } catch {
+      // Step 2: If still overflowing, strip from all resources except metadata + keep latest 15
+      const lean = resources.slice(0, 15).map((r) => ({
+        ...r,
+        dataUrl: undefined,
+        base64: undefined,
+        textContent: r.textContent ? r.textContent.slice(0, 5000) : undefined,
+      }));
+      try {
+        localStorage.setItem(RESOURCES_KEY, JSON.stringify(lean));
+      } catch (finalErr) {
+        console.error('Critical: unable to persist to localStorage:', finalErr);
+      }
+    }
+  }
 }
 
 export function deleteTeacherResource(id: string): void {
   const resources = getTeacherResources().filter((r) => r.id !== id);
-  localStorage.setItem(RESOURCES_KEY, JSON.stringify(resources));
+  try {
+    localStorage.setItem(RESOURCES_KEY, JSON.stringify(resources));
+  } catch (err) {
+    console.warn('deleteTeacherResource storage error:', err);
+  }
 }
 
 export function toggleTeacherResourcePublic(id: string, isPublic: boolean): void {
@@ -113,7 +148,11 @@ export function toggleTeacherResourcePublic(id: string, isPublic: boolean): void
   if (target) {
     target.isPublic = isPublic;
     target.updatedAt = Date.now();
-    localStorage.setItem(RESOURCES_KEY, JSON.stringify(resources));
+    try {
+      localStorage.setItem(RESOURCES_KEY, JSON.stringify(resources));
+    } catch (err) {
+      console.warn('toggleTeacherResourcePublic storage error:', err);
+    }
   }
 }
 
@@ -135,6 +174,9 @@ export function autoSaveUploadedResource(
   else if (file.type === 'image') resType = 'image';
   else if (file.type === 'text') resType = 'text';
 
+  // If file is larger than 1.5MB, do not embed raw base64/dataUrl into localStorage to prevent quota exhaustion
+  const isLarge = (file.size || 0) > 1.5 * 1024 * 1024 || (file.base64 && file.base64.length > 2 * 1024 * 1024);
+
   const newRes: import('@/types').TeacherResource = {
     id: file.id || uid(),
     name: file.name,
@@ -145,10 +187,10 @@ export function autoSaveUploadedResource(
     updatedAt: Date.now(),
     subject: meta?.subject,
     grade: meta?.grade,
-    dataUrl: file.dataUrl,
-    base64: file.base64,
+    dataUrl: isLarge ? undefined : file.dataUrl,
+    base64: isLarge ? undefined : file.base64,
     mimeType: file.mimeType,
-    textContent: file.textContent,
+    textContent: file.textContent ? file.textContent.slice(0, 100000) : undefined,
     pageCount: meta?.pageCount,
     isPublic: false,
     source: 'upload',
@@ -160,3 +202,4 @@ export function autoSaveUploadedResource(
   saveTeacherResource(newRes);
   return newRes;
 }
+
