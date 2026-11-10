@@ -36,12 +36,66 @@ export function saveLesson(lesson: SavedLesson): void {
   } else {
     lessons.unshift(normalizedLesson);
   }
-  localStorage.setItem(LESSONS_KEY, JSON.stringify(lessons));
+
+  // 1. Try standard save
+  try {
+    localStorage.setItem(LESSONS_KEY, JSON.stringify(lessons));
+    return;
+  } catch (err) {
+    console.warn('Quota exceeded while saving lesson to eduhub_lessons. Initiating automatic storage optimization...', err);
+  }
+
+  // 2. Step A: Aggressive cleanup of bloated teacher resources if they are consuming the storage
+  try {
+    const rawRes = localStorage.getItem(RESOURCES_KEY);
+    if (rawRes) {
+      const parsedRes = JSON.parse(rawRes);
+      if (Array.isArray(parsedRes)) {
+        // Strip heavy base64 and dataUrls from all teacher resources
+        const trimmedRes = parsedRes.map((r: any) => ({
+          ...r,
+          dataUrl: undefined,
+          base64: undefined,
+          textContent: r.textContent ? r.textContent.slice(0, 10000) : undefined,
+        }));
+        localStorage.setItem(RESOURCES_KEY, JSON.stringify(trimmedRes));
+      }
+    }
+  } catch (cleanErr) {
+    console.warn('Unable to trim resources:', cleanErr);
+  }
+
+  // 3. Step B: Retry saving the lessons
+  try {
+    localStorage.setItem(LESSONS_KEY, JSON.stringify(lessons));
+    return;
+  } catch {
+    console.warn('Still exceeded after trimming resources. Trimming lessons list...');
+  }
+
+  // 4. Step C: Keep latest 25 lessons and retry
+  const trimmedLessons = lessons.slice(0, 25);
+  try {
+    localStorage.setItem(LESSONS_KEY, JSON.stringify(trimmedLessons));
+    return;
+  } catch {
+    // 5. Step D: Keep latest 10 lessons only
+    const compactLessons = lessons.slice(0, 10);
+    try {
+      localStorage.setItem(LESSONS_KEY, JSON.stringify(compactLessons));
+    } catch (finalErr) {
+      console.error('Critical: Failed to save lesson even after pruning storage:', finalErr);
+    }
+  }
 }
 
 export function deleteLesson(id: string): void {
   const lessons = getSavedLessons().filter((l) => l.id !== id);
-  localStorage.setItem(LESSONS_KEY, JSON.stringify(lessons));
+  try {
+    localStorage.setItem(LESSONS_KEY, JSON.stringify(lessons));
+  } catch (err) {
+    console.warn('Error deleting lesson from localStorage:', err);
+  }
 }
 
 export function getLessonSettings(): LessonSettings {
@@ -55,7 +109,11 @@ export function getLessonSettings(): LessonSettings {
 }
 
 export function saveLessonSettings(settings: LessonSettings): void {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch (err) {
+    console.warn('Error saving settings to localStorage:', err);
+  }
 }
 
 function defaultSettings(): LessonSettings {
