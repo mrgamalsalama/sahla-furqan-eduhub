@@ -394,7 +394,7 @@ let currentKeyIndex = 0;
  */
 export async function callGemini(
   contents: any,
-  options?: { fast?: boolean; model?: string; responseMimeType?: string }
+  options?: { fast?: boolean; model?: string; responseMimeType?: string; thinkingLevel?: 'LOW' | 'MEDIUM' }
 ) {
   const keys = getApiKeys();
   const groqKey = getGroqApiKey();
@@ -433,8 +433,8 @@ export async function callGemini(
   const attemptErrors: string[] = [];
 
   // Maximum time to spend across all Gemini attempts before activating Groq fallback (if available)
-  // Kept strictly under Vercel's 60s maxDuration so Groq rescue always has ~18-22s to finish cleanly.
-  const geminiDeadline = Date.now() + (groqKey ? 36000 : 52000);
+  // Kept safely under Vercel's 60s maxDuration so Groq rescue still has ~14-16s if Gemini fails.
+  const geminiDeadline = Date.now() + (groqKey ? 44000 : 54000);
 
   // Try each API key in case of quota exhaustion or rate limits (429 / RESOURCE_EXHAUSTED)
   for (let kIdx = 0; kIdx < orderedKeys.length; kIdx++) {
@@ -469,19 +469,19 @@ export async function callGemini(
 
         try {
           const config: Record<string, any> = {};
-          // Use LOW thinking level on Gemini 4 models to minimize latency and prevent timeouts
+          // Use LOW thinking level by default (or MEDIUM for high-precision assessments) on Gemini 4 models
           // (Never pass MINIMAL to Gemini 4 models — it is unsupported and returns 400 INVALID_ARGUMENT)
           if (model.startsWith('gemini-4-') && !skipThinkingConfig) {
             config.thinkingConfig = {
-              thinkingLevel: ThinkingLevel.LOW,
+              thinkingLevel: options?.thinkingLevel === 'MEDIUM' ? ThinkingLevel.MEDIUM : ThinkingLevel.LOW,
             };
           }
           if (options?.responseMimeType) {
             config.responseMimeType = options.responseMimeType;
           }
 
-          const desiredTimeoutMs = options?.fast ? 18000 : 32000;
-          const timeoutMs = groqKey ? Math.min(desiredTimeoutMs, Math.max(6000, remainingMs)) : Math.min(48000, Math.max(10000, remainingMs));
+          const desiredTimeoutMs = options?.fast ? 20000 : 40000;
+          const timeoutMs = groqKey ? Math.min(desiredTimeoutMs, Math.max(6000, remainingMs)) : Math.min(50000, Math.max(10000, remainingMs));
           let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
           const timeoutPromise = new Promise((_, reject) => {
             timeoutHandle = setTimeout(() => {
@@ -667,17 +667,142 @@ function isNonNativeSubject(subject?: string): boolean {
   );
 }
 
-function buildSubjectGuidance(settings: any): string {
+type GradeAgeBand = 'kg' | 'lower-primary' | 'upper-primary' | 'middle' | 'high' | 'general';
+
+function getGradeAgeBand(grade?: string): GradeAgeBand {
+  if (!grade) return 'general';
+  const g = grade.toLowerCase();
+  if (g.includes('روضة') || g.includes('تمهيدي') || g.includes('kindergarten') || /\bkg\b/.test(g)) {
+    return 'kg';
+  }
+  if (
+    g.includes('الأول') || g.includes('الاول') ||
+    g.includes('الثاني') && !g.includes('الثاني عشر') ||
+    g.includes('الثالث') ||
+    /\bgrade\s*[123]\b/.test(g)
+  ) {
+    // Disambiguate "الأول الإعدادي / الأول الثانوي" if typed manually
+    if (g.includes('ثانوي')) return 'high';
+    if (g.includes('إعدادي') || g.includes('اعدادي') || g.includes('متوسط')) return 'middle';
+    return 'lower-primary';
+  }
+  if (
+    g.includes('الرابع') || g.includes('الخامس') || g.includes('السادس') ||
+    /\bgrade\s*[456]\b/.test(g)
+  ) {
+    return 'upper-primary';
+  }
+  if (
+    g.includes('السابع') || g.includes('الثامن') || g.includes('التاسع') ||
+    g.includes('إعدادي') || g.includes('اعدادي') || g.includes('متوسط') ||
+    /\bgrade\s*[789]\b/.test(g)
+  ) {
+    return 'middle';
+  }
+  if (
+    g.includes('العاشر') || g.includes('الحادي عشر') || g.includes('الثاني عشر') ||
+    g.includes('ثانوي') || /\bgrade\s*(10|11|12)\b/.test(g)
+  ) {
+    return 'high';
+  }
+  return 'general';
+}
+
+function buildGradeCalibrationDirective(grade?: string, isAr: boolean = true): string {
+  const band = getGradeAgeBand(grade);
+  const gradeLabel = grade || (isAr ? 'المرحلة المحددة' : 'the target grade');
+
+  if (!isAr) {
+    const mapEn: Record<GradeAgeBand, string> = {
+      kg: `Age & Grade Calibration (${gradeLabel}, Ages 4-6): Use very short, concrete, familiar everyday sentences (3-5 words), visual/tactile concepts, foundational phonics/vocabulary, and zero abstract grammatical jargon.`,
+      'lower-primary': `Age & Grade Calibration (${gradeLabel}, Ages 6-9): Use clear, short sentences (5-8 words), familiar child-friendly contexts, basic foundational skills, and avoid complex multi-clause analysis or advanced terminology.`,
+      'upper-primary': `Age & Grade Calibration (${gradeLabel}, Ages 9-12): Use well-structured, engaging grade-level sentences (7-12 words), age-appropriate analytical concepts, and avoid high-school-level abstraction.`,
+      middle: `Age & Grade Calibration (${gradeLabel}, Ages 12-15): Use coherent multi-paragraph contexts, intermediate analytical and reasoning rigor, and curriculum-accurate terminology for middle school.`,
+      high: `Age & Grade Calibration (${gradeLabel}, Ages 15-18): Use rigorous academic/literary texts, critical synthesis, advanced domain terminology, and university-prep analytical depth.`,
+      general: `Age & Grade Calibration (${gradeLabel}): Strictly match vocabulary, sentence complexity, cognitive depth, and curriculum scope to ${gradeLabel}.`,
+    };
+    return `\n\n${mapEn[band]}`;
+  }
+
+  const mapAr: Record<GradeAgeBand, string> = {
+    kg: `مُعَايَرَةُ الْمَرْحَلَةِ الْعُمْرِيَّةِ (${gradeLabel} — أَعْمَارُ 4 إِلَى 6 سَنَوَاتٍ):
+- اسْتَخْدِمْ جُمَلاً قَصِيرَةً جِدّاً وَبَسِيطَةً وَمَأْلُوفَةً مِنْ بِيئَةِ الطِّفْلِ (2 إِلَى 4 كَلِمَاتٍ) بِمُفْرَدَاتٍ حِسِّيَّةٍ وَاضِحَةٍ.
+- رَكِّزْ عَلَى تَمْيِيزِ الْحُرُوفِ وَأَصْوَاتِهَا وَالْحَرَكَاتِ الْقَصِيرَةِ وَالْكَلِمَاتِ الْبَصَرِيَّةِ وَالْفَهْمِ الشَّفَوِيِّ الْمُبَاشِرِ.
+- يُمْنَعُ مَنْعاً بَاتّاً طَرْحُ أَيِّ مُصْطَلَحَاتٍ نَحْوِيَّةٍ أَوْ إِعْرَابِيَّةٍ مُجَرَّدَةٍ.`,
+
+    'lower-primary': `مُعَايَرَةُ الْمَرْحَلَةِ الْعُمْرِيَّةِ (${gradeLabel} — الصُّفُوفُ الْأَوَّلِيَّةُ، أَعْمَارُ 6 إِلَى 9 سَنَوَاتٍ):
+- جُمَلٌ قَصِيرَةٌ وَسَلِسَةٌ وَمُبَاشِرَةٌ (4 إِلَى 7 كَلِمَاتٍ) مِنْ عَالَمِ الطِّفْلِ وَالْمَدْرَسَةِ وَالْأُسْرَةِ وَالطَّبِيعَةِ، مَعَ تَشْكِيلٍ وَاضِحٍ سَلِيمٍ.
+- الْمَهَارَاتُ الْمُنَاسِبَةُ لِهَذَا الْعُمْرِ فَقَطْ: الْمُدُودُ وَالتَّنْوِينُ، اللَّامُ الشَّمْسِيَّةُ وَالْقَمَرِيَّةُ، التَّاءُ الْمَرْبُوطَةُ وَالْمَفْتُوحَةُ وَالْهَاءُ، الْمُذَكَّرُ وَالْمُؤَنَّثُ، الْمُفْرَدُ وَالْمُثَنَّى وَالْجَمْعُ الْبَسِيطُ، أَقْسَامُ الْكَلِمَةِ (اسْمٌ/فِعْلٌ/حَرْفٌ)، أَسْمَاءُ الْإِشَارَةِ وَالضَّمَائِرُ الْبَسِيطَةُ، أَدَوَاتُ الِاسْتِفْهَامِ، حُرُوفُ الْجَرِّ الْأَسَاسِيَّةُ، وَالْفَهْمُ الْقِرَائِيُّ الْمُبَاشِرُ.
+- يُمْنَعُ إِقْحَامُ أَبْوَابٍ نَحْوِيَّةٍ تَفُوقُ مُسْتَوَى الصُّفُوفِ الْأَوَّلِيَّةِ (مِثْلِ: الْحَالِ، التَّمْيِيزِ، الْمَفْعُولِ الْمُطْلَقِ، الْمَفْعُولِ لِأَجْلِهِ، الْبَدَلِ، الْمَمْنُوعِ مِنَ الصَّرْفِ، أَوِ الْبَلَاغَةِ الْمُتَقَدِّمَةِ).`,
+
+    'upper-primary': `مُعَايَرَةُ الْمَرْحَلَةِ الْعُمْرِيَّةِ (${gradeLabel} — الصُّفُوفُ الِابْتِدَائِيَّةُ الْعُلْيَا، أَعْمَارُ 9 إِلَى 12 سَنَةً):
+- جُمَلٌ وَاضِحَةٌ مُتَوَسِّطَةُ الطُّولِ (6 إِلَى 12 كَلِمَةً) وَنُصُوصٌ تَرْبَوِيَّةٌ شَيِّقَةٌ بِمُفْرَدَاتٍ فَصِيحَةٍ مَيْسُورَةٍ بَعِيدَةٍ عَنِ التَّكَلُّفِ وَالْغَرِيبِ.
+- الْمَهَارَاتُ الْمُنَاسِبَةُ لِهَذَا الْعُمْرِ: الْجُمْلَةُ الِاسْمِيَّةُ (الْمُبْتَدَأُ وَالْخَبَرُ)، الْجُمْلَةُ الْفِعْلِيَّةُ (الْفِعْلُ وَالْفَاعِلُ وَالْمَفْعُولُ بِهِ)، حُرُوفُ الْجَرِّ وَالِاسْمُ الْمَجْرُورُ، ظَرْفُ الزَّمَانِ وَظَرْفُ الْمَكَانِ (مَنْصُوبَيْنِ بِلَا حَرْفِ جَرٍّ)، كَانَ وَأَخَوَاتُهَا، إِنَّ وَأَخَوَاتُهَا، النَّعْتُ وَالْمُضَافُ إِلَيْهِ، عَلَامَاتُ الْإِعْرَابِ الْأَصْلِيَّةُ وَالْفَرْعِيَّةُ لِلْمُثَنَّى وَجَمْعَيِ الْمُذَكَّرِ وَالْمُؤَنَّثِ السَّالِمَيْنِ، الْهَمْزَةُ الْمُتَوَسِّطَةُ وَالْمُتَطَرِّفَةُ، وَالْفَهْمُ وَالِاسْتِنْتَاجُ.
+- يُمْنَعُ اسْتِخْدَامُ نُصُوصٍ تَعْجِيزِيَّةٍ أَوْ قَوَاعِدَ إِعْدَادِيَّةٍ/ثَانَوِيَّةٍ مُعَقَّدَةٍ (كَالتَّمْيِيزِ وَالِاسْتِثْنَاءِ وَالْبَدَلِ وَالْإِعْمَالِ).`,
+
+    middle: `مُعَايَرَةُ الْمَرْحَلَةِ الْعُمْرِيَّةِ (${gradeLabel} — الْمَرْحَلَةُ الْإِعْدَادِيَّةُ / الْمُتَوَسِّطَةُ، أَعْمَارُ 12 إِلَى 15 سَنَةً):
+- نُصُوصٌ مُتَرَابِطَةٌ مُتَوَسِّطَةُ الْعُمْقِ، وَتَرَاكِيبُ فَصِيحَةٌ مُتَنَوِّعَةٌ تَقِيسُ الْفَهْمَ وَالتَّطْبِيقَ وَالتَّحْلِيلَ.
+- الْقَوَاعِدُ الْمُنَاسِبَةُ: الْمُعْرَبُ وَالْمَبْنِيُّ، الْأَفْعَالُ الْخَمْسَةُ، النَّعْتُ وَالْحَالُ وَالتَّوْكِيدُ وَالْعَطْفُ، الْمَفْعُولُ الْمُطْلَقُ وَالْمَفْعُولُ لِأَجْلِهِ، اللَّازِمُ وَالْمُتَعَدِّي، الْمَبْنِيُّ لِلْمَعْلُومِ وَالْمَبْنِيُّ لِلْمَجْهُولِ وَنَائِبُ الْفَاعِلِ، الْمُجَرَّدُ وَالْمَزِيدُ، الْمُشْتَقَّاتُ الْأَسَاسِيَّةُ، وَأَسَالِيبُ الشَّرْطِ وَالنِّدَاءِ وَالتَّعَجُّبِ وَالتَّذَوُّقُ الْأَدَبِيُّ الْمُنَاسِبُ لِلْمَرْحَلَةِ.`,
+
+    high: `مُعَايَرَةُ الْمَرْحَلَةِ الْعُمْرِيَّةِ (${gradeLabel} — الْمَرْحَلَةُ الثَّانَوِيَّةُ، أَعْمَارُ 15 إِلَى 18 سَنَةً):
+- نُصُوصٌ أَدَبِيَّةٌ وَفِكْرِيَّةٌ رَصِينَةٌ وَشَوَاهِدُ أَصِيلَةٌ تَقِيسُ التَّحْلِيلَ النَّقْدِيَّ وَالِاسْتِنْبَاطَ الْعَمِيقَ.
+- الْقَوَاعِدُ وَالْبَلَاغَةُ الْمُنَاسِبَةُ: التَّوَابِعُ الْمُتَقَدِّمَةُ (الْبَدَلُ، التَّوْكِيدُ، الْعَطْفُ)، الْمَنْصُوبَاتُ الْمُتَقَدِّمَةُ (التَّمْيِيزُ، الِاسْتِثْنَاءُ، الْمُنَادَى، الْمَفْعُولُ مَعَهُ)، إِعْمَالُ الْمُشْتَقَّاتِ، الْمَصَادِرُ، الْمَمْنُوعُ مِنَ الصَّرْفِ، الْأَسَالِيبُ النَّحْوِيَّةُ، وَعُلُومُ الْبَلَاغَةِ (الْبَيَانُ وَالْبَدِيعُ وَالْمَعَانِي).`,
+
+    general: `مُعَايَرَةُ الْمَرْحَلَةِ الْعُمْرِيَّةِ (${gradeLabel}):
+- اضْبِطْ طُولَ الْجُمَلِ، وَمُسْتَوَى الْمُفْرَدَاتِ، وَعُمْقَ الْقَوَاعِدِ النَّحْوِيَّةِ، وَصُعُوبَةَ الْأَسْئِلَةِ لِتُطَابِقَ الْمَرْحَلَةَ الْعُمْرِيَّةَ وَالْمَنْهَجَ الْمُقَرَّرَ لِـ (${gradeLabel}) بِدِقَّةٍ تَامَّةٍ.`,
+  };
+
+  return `\n\n${mapAr[band]}`;
+}
+
+function buildArabicLinguistVerificationProtocol(isAssessment: boolean = true): string {
+  return `
+
+بْرُوتُوكُولُ خَبِيرِ اللُّغَةِ الْعَرَبِيَّةِ وَالتَّدْقِيقِ النَّحْوِيِّ الصَّارِمِ (إِلْزَامِيٌّ 100% — مَمْنُوعُ الْخَطَأِ النَّحْوِيِّ):
+تَقَمَّصْ دَوْرَ أُسْتَاذِ نَحْوٍ وَصَرْفٍ وَخَبِيرٍ مُعْتَمَدٍ فِي إِعْدَادِ وَتَحْكِيمِ اخْتِبَارَاتِ اللُّغَةِ الْعَرَبِيَّةِ. قَبْلَ كِتَابَةِ أَوِ اعْتِمَادِ أَيِّ جُمْلَةٍ أَوْ سُؤَالٍ أَوْ خِيَارٍ، الْتَزِمْ حَرْفِيّاً بِالضَّوَابِطِ التَّالِيَةِ:
+1. التَّفْرِيقُ الْحَاسِمُ بَيْنَ (ظَرْفِ الزَّمَانِ/الْمَكَانِ - الْمَفْعُولِ فِيهِ) وَبَيْنَ (الْجَارِّ وَالْمَجْرُورِ):
+   - خَطَأٌ فَادِحٌ مَمْنُوعٌ مَنْعاً بَاتّاً: لَا يُعَدُّ الِاسْمُ الْمَجْرُورُ بِحَرْفِ جَرٍّ (مِثْلِ: "فِي الصَّبَاحِ"، "فِي الْمَدْرَسَةِ"، "عَلَى الطَّاوِلَةِ"، "إِلَى الْحَدِيقَةِ"، "فِي الْمَسَاءِ"، "مِنَ الْبَيْتِ") ظَرْفَ زَمَانٍ أَوْ ظَرْفَ مَكَانٍ فِي الْإِعْرَابِ الْمَدْرَسِيِّ؛ بَلْ هُوَ "حَرْفُ جَرٍّ وَاسْمٌ مَجْرُورٌ" فَقَطْ!
+   - الصَّوَابُ الْإِلْزَامِيُّ: ظَرْفُ الزَّمَانِ أَوِ الْمَكَانِ الصَّحِيحُ هُوَ الِاسْمُ الْمَنْصُوبُ الدَّالُّ عَلَى الزَّمَانِ أَوِ الْمَكَانِ بِتَقْدِيرِ (فِي) دُونَ أَنْ يَسْبِقَهُ حَرْفُ جَرٍّ ظَاهِرٌ، وَيَكُونُ ظَرْفُ الْمَكَانِ **مُبْهَماً** لَا اسْمَ مَكَانٍ مُخْتَصّاً أَوْ مَفْعُولاً بِهِ:
+     * ظُرُوفُ زَمَانٍ صَحِيحَةٌ: (صَبَاحاً، مَسَاءً، لَيْلاً، نَهَاراً، يَوْماً، سَاعَةً، شِتَاءً، صَيْفاً، غَداً، قَبْلَ، بَعْدَ، حِينَ).
+     * ظُرُوفُ مَكَانٍ صَحِيحَةٌ: (أَمَامَ، خَلْفَ، فَوْقَ، تَحْتَ، بَيْنَ، عِنْدَ، يَمِينَ، يَسَارَ، وَسَطَ، حَوْلَ، دَاخِلَ، خَارِجَ، شَمَالَ، جَنُوبَ).
+   - خَطَأٌ فَادِحٌ آخَرُ مَمْنُوعٌ: لَا يُعَدُّ الْمَفْعُولُ بِهِ وَلَا اسْمُ الْمَكَانِ الْمُخْتَصُّ (مِثْلُ: «مَحَطَّةً، حَدِيقَةً، مَتْحَفاً، شَجَرَةً، مَدْرَسَةً، بَيْتاً» فِي نَحْوِ «زَارَ الزَّائِرُ مَتْحَفاً» أَوْ «غَادَرَ الْعُصْفُورُ شَجَرَةً») ظَرْفَ مَكَانٍ أَبَداً!
+   - إِذَا طَلَبَ السُّؤَالُ اسْتِخْرَاجَ أَوْ تَحْدِيدَ ظَرْفِ زَمَانٍ أَوْ مَكَانٍ، فَيَجِبُ أَنْ تَشْتَمِلَ الْجُمْلَةُ فِعْلاً عَلَى ظَرْفٍ حَقِيقِيٍّ مَنْصُوبٍ مِنَ الْقَائِمَةِ أَعْلَاهُ غَيْرِ مَسْبُوقٍ بِحَرْفِ جَرٍّ (مِثْلُ: "وَقَفَ الْعُصْفُورُ فَوْقَ الشَّجَرَةِ" أَوْ "ذَهَبَ الطَّالِبُ إِلَى الْمَدْرَسَةِ صَبَاحاً")، وَيُمْنَعُ جَعْلُ الْجَارِّ وَالْمَجْرُورِ أَوِ الْمَفْعُولِ بِهِ إِجَابَةً صَحِيحَةً لِلظَّرْفِ!
+2. التَّحَقُّقُ النَّحْوِيُّ الدَّقِيقُ مِنْ كُلِّ ظَاهِرَةٍ قَبْلَ طَرْحِ السُّؤَالِ:
+   - قَبْلَ اعْتِمَادِ أَيِّ سُؤَالٍ يَطْلُبُ اسْتِخْرَاجاً أَوْ إِعْرَاباً أَوْ تَمْيِيزاً (فَاعِلٌ، مَفْعُولٌ بِهِ، مُبْتَدَأٌ، خَبَرٌ، نَعْتٌ، مُضَافٌ إِلَيْهِ، حَالٌ، خَبَرُ كَانَ أَوْ إِنَّ، فِعْلٌ مَجْزُومٌ أَوْ مَنْصُوبٌ، مَفْعُولٌ مُطْلَقٌ، مَفْعُولٌ لِأَجْلِهِ...): أَعْرِبِ الْجُمْلَةَ فِي ذِهْنِكَ كَلِمَةً كَلِمَةً، وَتَأَكَّدْ مِنْ مُطَابَقَةِ الْفِعْلِ لِلْفَاعِلِ تَذْكِيراً وَتَأْنِيثاً (مِثْلُ: «سَافَرَتِ الْعَائِلَةُ» لَا «سَافَرَ الْعَائِلَةُ»)، وَمِنْ تَوَافُقِ زَمَنِ الْفِعْلِ مَعَ ظَرْفِ الزَّمَانِ (الْمَاضِي مَعَ «أَمْسِ»، وَالْمُضَارِعُ/الْمُسْتَقْبَلُ مَعَ «غَداً»؛ مَمْنُوعٌ: «تَمَشَّى الْجَدُّ غَداً»!)، وَسَلَامَةِ صِيغَةِ الِاسْتِفْهَامِ («أَيُّ الْجُمَلِ التَّالِيَةِ» لَا «أَيُّ جُمْلَةٍ التَّالِيَةِ»)، وَأَنَّ خِيَاراً وَاحِداً فَقَطْ يَصِحُّ نَحْوِيّاً كَإِجَابَةٍ صَحِيحَةٍ.
+   - لَا تَخْلِطْ بَيْنَ النَّعْتِ وَالْمُضَافِ إِلَيْهِ، وَلَا بَيْنَ النَّعْتِ وَالْحَالِ، وَلَا بَيْنَ الْفِعْلِ اللَّازِمِ وَالْمُتَعَدِّي، وَلَا بَيْنَ هَمْزَةِ الْوَصْلِ وَهَمْزَةِ الْقَطْعِ، وَلَا بَيْنَ التَّاءِ الْمَرْبُوطَةِ وَالْهَاءِ.
+3. سَلَامَةُ الضَّبْطِ الْإِعْرَابِيِّ وَجَزَالَةُ الْمَعْنَى:
+   - اضْبِطْ أَوَاخِرَ الْكَلِمَاتِ وَبِنْيَتَهَا الصَّرْفِيَّةَ فِي الْجُمَلِ وَالْخِيَارَاتِ ضَبْطاً صَحِيحاً 100% (الْمَرْفُوعُ بِالضَّمَّةِ، الْمَنْصُوبُ بِالْفَتْحَةِ، الْمَجْرُورُ بِالْكَسْرَةِ، وَالْعَلَامَاتُ الْفَرْعِيَّةُ فِي مَوْضِعِهَا الصَّحِيحِ).
+   - يَجِبُ أَنْ تَكُونَ جَمِيعُ الْجُمَلِ الْعَرَبِيَّةِ ذَاتَ مَعْنىً طَبِيعِيٍّ مَنْطِقِيٍّ وَمَأْلُوفٍ يَلِيقُ بِكِتَابٍ مَدْرَسِيٍّ مُعْتَمَدٍ، وَيُمْنَعُ مَنْعاً بَاتّاً تَوْلِيدُ جُمَلٍ رَكِيكَةٍ أَوْ غَيْرِ مَنْطِقِيَّةِ الْمَعْنَى.${
+     isAssessment
+       ? `
+4. مَعَايِيرُ صِيَاغَةِ الْأَسْئِلَةِ الِاحْتِرَافِيَّةِ وَتَوَازُنُ الْبَدَائِلِ (إِلْزَامِيٌّ 100%):
+   - اكْتِمَالُ صِيغَةِ السُّؤَالِ: يَجِبُ أَنْ يَحْتَوِيَ كُلُّ سُؤَالٍ عَلَى مَطْلُوبٍ صَرِيحٍ وَوَاضِحٍ يَنْتَهِي بِعَلَامَةِ اسْتِفْهَامٍ (؟) أَوْ أَمْرٍ تَعْلِيمِيٍّ وَاضِحٍ (مِثَالٌ صَحِيحٌ: «فِي جُمْلَةِ: "وَقَفَ الْعُصْفُورُ فَوْقَ الشَّجَرَةِ"، مَا ظَرْفُ الْمَكَانِ؟» أَوْ «أَكْمِلِ الْفَرَاغَ بِظَرْفِ زَمَانٍ مُنَاسِبٍ: تَظْهَرُ النُّجُومُ ..... .»)، وَيُمْنَعُ كِتَابَةُ جُمْلَةٍ خَبَرِيَّةٍ مُجَرَّدَةٍ بِدُونِ سُؤَالٍ!
+   - اتِّسَاقُ الْبَدَائِلِ (الْخِيَارَاتِ الْأَرْبَعَةِ): فِي أَسْئِلَةِ الِاسْتِخْرَاجِ مِنْ جُمْلَةٍ، يَجِبُ أَنْ تَكُونَ الْخِيَارَاتُ الْأَرْبَعَةُ (أ، ب، ج، د) كَلِمَاتٍ مَأْخُوذَةً مِنْ نَفْسِ الْجُمْلَةِ (أَحَدُهَا الْإِجَابَةُ الصَّحِيحَةُ، وَالثَّلَاثَةُ مُشَتَّتَاتٌ مِنْ كَلِمَاتِ الْجُمْلَةِ كَالْفِعْلِ وَالْفَاعِلِ وَالِاسْمِ الْمَجْرُورِ).
+   - تَنَوُّعُ أَنْمَاطِ الْأَسْئِلَةِ: نَوِّعْ بَيْنَ (الِاسْتِخْرَاجِ مِنْ جُمْلَةٍ، إِكْمَالِ الْفَرَاغِ، تَصْنِيفِ الظَّاهِرَةِ النَّحْوِيَّةِ، تَمْيِيزِ الْجُمْلَةِ الصَّحِيحَةِ نَحْوِيّاً، التَّمْيِيزِ بَيْنَ الظَّرْفِ وَالْجَارِّ وَالْمَجْرُورِ، وَالضَّبْطِ الْإِعْرَابِيِّ الصَّحِيحِ).
+   - تَوْزِيعُ الْإِجَابَاتِ الصَّحِيحَةِ: مَمْنُوعٌ مَنْعاً بَاتّاً جَعْلُ جَمِيعِ الْإِجَابَاتِ الصَّحِيحَةِ فِي الْخِيَارِ (أ)! وَزِّعِ الْإِجَابَاتِ الصَّحِيحَةَ بِتَوَازُنٍ مُتَنَوِّعٍ بَيْنَ (أ، ب، ج، د) عَلَى مَدَارِ الِاخْتِبَارِ.
+   - تَأَكَّدْ أَنَّ الإِجَابَةَ الصَّحِيحَةَ وَالتَّعْلِيلَ الإِعْرَابِيَّ فِي نَمُوذَجِ الإِجَابَةِ يُطَابِقَانِ الْجُمْلَةَ وَالْخِيَارَ الْمُخْتَارَ حَرْفِيّاً وَنَحْوِيّاً دُونَ أَيِّ تَنَاقُضٍ.`
+       : ''
+   }`;
+}
+
+function buildSubjectGuidance(settings: any, outputType: string = ''): string {
   const isAr = settings.contentLanguage === 'ar';
   const nonNative = isNonNativeSubject(settings.subject);
+  const isAssessment = ['quiz', 'qti-exam', 'standardized-test', 'worksheet'].includes(outputType);
+  const gradeCalibration = buildGradeCalibrationDirective(settings.grade, isAr);
+
   if (nonNative) {
-    return isAr
+    const base = isAr
       ? `\n\nتَوْجِيهَاتٌ خَاصَّةٌ: الْمَادَّةُ مُخَصَّصَةٌ لِغَيْرِ النَّاطِقِينَ بِاللُّغَةِ (AFL). يَجِبُ تَبْسِيطُ التَّرَاكِيبِ اللُّغَوِيَّةِ، وَاقْتِرَاحُ وَسَائِلَ بَصَرِيَّةٍ وَمُعْجَمٍ مُسَاعِدٍ لِلْمُصْطَلَحَاتِ، وَتَكْيِيفُ الْأَسْئِلَةِ لِتُنَاسِبَ مُتَعَلِّمِي اللُّغَةِ الثَّانِيَةِ مَعَ التَّشْكِيلِ التَّامِ.`
       : `\n\nSpecial guidance: This subject is designed for non-native speakers (AFL / Second Language Learners). Simplify language structures, include visual supports and bilingual glossaries, and calibrate difficulty accordingly.`;
+    return `${base}${gradeCalibration}${isAr ? buildArabicLinguistVerificationProtocol(isAssessment) : ''}`;
   }
-  return isAr
-    ? `\n\nتَوْجِيهَاتٌ خَاصَّةٌ: الْمَادَّةُ مُخَصَّصَةٌ لِلنَّاطِقِينَ بِاللُّغَةِ. رَكِّزْ عَلَى الْمَهَارَاتِ التَّحْلِيلِيَّةِ وَالْبَلَاغِيَّةِ وَالتَّعْبِيرِ الْعَمِيقِ الْمُنَاسِبِ لِلْمَرْحَلَةِ الْعُمْرِيَّةِ وَالْمَعَايِيرِ الْوَطَنِيَّةِ وَالدَّوْلِيَّةِ.`
-    : `\n\nSpecial guidance: Designed for native-level learners. Focus on higher-order analytical, literary, and evaluative competencies appropriate for the grade level.`;
+
+  const base = isAr
+    ? `\n\nتَوْجِيهَاتٌ خَاصَّةٌ: الْمَادَّةُ مُخَصَّصَةٌ لِلنَّاطِقِينَ بِاللُّغَةِ. رَكِّزْ عَلَى سَلَامَةِ اللُّغَةِ الْعَرَبِيَّةِ وَالدِّقَّةِ النَّحْوِيَّةِ وَالْعِلْمِيَّةِ، وَتَدَرُّجِ الْمَهَارَاتِ بِمَا يُنَاسِبُ الْمَرْحَلَةَ الْعُمْرِيَّةَ وَالصَّفَّ الْمُخْتَارَ وَالْمَعَايِيرَ التَّعْلِيمِيَّةَ الْمُعْتَمَدَةَ.`
+    : `\n\nSpecial guidance: Designed for native-level learners. Focus on domain accuracy, age-appropriate rigor, and higher-order analytical competencies aligned with the selected grade level.`;
+
+  return `${base}${gradeCalibration}${isAr ? buildArabicLinguistVerificationProtocol(isAssessment) : ''}`;
 }
 
 function getLmsXmlSchemaDirective(lmsTarget?: string, isAr: boolean = true): string {
@@ -770,8 +895,6 @@ function buildStandardizedPrompt(settings: any, isAr: boolean, ctx: string): str
     ? `\nMandatory Question Format: The teacher specified "Multiple Choice Only (All MCQ)". All questions (15 to 20 items) must strictly be 4-option multiple choice items mapped to standards without essay questions.`
     : `\nQuestion Format: Keep the authentic mixed format (MCQs + in-depth analytical questions + writing production task + benchmark matrix).`;
 
-  const lmsXmlDirective = getLmsXmlSchemaDirective(lmsTarget, isAr);
-
   if (isAr) {
     let frameworkDetails = '';
     if (fw === 'diagnostic_gap' || fw === 'diagnostic') {
@@ -843,7 +966,8 @@ function buildStandardizedPrompt(settings: any, isAr: boolean, ctx: string): str
       : '';
 
     return `${ctx}${sourceDirective}${formatDirectiveAr}
-المَطْلُوبُ: تَوْلِيدُ "اخْتِبَارٍ مِعْيَارِيٍّ / تَشْخِيصِيٍّ مُتَكَامِلٍ" بِاللُّغَةِ الْعَرَبِيَّةِ بِلُغَةٍ سَلِيمَةٍ وَمَضْبُوطَةٍ عَلَى شَكْلِ HTML احْتِرَافِيٍّ جَاهِزٍ لِلْعَرْضِ وَالطِّبَاعَةِ وَالتَّصْدِيرِ لِلِاعْتِمَادِ التَّرْبَوِيِّ (مِنْ 10 إِلَى 12 سُؤَالاً مُعَيَّراً).
+المَطْلُوبُ: تَوْلِيدُ "اخْتِبَارٍ مِعْيَارِيٍّ / تَشْخِيصِيٍّ مُتَكَامِلٍ" بِاللُّغَةِ الْعَرَبِيَّةِ بِلُغَةٍ سَلِيمَةٍ وَمَضْبُوطَةٍ عَلَى شَكْلِ HTML احْتِرَافِيٍّ جَاهِزٍ لِلْعَرْضِ وَالطِّبَاعَةِ وَالتَّصْدِيرِ لِلِاعْتِمَادِ التَّرْبَوِيِّ (مِنْ 10 إِلَى 12 سُؤَالاً مُعَيَّراً)، مُعَدٍّ بِمِيزَانِ خَبِيرِ اللُّغَةِ الْعَرَبِيَّةِ وَمُعَايَرٍ تَمَاماً لِلْمَرْحَلَةِ الْعُمْرِيَّةِ لِـ (${settings.grade || 'الصَّفِّ الْمُخْتَارِ'}).
+قَاعِدَةُ التَّدْقِيقِ النَّحْوِيِّ الْإِلْزَامِيَّةُ: افْحَصْ كُلَّ سُؤَالٍ وَشَاهِدٍ لُغَوِيٍّ نَحْوِيّاً قَبْلَ اعْتِمَادِهِ (لَا تَخْلِطْ أَبَداً بَيْنَ الْجَارِّ وَالْمَجْرُورِ وَبَيْنَ ظَرْفِ الزَّمَانِ أَوِ الْمَكَانِ، وَتَأَكَّدْ مِنْ صِحَّةِ الْإِعْرَابِ وَالضَّبْطِ وَمُلَاءَمَةِ الْمُسْتَوَى لِعُمْرِ الطَّالِبِ).
 تَفَاصِيلُ الْإِطَارِ الْمِعْيَارِيِّ الْمُسْتَهْدَفِ:
 ${frameworkDetails}
 ${subCriteriaText}
@@ -857,11 +981,8 @@ ${teacherCustomStandardsText}
    جَدْوَلٌ رَسْمِيٌّ تَفْصِيلِيٌّ لِلْإِشْرَافِ التَّرْبَوِيِّ يَشْمَلُ الْأَعْمِدَةَ:
    (رَقْمُ السُّؤَالِ | كُودُ وَاسْمُ الْمِعْيَارِ الْمُسْتَهْدَفِ | مُسْتَوَى التَّفْكِيرِ / عُمْقِ الْمَعْرِفَةِ | مُؤَشِّرُ الْأَدَاءِ الْمِعْيَارِيِّ وَدَرَجَةُ الْإِتْقَانِ | الْإِجْرَاءُ التَّدْرِيسِيُّ وَالْخُطَّةُ الْعِلَاجِيَّةُ الْمُقْتَرَحَةُ عِنْدَ الْخَطَأِ).
 5. الْخُطَّةُ الْعِلَاجِيَّةُ وَالتَّدَخُّلَاتُ التَّدْرِيسِيَّةُ الْمُبَاشِرَةُ (Remediation & Enrichment Plan).
-6. نَمُوذَجُ الْإِجَابَاتِ النَّمُوذَجِيَّةِ وَسُلَّمُ التَّقْدِيرِ اللَّفْظِيِّ (Answer Key & Scoring Rubrics).
-7. فِي نِهَايَةِ الْمُخْرَجِ تَمَاماً: كُودُ QTI XML الْكَامِلُ لِلْأَسْئِلَةِ دَاخِلَ:${lmsXmlDirective}
-<div id="qti-xml-payload" style="display:none;"><![CDATA[
-<!-- كود QTI XML الصالح هنا -->
-]]></div>
+6. نَمُوذَجُ الْإِجَابَاتِ النَّمُوذَجِيَّةِ وَسُلَّمُ التَّقْدِيرِ اللَّفْظِيِّ (Answer Key & Scoring Rubrics) بِصِيغَةٍ وَاضِحَةٍ وَدَقِيقَةٍ: "1 - (ب) [نَصُّ الْخِيَارِ]: [التَّعْلِيلُ]".
+تَنْبِيهٌ مُهِمٌّ لِلسُّرْعَةِ وَالدِّقَّةِ: لَا تَكْتُبْ كُودَ QTI XML يَدَوِيّاً فِي نِهَايَةِ الرَّدِّ (سَيَتِمُّ تَوْلِيدُ حُزْمَةِ QTI ZIP تِلْقَائِيّاً وَبِدِقَّةٍ 100% مِنْ جَدْوَلِ الْأَسْئِلَةِ وَنَمُوذَجِ الْإِجَابَةِ أَعْلَاهُ).
 اسْتَخْدِمْ وُسُومَ HTML الْقِيَاسِيَّةَ فَقَطْ: <h1>, <h2>, <h3>, <p>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <ul>, <li>, <strong>, <ol>, <blockquote>, <div>.
 لَا تَسْتَخْدِمْ وُسُومَ <html> أَوْ <body> أَوْ <style>.`;
   } else {
@@ -933,19 +1054,15 @@ Required HTML Structure:
 3. Item Bank (each item clearly tagged with target standard / competency).
 4. Standards Measurement or Learning Gap Matrix Table.
 5. Targeted Remediation Action Plan (Actionable classroom interventions).
-6. Official Answer Key & Analytical Rubric.
-7. Complete QTI XML payload at the very end inside:
-${lmsXmlDirective}
-<div id="qti-xml-payload" style="display:none;"><![CDATA[
-<!-- Valid QTI XML here -->
-]]></div>
+6. Official Answer Key & Analytical Rubric (formatted clearly as "1 - (B) [Option]: [Rationale]").
+Note: Do NOT output raw QTI XML — the QTI ZIP package is deterministically generated from the HTML items and answer key above.
 Use only standard HTML tags: <h1>, <h2>, <h3>, <p>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <ul>, <li>, <strong>, <ol>, <blockquote>, <div>.`;
   }
 }
 
 function buildBasePrompt(settings: any, outputType: string): string {
   const isAr = settings.contentLanguage === 'ar';
-  const subjectGuidance = buildSubjectGuidance(settings);
+  const subjectGuidance = buildSubjectGuidance(settings, outputType);
   const lmsTarget = settings.lmsTarget || 'sahlah_cypher';
 
   let customStandardsText = '';
@@ -963,10 +1080,10 @@ function buildBasePrompt(settings: any, outputType: string): string {
   }
 
   if (isAr) {
-    const ctx = `أَنْتَ مُعَلِّمٌ خَبِيرٌ وَمُسَاعِدٌ تَرْبَوِيٌّ مُتَقَدِّمٌ لِإِعْدَادِ الدُّرُوسِ وَالْمَنَاهِجِ التَّعْلِيمِيَّةِ التَّابِعَةِ لِأَكَادِيمِيَّةِ سَهْلَةَ الدَّوْلِيَّةِ وَمَدْرَسَةِ الْفُرْقَانِ الْعَالَمِيَّةِ، وَخَبِيرٌ مُتَمَرِّسٌ فِي التَّدْرِيسِ وَالتَّقْيِيمِ لِلُّغَةِ الْعَرَبِيَّةِ وَالْمَنَاهِجِ الدَّوْلِيَّةِ.
+    const ctx = `أَنْتَ خَبِيرٌ أَكَادِيمِيٌّ مُتَخَصِّصٌ فِي اللُّغَةِ الْعَرَبِيَّةِ وَالنَّحْوِ وَالصَّرْفِ وَبِنَاءِ الْمَنَاهِجِ وَالِاخْتِبَارَاتِ التَّرْبَوِيَّةِ لِأَكَادِيمِيَّةِ سَهْلَةَ الدَّوْلِيَّةِ وَمَدْرَسَةِ الْفُرْقَانِ الْعَالَمِيَّةِ، تَصُوغُ كُلَّ مُحْتَوَى وَسُؤَالٍ بِدِقَّةِ خَبِيرِ اللُّغَةِ وَالْقِيَاسِ وَالتَّقْوِيمِ، وَتُرَاعِي بِصَرَامَةٍ الْمَرْحَلَةَ الْعُمْرِيَّةَ وَالصَّفَّ الدِّرَاسِيَّ الْمُخْتَارَ.
 
-قَاعِدَةٌ لُغَوِيَّةٌ وَإِمْلَائِيَّةٌ:
-يَجِبُ ضَبْطُ الْعَنَاوِينِ الرَّئِيسَةِ وَالْمَفَاهِيمِ وَالْكَلِمَاتِ الْمِفْتَاحِيَّةِ وَالْأَسْئِلَةِ ضَبْطاً نَحْوِيّاً سَلِيماً وَمُتْقَناً بِالشَّكْلِ مَعَ سَلَاسَةِ الصِّيَاغَةِ وَالْإِيجَازِ التَّرْبَوِيِّ دُونَ إِثْقَالٍ مُعِيقٍ لِسُرْعَةِ الْقِرَاءَةِ.
+قَاعِدَةٌ لُغَوِيَّةٌ وَنَحْوِيَّةٌ وَإِمْلَائِيَّةٌ صَارِمَةٌ:
+يَجِبُ أَنْ تَخْلُوَ جَمِيعُ الْأَسْئِلَةِ وَالشَّوَاهِدِ وَالْخِيَارَاتِ مِنْ أَيِّ خَطَأٍ نَحْوِيٍّ أَوْ صَرْفِيٍّ أَوْ إِمْلَائِيٍّ أَوْ خَلْطٍ بَيْنَ الْأَبْوَابِ النَّحْوِيَّةِ (مِثْلِ الْخَلْطِ بَيْنَ الْجَارِّ وَالْمَجْرُورِ وَالظَّرْفِ)، مَعَ ضَبْطٍ نَحْوِيٍّ صَحِيحٍ بِالشَّكْلِ وَصِيَاغَةٍ سَلِسَةٍ مُنَاسِبَةٍ تَمَاماً لِعُمْرِ الطَّالِبِ.
 
 مَعْلُومَاتُ الدَّرْسِ:
 - الْمَادَّةُ: ${settings.subject || 'غَيْرُ مُحَدَّدٍ'}
@@ -1151,26 +1268,28 @@ ${isAutoPilot ? '- نِظَامُ الطَّيَّارِ الْآلِيِّ (AI 
       }
 
       case 'quiz': {
-        const lmsXmlDirective = getLmsXmlSchemaDirective(lmsTarget, true);
-        const subj = settings.subject || 'اللُّغَةُ الْعَرَبِيَّةُ';
-        const grd = settings.grade || 'الصَّفُّ السَّادِسُ';
-        const title = settings.lessonTitle || 'اخْتِبَارٌ قَصِيرٌ شَامِلٌ';
+        const subj = settings.subject || 'اللغة العربية';
+        const grd = settings.grade || 'الصف السادس';
 
         return `${ctx}
-الْمَطْلُوبُ حَصْرِيّاً: تَوْلِيدُ "اخْتِبَارٍ قَصِيرٍ شَامِلٍ (QTI)" مَشْكُولٍ كَامِلاً 100% بِاللُّغَةِ الْعَرَبِيَّةِ عَلَى شَكْلِ HTML مُنَسَّقٍ جَاهِزٍ.
-قَاعِدَةٌ ذَهَبِيَّةٌ إِلْزَامِيَّةٌ: مَمْنُوعٌ تَمَاماً أَيُّ كَلَامٍ حِوَارِيٍّ أَوْ مُقَدِّمَاتٍ شَخْصِيَّةٍ قَبْلَ الِاخْتِبَارِ (مَمْنُوعٌ: "بصفتي معلمك الخبير..." أَوْ "يسرني أن أقدم لك...")، وَمَمْنُوعٌ اسْتِخْدَامُ رُمُوزِ مَارْكْدَاوْن (\`\`\` أَوْ ### أَوْ **). ابْدَأْ فَوْراً بِوُسُومِ HTML التَّالِيَةِ:
+المطلوب حصرياً: توليد "اختبار قصير شامل (10 أسئلة اختيار من متعدد)" باللغة العربية الفصيحة مع ضبط أواخر الكلمات الإعرابية والشواهد النحوية بالشكل الصحيح بدقة 100%، بصيغة HTML منسق وجاهز، مُراجع نحوياً بدقة خبير اللغة العربية ومُعاير تماماً للمرحلة العمرية لـ (${grd}).
+قاعدة التدقيق قبل الإخراج:
+- راجع كل سؤال وجملة شاهد نحوياً قبل كتابتها: تأكد من وجود الظاهرة النحوية المطلوبة فعلاً في الجملة (لا تطلب ظرفاً في جملة ليس فيها إلا جار ومجرور أو مفعول به، ولا تخلط بين ظرف المكان المبهم مثل "أمام/خلف/فوق/تحت/بين/عند" وبين اسم المكان المختص مثل "حديقة/محطة/متحف/مدرسة").
+- تأكد من سلامة المعنى ومطابقة الفعل للفاعل تذكيراً وتأنيثاً، وملاءمة المفردات والقواعد لعمر طلاب (${grd}).
+- وزّع الإجابات الصحيحة بتوازن متنوع بين (أ، ب، ج، د) ولا تجعل الإجابة الصحيحة دائماً في (أ).
+قاعدة ذهبية إلزامية: ممنوع تماماً أي كلام حواري أو مقدمات شخصية، وممنوع استخدام رموز ماركداون (\`\`\` أو ### أو **). ابدأ فوراً بوسوم HTML التالية:
 
-1. عُنْوَانُ الِاخْتِبَارِ فِي الْبِدَايَةِ:
-<h1 style="color:#0369a1; text-align:center; font-size:22px; font-weight:800; margin-bottom:20px;">اخْتِبَارٌ قَصِيرٌ شَامِلٌ (${subj} - ${grd})</h1>
+1. عنوان الاختبار في البداية:
+<h1 style="color:#0369a1; text-align:center; font-size:22px; font-weight:800; margin-bottom:20px;">اختبار قصير شامل (${subj} - ${grd})</h1>
 
-2. الشَّكْلُ الْأَوَّلُ: جَدْوَلُ الْأَسْئِلَةِ (اخْتِيَارٌ مِنْ مُتَعَدِّدٍ)
-يَجِبُ عَرْضُ جَمِيعِ الْأَسْئِلَةِ الْعَشَرَةِ (10 أَسْئِلَة) فِي جَدْوَلِ HTML أَنِيقٍ وَمُنَظَّمٍ يَتَكَوَّنُ مِنْ 6 أَعْمِدَةٍ بِالضَّبْطِ (رَقْمُ السُّؤَالِ | السُّؤَالُ | أ | ب | ج | د):
-<h3 style="color:#0f172a; margin-bottom:12px; font-weight:bold;">أَوَّلاً: جَدْوَلُ الْأَسْئِلَةِ (اخْتِيَارٌ مِنْ مُتَعَدِّدٍ)</h3>
+2. الشكل الأول: جدول الأسئلة (10 أسئلة اختيار من متعدد)
+اعرض جميع الأسئلة العشرة (10 أسئلة) في جدول HTML أنيق من 6 أعمدة بالضبط (رقم السؤال | السؤال | أ | ب | ج | د):
+<h3 style="color:#0f172a; margin-bottom:12px; font-weight:bold;">أولاً: جدول الأسئلة (اختيار من متعدد)</h3>
 <table dir="rtl" border="1" style="width:100%; border-collapse:collapse; margin-bottom:28px; text-align:center; font-size:14px; border:1px solid #cbd5e1;">
   <thead>
     <tr style="background:#f8fafc; color:#0f172a; font-weight:bold;">
-      <th style="border:1px solid #cbd5e1; padding:10px; width:70px;">رَقْمُ السُّؤَالِ</th>
-      <th style="border:1px solid #cbd5e1; padding:10px; text-align:right;">السُّؤَالُ</th>
+      <th style="border:1px solid #cbd5e1; padding:10px; width:70px;">رقم السؤال</th>
+      <th style="border:1px solid #cbd5e1; padding:10px; text-align:right;">السؤال</th>
       <th style="border:1px solid #cbd5e1; padding:10px; width:120px;">أ</th>
       <th style="border:1px solid #cbd5e1; padding:10px; width:120px;">ب</th>
       <th style="border:1px solid #cbd5e1; padding:10px; width:120px;">ج</th>
@@ -1178,58 +1297,44 @@ ${isAutoPilot ? '- نِظَامُ الطَّيَّارِ الْآلِيِّ (AI 
     </tr>
   </thead>
   <tbody>
-    <!-- ضَعْ كُلَّ سُؤَالٍ فِي صَفٍّ مُنْفَصِلٍ مَعَ خِيَارَاتِهِ الْأَرْبَعَةِ أ، ب، ج، د مُوَزَّعَةً فِي خَلَايَاهَا: -->
-    <tr>
-      <td style="border:1px solid #cbd5e1; padding:8px; font-weight:bold;">1</td>
-      <td style="border:1px solid #cbd5e1; padding:8px; text-align:right;">نَصُّ السُّؤَالِ الْأَوَّلِ مَشْكُولاً كَامِلاً؟</td>
-      <td style="border:1px solid #cbd5e1; padding:8px;">الْخِيَارُ أ</td>
-      <td style="border:1px solid #cbd5e1; padding:8px;">الْخِيَارُ ب</td>
-      <td style="border:1px solid #cbd5e1; padding:8px;">الْخِيَارُ ج</td>
-      <td style="border:1px solid #cbd5e1; padding:8px;">الْخِيَارُ د</td>
-    </tr>
-    <!-- كَرِّرْ هَذَا الصَّفَّ لِجَمِيعِ الْأَسْئِلَةِ حَتَّى السُّؤَالِ 10 كَامِلَةً -->
+    <!-- ضع كل سؤال كامل الصيغة في صف منفصل مع خياراته الأربعة أ، ب، ج، د (من 1 إلى 10) -->
   </tbody>
 </table>
 
-3. الشَّكْلُ الثَّانِي: نَمُوذَجُ الْإِجَابَةِ وَالتَّعْلِيلِ
-يَجِبُ عَرْضُ قَائِمَةٍ نُقَطِيَّةٍ أَنِيقَةٍ بِجَمِيعِ الْإِجَابَاتِ مَعَ التَّعْلِيلِ التَّرْبَوِيِّ وَاللُّغَوِيِّ الدَّقِيقِ:
+3. الشكل الثاني: نموذج الإجابة والتعليل
+اعرض قائمة نقطية بجميع الإجابات (1 إلى 10) مع التعليل النحوي والتربوي الدقيق:
 <div style="margin-top:24px;">
-  <h3 style="color:#0284c7; margin-bottom:12px; font-weight:bold;">ثَانِياً: نَمُوذَجُ الْإِجَابَةِ وَالتَّعْلِيلِ</h3>
+  <h3 style="color:#0284c7; margin-bottom:12px; font-weight:bold;">ثانياً: نموذج الإجابة والتعليل</h3>
   <ul style="list-style-type:disc; padding-right:24px; line-height:2.2; font-size:14px; color:#1e293b;">
-    <li><strong>1 - (أ) [نَصُّ الْخِيَارِ]:</strong> [التَّعْلِيلُ التَّرْبَوِيُّ وَاللُّغَوِيُّ الدَّقِيقُ لِسَبَبِ صِحَّةِ الْخِيَارِ].</li>
-    <!-- كَرِّرْ لِجَمِيعِ الْأَسْئِلَةِ حَتَّى السُّؤَالِ 10 -->
+    <li><strong>1 - (ب) [نص الخيار الصحيح]:</strong> [التعليل النحوي والتربوي الدقيق].</li>
+    <!-- كرر لجميع الأسئلة حتى السؤال 10 -->
   </ul>
 </div>
-
-4. كُودُ QTI XML الصَّالِحُ لِجَمِيعِ الْأَسْئِلَةِ دَاخِلَ الْوَسْمِ الْمَخْفِيِّ فِي النِّهَايَةِ:
-${lmsXmlDirective}
-<div id="qti-xml-payload" style="display:none;">
-<!-- كُودُ QTI XML لِلْأَسْئِلَةِ مِنْ Q_01 إِلَى Q_10 كَامِلاً مَعَ نُصُوصِ الْأَسْئِلَةِ وَالْخِيَارَاتِ -->
-</div>`;
+تنبيه: لا تكتب كود QTI XML يدوياً في نهاية الرد (المنصة تولّد حزمة QTI ZIP تلقائياً من الجدول ونموذج الإجابة).`;
       }
 
       case 'qti-exam': {
-        const lmsXmlDirective = getLmsXmlSchemaDirective(lmsTarget, true);
-        const subj = settings.subject || 'اللُّغَةُ الْعَرَبِيَّةُ';
-        const grd = settings.grade || 'الصَّفُّ السَّادِسُ';
+        const subj = settings.subject || 'اللغة العربية';
+        const grd = settings.grade || 'الصف السادس';
 
         return `${ctx}
-الْمَطْلُوبُ حَصْرِيّاً: تَوْلِيدُ "امْتِحَانِ اخْتِيَارٍ مِنْ مُتَعَدِّدٍ شَامِلٍ لِمُسْتَوَيَاتِ بِلُوم (20 سُؤَالَ QTI مُعَيَّراً)" بِاللُّغَةِ الْعَرَبِيَّةِ وَمَشْكُولٍ بِالْكَامِلِ (100%) عَلَى شَكْلِ HTML، بِدُونِ أَيِّ مُقَدِّمَاتٍ حِوَارِيَّةٍ أَوْ رُمُوزِ مَارْكْدَاوْن.
+المطلوب حصرياً: توليد "امتحان اختيار من متعدد شامل لمستويات بلوم (20 سؤالاً معيارياً)" باللغة العربية الفصيحة مع ضبط أواخر الكلمات الإعرابية والشواهد النحوية بالشكل الصحيح بدقة 100% على شكل HTML، بدون أي مقدمات حوارية أو رموز ماركداون، مُعد بدقة خبير اللغة العربية ومُعاير تماماً للمرحلة العمرية لـ (${grd}).
+قاعدة التدقيق النحوي الإلزامية: افحص كل سؤال وجملة شاهد نحوياً قبل كتابتها (تمييز تام بين الظرف المنصوب وبين الجار والمجرور والمفعول به، صحة الإعراب والضبط ومطابقة الفعل للفاعل، ملاءمة المفردات والقواعد لـ ${grd}، وتوزيع الإجابات الصحيحة بتوازن بين أ، ب، ج، د).
 
-1. عُنْوَانُ الِامْتِحَانِ:
-<h1 style="color:#0369a1; text-align:center; font-size:22px; font-weight:800; margin-bottom:20px;">امْتِحَانُ بِلُومَ الشَّامِلُ (${subj} - ${grd})</h1>
+1. عنوان الامتحان:
+<h1 style="color:#0369a1; text-align:center; font-size:22px; font-weight:800; margin-bottom:20px;">امتحان بلوم الشامل (${subj} - ${grd})</h1>
 
-2. الشَّكْلُ الْأَوَّلُ: جَدْوَلُ الْأَسْئِلَةِ (20 سُؤَالَ اخْتِيَارٍ مِنْ مُتَعَدِّدٍ)
-جَدْوَلُ HTML أَنِيقٌ بـ 6 أَعْمِدَةٍ (رَقْمُ السُّؤَالِ | السُّؤَالُ | أ | ب | ج | د) لِجَمِيعِ الْـ 20 سُؤَالاً مُوَزَّعَةً حَسَبَ هَرَمِ بِلُومَ:
-- 6 أَسْئِلَة: التَّذَكُّرُ وَالْفَهْمُ (1 - 6).
-- 8 أَسْئِلَة: التَّطْبِيقُ وَالتَّحْلِيلُ (7 - 14).
-- 6 أَسْئِلَة: التَّقْوِيمُ وَالِابْتِكَارُ (15 - 20).
-<h3 style="color:#0f172a; margin-bottom:12px; font-weight:bold;">أَوَّلاً: جَدْوَلُ الْأَسْئِلَةِ (اخْتِيَارٌ مِنْ مُتَعَدِّدٍ)</h3>
+2. الشكل الأول: جدول الأسئلة (20 سؤال اختيار من متعدد)
+جدول HTML أنيق بـ 6 أعمدة (رقم السؤال | السؤال | أ | ب | ج | د) لجميع الـ 20 سؤالاً موزعة حسب هرم بلوم:
+- 6 أسئلة: التذكر والفهم (1 - 6).
+- 8 أسئلة: التطبيق والتحليل (7 - 14).
+- 6 أسئلة: التقويم والابتكار (15 - 20).
+<h3 style="color:#0f172a; margin-bottom:12px; font-weight:bold;">أولاً: جدول الأسئلة (اختيار من متعدد)</h3>
 <table dir="rtl" border="1" style="width:100%; border-collapse:collapse; margin-bottom:28px; text-align:center; font-size:14px; border:1px solid #cbd5e1;">
   <thead>
     <tr style="background:#f8fafc; color:#0f172a; font-weight:bold;">
-      <th style="border:1px solid #cbd5e1; padding:8px; width:65px;">رَقْمُ السُّؤَالِ</th>
-      <th style="border:1px solid #cbd5e1; padding:8px; text-align:right;">السُّؤَالُ</th>
+      <th style="border:1px solid #cbd5e1; padding:8px; width:65px;">رقم السؤال</th>
+      <th style="border:1px solid #cbd5e1; padding:8px; text-align:right;">السؤال</th>
       <th style="border:1px solid #cbd5e1; padding:8px; width:110px;">أ</th>
       <th style="border:1px solid #cbd5e1; padding:8px; width:110px;">ب</th>
       <th style="border:1px solid #cbd5e1; padding:8px; width:110px;">ج</th>
@@ -1237,25 +1342,20 @@ ${lmsXmlDirective}
     </tr>
   </thead>
   <tbody>
-    <!-- صُفُوفُ جَمِيعِ الْأَسْئِلَةِ مِنْ 1 حَتَّى 20 -->
+    <!-- صفوف جميع الأسئلة من 1 حتى 20 -->
   </tbody>
 </table>
 
-3. الشَّكْلُ الثَّانِي: نَمُوذَجُ الْإِجَابَةِ وَالتَّعْلِيلِ
+3. الشكل الثاني: نموذج الإجابة والتعليل
 <div style="margin-top:24px;">
-  <h3 style="color:#0284c7; margin-bottom:12px; font-weight:bold;">ثَانِياً: نَمُوذَجُ الْإِجَابَةِ وَالتَّعْلِيلِ</h3>
+  <h3 style="color:#0284c7; margin-bottom:12px; font-weight:bold;">ثانياً: نموذج الإجابة والتعليل</h3>
   <ul style="list-style-type:disc; padding-right:24px; line-height:2.2; font-size:14px; color:#1e293b;">
-    <!-- جَمِيعُ الْإِجَابَاتِ مِنْ 1 حَتَّى 20 مَعَ التَّعْلِيلِ -->
+    <!-- جميع الإجابات من 1 حتى 20 بصيغة: 1 - (ب) [الخيار]: [التعليل النحوي] -->
   </ul>
 </div>
 
-4. مَصْفُوفَةُ نَوَاتِجِ التَّعَلُّمِ وَجَدْوَلُ الْمُوَاصَفَاتِ فِي جَدْوَلٍ مُنَسَّقٍ.
-
-5. كُودُ QTI XML لِلْـ 20 سُؤَالاً دَاخِلَ:
-${lmsXmlDirective}
-<div id="qti-xml-payload" style="display:none;">
-<!-- كُودُ QTI XML الصَّالِحُ لِجَمِيعِ الْأَسْئِلَةِ مِنْ Q_01 إِلَى Q_20 مَعَ نُصُوصِ الْأَسْئِلَةِ الْكَامِلَةِ -->
-</div>`;
+4. مصفوفة نواتج التعلم وجدول المواصفات في جدول منسق.
+تنبيه: لا تكتب كود QTI XML يدوياً في نهاية الرد (المنصة تولّد حزمة QTI ZIP تلقائياً من الجدول ونموذج الإجابة).`;
       }
 
       case 'performance-task': {
@@ -1418,10 +1518,9 @@ Enclose each slide inside <div class="slide" data-slide-index="N"> with title, c
       }
 
       case 'quiz': {
-        const lmsXmlDirective = getLmsXmlSchemaDirective(lmsTarget, false);
         return `${ctx}
 Task: Generate a "Short Assessment Quiz (10 MCQs)" in English formatted as clean, professional HTML.
-Do NOT output conversational preamble or markdown syntax. Start directly with:
+Distribute correct answers evenly across A, B, C, and D. Do NOT output conversational preamble or markdown syntax. Start directly with:
 
 1. Title:
 <h1 style="color:#0369a1; text-align:center; font-size:22px; font-weight:800; margin-bottom:20px;">Short Assessment Quiz (${settings.subject || 'Subject'} - ${settings.grade || 'Grade'})</h1>
@@ -1449,30 +1548,21 @@ Provide all 10 questions in a clean HTML table with 6 columns (Q#, Question, A, 
 <div style="margin-top:24px;">
   <h3 style="color:#0284c7; margin-bottom:12px; font-weight:bold;">2. Answer Key & Rationale</h3>
   <ul style="list-style-type:disc; padding-left:24px; line-height:2.2; font-size:14px; color:#1e293b;">
-    <!-- 1 - (A) [Option text]: [Rationale] -->
+    <!-- 1 - (B) [Option text]: [Rationale] -->
   </ul>
 </div>
-
-4. QTI XML Payload at the end:
-${lmsXmlDirective}
-<div id="qti-xml-payload" style="display:none;">
-<!-- Full QTI XML for questions Q_01 through Q_10 -->
-</div>`;
+Note: Do NOT output raw QTI XML — the QTI ZIP package is deterministically generated from the HTML table and answer key above.`;
       }
 
       case 'qti-exam': {
-        const lmsXmlDirective = getLmsXmlSchemaDirective(lmsTarget, false);
         return `${ctx}
-Task: Generate a comprehensive "50-Question Bloom Exam (QTI)" in English formatted as clean HTML.
+Task: Generate a comprehensive "20-Question Bloom Exam" in English formatted as clean HTML.
+Distribute correct answers evenly across A, B, C, and D.
 1. Title: <h1 style="color:#0369a1; text-align:center; font-size:22px; font-weight:800; margin-bottom:20px;">Comprehensive Bloom Assessment (${settings.subject || 'Subject'} - ${settings.grade || 'Grade'})</h1>
-2. Questions Table with 6 columns (Q#, Question, A, B, C, D) for all 50 questions.
-3. Answer Key & Rationale list for questions 1 through 50.
+2. Questions Table with 6 columns (Q#, Question, A, B, C, D) for all 20 questions.
+3. Answer Key & Rationale list for questions 1 through 20 formatted as "1 - (B) [Option]: [Rationale]".
 4. Bloom Specification Matrix table.
-5. QTI XML Payload at the end:
-${lmsXmlDirective}
-<div id="qti-xml-payload" style="display:none;">
-<!-- Full QTI XML for all 50 questions -->
-</div>`;
+Note: Do NOT output raw QTI XML — the QTI ZIP package is deterministically generated from the HTML table and answer key above.`;
       }
 
       case 'performance-task': {

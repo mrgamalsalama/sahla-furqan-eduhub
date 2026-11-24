@@ -28,7 +28,55 @@ function extractYouTubeId(url: string): string | null {
 
 const STORAGE_PROJECTS_KEY = 'eduhub_interactive_video_projects';
 
-export default function InteractiveVideoStudio({ uiLang }: InteractiveVideoStudioProps) {
+// Toggle to false once QA verification of Interactive Video Studio is complete
+const INTERACTIVE_VIDEO_COMING_SOON = true;
+
+export default function InteractiveVideoStudio({ uiLang, onNavigate }: InteractiveVideoStudioProps) {
+  if (INTERACTIVE_VIDEO_COMING_SOON) {
+    const isAr = uiLang === 'ar';
+    return (
+      <div
+        className="max-w-3xl mx-auto px-4 sm:px-6 py-16 sm:py-24 w-full animate-fade-in"
+        dir={isAr ? 'rtl' : 'ltr'}
+      >
+        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-lg shadow-slate-200/40 p-8 sm:p-12 text-center">
+          <div className="mx-auto w-20 h-20 rounded-2xl bg-gradient-to-br from-rose-500 via-pink-600 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-500/20 mb-6">
+            <Video className="w-10 h-10 text-white" />
+          </div>
+
+          <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 mb-4">
+            <Clock className="w-3.5 h-3.5 text-amber-600" />
+            {isAr ? 'استوديو الفيديو التفاعلي الذكي' : 'Interactive Video & Quiz Studio'}
+          </span>
+
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight mb-4">
+            {isAr ? 'انتظروا قريباً' : 'Coming Soon'}
+          </h1>
+
+          <p className="text-slate-600 text-base sm:text-lg leading-relaxed max-w-xl mx-auto mb-8 font-medium">
+            {isAr
+              ? 'نعمل حالياً على الفحص النهائي وتطوير استوديو الفيديو التفاعلي لضمان عمله بأعلى دقة وكفاءة دون أي أخطاء. سيتاح قريباً لجميع المعلمين والطلاب.'
+              : 'We are currently completing final testing and quality assurance for the Interactive Video Studio to ensure a seamless, error-free experience. It will be available soon.'}
+          </p>
+
+          {onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate('home')}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm transition-colors cursor-pointer shadow-sm"
+            >
+              <span>{isAr ? 'العودة إلى لوحة التحكم' : 'Back to Dashboard'}</span>
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return <InteractiveVideoStudioWorkspace uiLang={uiLang} onNavigate={onNavigate} />;
+}
+
+function InteractiveVideoStudioWorkspace({ uiLang }: InteractiveVideoStudioProps) {
   const isAr = uiLang === 'ar';
 
   // ── Project State ──

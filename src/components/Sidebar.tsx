@@ -105,7 +105,7 @@ export default function Sidebar({
           labelAr: 'الفيديو التفاعلي الذكي',
           labelEn: 'Interactive Video Quiz',
           icon: Video,
-          badge: { ar: 'Edpuzzle', en: 'Edpuzzle', color: 'bg-rose-500/20 text-rose-700 border-rose-300' },
+          badge: { ar: 'قريباً', en: 'Soon', color: 'bg-amber-500/20 text-amber-700 border-amber-300' },
         },
         {
           view: 'qti-converter',

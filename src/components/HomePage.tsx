@@ -71,7 +71,7 @@ export default function HomePage({ onOpenResult, uiLang, onNavigate }: HomePageP
         : 'Transform YouTube videos into interactive lessons with AI timestamped questions, auto-pause student player, and Kahoot/Word export.',
       icon: Video,
       color: 'from-rose-600 via-pink-600 to-amber-600',
-      badge: isAr ? 'حصري Edpuzzle 🎬' : 'Edpuzzle 🎬',
+      badge: isAr ? 'انتظروا قريباً ⏳' : 'Coming Soon ⏳',
     },
     {
       id: 'worksheet',
