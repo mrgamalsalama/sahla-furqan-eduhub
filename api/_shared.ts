@@ -225,6 +225,12 @@ function convertContentsToGroqMessages(contents: any): Array<{ role: 'system' | 
         textPieces.push(item);
       } else if (item?.text) {
         textPieces.push(item.text);
+      } else if (Array.isArray(item?.parts)) {
+        const partText = item.parts
+          .map((p: any) => (typeof p === 'string' ? p : p?.text || ''))
+          .filter(Boolean)
+          .join('\n\n');
+        if (partText) textPieces.push(partText);
       } else if (typeof item === 'object') {
         textPieces.push(JSON.stringify(item));
       }
@@ -249,13 +255,58 @@ function convertContentsToGroqMessages(contents: any): Array<{ role: 'system' | 
   return [{ role: 'user', content: String(contents || '') }];
 }
 
+let cachedGroqTextModels: { models: string[]; fetchedAt: number } | null = null;
+
+async function discoverGroqTextModels(groq: Groq): Promise<string[]> {
+  if (cachedGroqTextModels && Date.now() - cachedGroqTextModels.fetchedAt < 10 * 60 * 1000) {
+    return cachedGroqTextModels.models;
+  }
+
+  try {
+    const listRes = await groq.models.list();
+    const excludedPattern = /whisper|tts|guard|orpheus|playai|distil-whisper|prompt-guard|safeguard|embed|rerank|vision/i;
+    const allIds = (listRes.data || [])
+      .filter((m: any) => m?.id && m?.active !== false && !excludedPattern.test(m.id))
+      .map((m: any) => String(m.id));
+
+    const priorityPatterns = [
+      /llama-3\.3-70b/i,
+      /llama-4-maverick/i,
+      /llama-4-scout/i,
+      /gpt-oss-120b/i,
+      /qwen/i,
+      /kimi/i,
+      /deepseek/i,
+      /gpt-oss-20b/i,
+      /llama-3\.1-8b/i,
+      /llama/i,
+    ];
+
+    const scoreModel = (id: string) => {
+      const idx = priorityPatterns.findIndex((re) => re.test(id));
+      return idx === -1 ? 999 : idx;
+    };
+
+    const ranked = Array.from(new Set(allIds)).sort((a, b) => scoreModel(a) - scoreModel(b));
+    if (ranked.length > 0) {
+      cachedGroqTextModels = { models: ranked, fetchedAt: Date.now() };
+      console.log(`[Dual-Engine / Groq] Discovered active models:`, ranked.slice(0, 5).join(', '));
+      return ranked;
+    }
+  } catch (err: any) {
+    console.warn('[Dual-Engine / Groq] Model discovery failed:', err?.message || err);
+  }
+
+  return ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+}
+
 /**
- * Groq Text Engine (llama-3.3-70b-versatile):
- * Ultra-fast silent fallback engine and secondary processing core.
+ * Groq Text Engine:
+ * Ultra-fast silent fallback engine and secondary processing core with dynamic model discovery.
  */
 export async function callGroqText(
   contents: any,
-  options?: { fast?: boolean; model?: string }
+  options?: { fast?: boolean; model?: string; responseMimeType?: string }
 ): Promise<{ text: string; engine: 'groq'; model: string }> {
   const groqKey = getGroqApiKey();
   if (!groqKey) {
@@ -269,33 +320,69 @@ export async function callGroqText(
     (m) => Array.isArray(m.content) && m.content.some((part: any) => part.type === 'image_url')
   );
 
-  const modelToUse = hasImage
-    ? 'llama-3.2-90b-vision-preview'
-    : (options?.model || 'llama-3.3-70b-versatile');
+  const explicitGroqModel =
+    options?.model && !options.model.startsWith('gemini-') ? options.model : undefined;
 
-  console.log(`[Dual-Engine / Groq] Calling model: ${modelToUse} (fast=${Boolean(options?.fast)})...`);
+  const discovered = hasImage ? [] : await discoverGroqTextModels(groq);
 
-  const completion = await groq.chat.completions.create({
-    model: modelToUse,
-    messages: messages as any,
-    temperature: options?.fast ? 0.2 : 0.4,
-    max_tokens: 8192,
-    top_p: 0.95,
-  });
+  const candidateModels = hasImage
+    ? ['meta-llama/llama-4-scout-17b-16e-instruct', 'llama-3.2-90b-vision-preview', 'llama-3.2-11b-vision-preview']
+    : Array.from(new Set([explicitGroqModel, ...discovered].filter(Boolean) as string[])).slice(0, 4);
 
-  const text = completion.choices[0]?.message?.content || '';
-  return {
-    text,
-    engine: 'groq',
-    model: modelToUse,
-  };
+  let lastGroqError: any = null;
+  for (const modelToUse of candidateModels) {
+    try {
+      console.log(`[Dual-Engine / Groq] Calling model: ${modelToUse} (fast=${Boolean(options?.fast)})...`);
+      const useJsonMode = options?.responseMimeType === 'application/json';
+      const completion = await groq.chat.completions.create({
+        model: modelToUse,
+        messages: messages as any,
+        temperature: options?.fast ? 0.2 : 0.4,
+        max_tokens: 4096,
+        top_p: 0.95,
+        ...(useJsonMode ? { response_format: { type: 'json_object' as const } } : {}),
+      });
+
+      const text = completion.choices[0]?.message?.content || '';
+      if (!text.trim()) {
+        throw new Error(`Groq model ${modelToUse} returned empty content`);
+      }
+      return {
+        text,
+        engine: 'groq',
+        model: modelToUse,
+      };
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      // If json_object mode is unsupported by this specific Groq model, retry once without response_format
+      if (options?.responseMimeType === 'application/json' && /response_format|json_object|json/i.test(msg)) {
+        try {
+          const retryCompletion = await groq.chat.completions.create({
+            model: modelToUse,
+            messages: messages as any,
+            temperature: 0.2,
+            max_tokens: 4096,
+          });
+          const retryText = retryCompletion.choices[0]?.message?.content || '';
+          if (retryText.trim()) {
+            return { text: retryText, engine: 'groq', model: modelToUse };
+          }
+        } catch (retryErr: any) {
+          lastGroqError = retryErr;
+        }
+      }
+      console.warn(`[Dual-Engine / Groq] Model ${modelToUse} failed:`, msg.slice(0, 180));
+      lastGroqError = err;
+    }
+  }
+
+  throw lastGroqError || new Error('All Groq candidate models failed.');
 }
 
-// Order prioritized by stability, speed, and active quota limits
+// Order prioritized by stability, response latency, and active quota limits
 const CANDIDATE_MODELS = [
-  'gemini-3.8-flash',
+  'gemini-4-hydrogen',
   'gemini-3.1-flash-lite',
-  'gemini-flash-latest',
 ];
 
 let currentKeyIndex = 0;
@@ -303,16 +390,19 @@ let currentKeyIndex = 0;
 /**
  * Unified AI Caller with Dual-Engine Architecture:
  * - Primary: Google Gemini with multi-key rotation and intelligent model fallback
- * - Silent Fallback: Groq llama-3.3-70b-versatile on 429 Rate Limits, 503 Overloads, 504 Timeouts, or model exhaustion
+ * - Silent Fallback: Groq on 429 Rate Limits, 503 Overloads, 504 Timeouts, or model exhaustion
  */
-export async function callGemini(contents: any, options?: { fast?: boolean; model?: string }) {
+export async function callGemini(
+  contents: any,
+  options?: { fast?: boolean; model?: string; responseMimeType?: string }
+) {
   const keys = getApiKeys();
   const groqKey = getGroqApiKey();
 
   // If no Gemini keys are configured, but Groq key is available, seamless direct dispatch to Groq
   if (keys.length === 0) {
     if (groqKey) {
-      console.log('[Dual-Engine] No Gemini API key detected. Seamlessly delegating request to Groq llama-3.3-70b-versatile...');
+      console.log('[Dual-Engine] No Gemini API key detected. Seamlessly delegating request to Groq...');
       return await callGroqText(contents, options);
     }
     const err = new Error(
@@ -327,7 +417,7 @@ export async function callGemini(contents: any, options?: { fast?: boolean; mode
   if (options?.model) {
     modelsToTry = [options.model, ...modelsToTry.filter((m) => m !== options.model)];
   } else if (options?.fast) {
-    modelsToTry = ['gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
+    modelsToTry = ['gemini-4-hydrogen', 'gemini-3.1-flash-lite'];
   }
 
   // Round-robin index rotation across available keys to distribute load
@@ -340,15 +430,16 @@ export async function callGemini(contents: any, options?: { fast?: boolean; mode
   ];
 
   let lastError: any;
+  const attemptErrors: string[] = [];
 
-  // Maximum time to spend across all Gemini attempts before immediately activating Groq fallback
-  // This guarantees the entire request completes well under the 60s gateway timeout!
-  const geminiDeadline = Date.now() + 25000;
+  // Maximum time to spend across all Gemini attempts before activating Groq fallback (if available)
+  // Kept strictly under Vercel's 60s maxDuration so Groq rescue always has ~18-22s to finish cleanly.
+  const geminiDeadline = Date.now() + (groqKey ? 36000 : 52000);
 
   // Try each API key in case of quota exhaustion or rate limits (429 / RESOURCE_EXHAUSTED)
   for (let kIdx = 0; kIdx < orderedKeys.length; kIdx++) {
-    if (Date.now() > geminiDeadline && groqKey) {
-      console.warn('[Dual-Engine] Gemini deadline reached (25s). Fast-forwarding directly to Groq fallback...');
+    if (groqKey && geminiDeadline - Date.now() < 6000) {
+      console.warn('[Dual-Engine] Gemini deadline budget exhausted. Fast-forwarding directly to Groq fallback...');
       break;
     }
 
@@ -363,76 +454,131 @@ export async function callGemini(contents: any, options?: { fast?: boolean; mode
     });
 
     for (const model of modelsToTry) {
-      if (Date.now() > geminiDeadline && groqKey) {
+      if (groqKey && geminiDeadline - Date.now() < 6000) {
         break;
       }
 
-      try {
-        // Enforce a tight 20s timeout on primary engine call to guarantee swift response and prevent 504
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => {
-            const timeoutErr = new Error(`Gemini API call to ${model} timed out after 20s`);
-            (timeoutErr as any).name = 'TimeoutError';
-            reject(timeoutErr);
-          }, 20000)
-        );
+      const maxAttemptsForModel = model === 'gemini-4-hydrogen' ? 2 : 1;
+      let skipThinkingConfig = false;
 
-        const callPromise = ai.models.generateContent({
-          model,
-          contents,
-          config: {
-            thinkingConfig: {
-              thinkingLevel: ThinkingLevel.MINIMAL,
-            },
-          },
-        });
-
-        const response: any = await Promise.race([callPromise, timeoutPromise]);
-        return {
-          ...response,
-          text: response.text || '',
-          engine: 'gemini',
-          model,
-        };
-      } catch (err: any) {
-        const errMessage = err?.message || String(err);
-        const isQuotaOrRateLimit =
-          errMessage.includes('429') ||
-          errMessage.includes('RESOURCE_EXHAUSTED') ||
-          errMessage.includes('quota') ||
-          errMessage.includes('rate limit');
-        const isAuthError =
-          errMessage.includes('401') ||
-          errMessage.includes('403') ||
-          errMessage.includes('API key') ||
-          errMessage.includes('API_KEY_INVALID');
-
-        // If key reached its quota or is invalid, switch immediately to next key instead of retrying models
-        if ((isQuotaOrRateLimit || isAuthError) && orderedKeys.length > 1) {
-          console.warn(`Key #${kIdx + 1} failed (${isAuthError ? 'Auth error' : 'Quota/Rate limit'}). Switching to next key in pool...`);
-          lastError = err;
-          break; // break to next API key
+      for (let attempt = 1; attempt <= maxAttemptsForModel; attempt++) {
+        const remainingMs = geminiDeadline - Date.now();
+        if (groqKey && remainingMs < 6000) {
+          break;
         }
 
-        console.warn(`Model ${model} failed, switching to fallback candidate:`, errMessage.slice(0, 150));
-        lastError = err;
+        try {
+          const config: Record<string, any> = {};
+          // Use LOW thinking level on Gemini 4 models to minimize latency and prevent timeouts
+          // (Never pass MINIMAL to Gemini 4 models — it is unsupported and returns 400 INVALID_ARGUMENT)
+          if (model.startsWith('gemini-4-') && !skipThinkingConfig) {
+            config.thinkingConfig = {
+              thinkingLevel: ThinkingLevel.LOW,
+            };
+          }
+          if (options?.responseMimeType) {
+            config.responseMimeType = options.responseMimeType;
+          }
+
+          const desiredTimeoutMs = options?.fast ? 18000 : 32000;
+          const timeoutMs = groqKey ? Math.min(desiredTimeoutMs, Math.max(6000, remainingMs)) : Math.min(48000, Math.max(10000, remainingMs));
+          let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+          const timeoutPromise = new Promise((_, reject) => {
+            timeoutHandle = setTimeout(() => {
+              const timeoutErr = new Error(`Gemini API call to ${model} timed out after ${Math.round(timeoutMs / 1000)}s`);
+              (timeoutErr as any).name = 'TimeoutError';
+              reject(timeoutErr);
+            }, timeoutMs);
+          });
+
+          const callPromise = ai.models.generateContent({
+            model,
+            contents,
+            ...(Object.keys(config).length > 0 ? { config } : {}),
+          });
+
+          let response: any;
+          try {
+            response = await Promise.race([callPromise, timeoutPromise]);
+          } finally {
+            if (timeoutHandle) clearTimeout(timeoutHandle);
+          }
+
+          return {
+            ...response,
+            text: response.text || '',
+            engine: 'gemini',
+            model,
+          };
+        } catch (err: any) {
+          const errMessage = err?.message || String(err);
+          attemptErrors.push(`${model}#${attempt}: ${errMessage.slice(0, 140)}`);
+
+          const isThinkingConfigError =
+            errMessage.includes('Thinking level') || errMessage.includes('thinkingConfig');
+          const isTransientOverload =
+            errMessage.includes('503') ||
+            errMessage.includes('UNAVAILABLE') ||
+            errMessage.includes('high demand') ||
+            errMessage.includes('overloaded');
+          const isQuotaOrRateLimit =
+            errMessage.includes('429') ||
+            errMessage.includes('RESOURCE_EXHAUSTED') ||
+            errMessage.includes('quota') ||
+            errMessage.includes('rate limit');
+          const isAuthError =
+            errMessage.includes('401') ||
+            errMessage.includes('403') ||
+            errMessage.includes('API key') ||
+            errMessage.includes('API_KEY_INVALID');
+
+          if (isThinkingConfigError && !skipThinkingConfig && attempt < maxAttemptsForModel) {
+            console.warn(`Model ${model} rejected thinkingConfig. Retrying without thinkingConfig...`);
+            skipThinkingConfig = true;
+            lastError = err;
+            continue;
+          }
+
+          if (isTransientOverload && attempt < maxAttemptsForModel && geminiDeadline - Date.now() > 8000) {
+            console.warn(`Model ${model} returned transient 503 (attempt ${attempt}). Retrying after 1.5s...`);
+            await new Promise((r) => setTimeout(r, 1500));
+            lastError = err;
+            continue;
+          }
+
+          // If key reached its quota or is invalid, switch immediately to next key instead of retrying models
+          if ((isQuotaOrRateLimit || isAuthError) && orderedKeys.length > 1) {
+            console.warn(`Key #${kIdx + 1} failed (${isAuthError ? 'Auth error' : 'Quota/Rate limit'}). Switching to next key in pool...`);
+            lastError = err;
+            break; // break to next API key
+          }
+
+          console.warn(`Model ${model} failed, switching to fallback candidate:`, errMessage.slice(0, 180));
+          lastError = err;
+          break;
+        }
       }
     }
   }
 
-  // AUTOMATIC SILENT RESCUE FALLBACK TO GROQ (llama-3.3-70b-versatile)
+  // AUTOMATIC SILENT RESCUE FALLBACK TO GROQ
   if (groqKey) {
     try {
       console.warn(
-        `[Dual-Engine Fallback] Primary engine (Gemini) failed or timed out (${lastError?.message?.slice(0, 120) || 'All models exhausted'}). Automatically and silently activating Groq llama-3.3-70b-versatile...`
+        `[Dual-Engine Fallback] Primary engine (Gemini) failed or timed out (${lastError?.message?.slice(0, 120) || 'All models exhausted'}). Automatically activating Groq fallback...`
       );
       return await callGroqText(contents, options);
     } catch (groqErr: any) {
+      attemptErrors.push(`groq: ${(groqErr?.message || String(groqErr)).slice(0, 120)}`);
       console.error('[Dual-Engine Fallback] Groq fallback also failed:', groqErr?.message);
     }
   }
 
-  throw lastError || new Error('فشلت جميع نماذج ومفاتيح الذكاء الاصطناعي المتاحة (Gemini & Groq).');
+  const finalError = lastError || new Error('فشلت جميع نماذج ومفاتيح الذكاء الاصطناعي المتاحة (Gemini & Groq).');
+  if (attemptErrors.length > 0 && !String(finalError.message || '').includes(' | ')) {
+    finalError.attemptErrors = attemptErrors;
+  }
+  throw finalError;
 }
 
 export function formatApiError(error: any): { status: number; message: string } {
@@ -1376,7 +1522,219 @@ COMPREHENSIVE PBL STRUCTURE:
 export async function executeGenerate(req: any, res: any) {
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-    const { settings = {}, outputType = 'lesson-plan', files = [] } = body || {};
+    const { action, settings = {}, outputType = 'lesson-plan', files = [] } = body || {};
+
+    // ─────────────────────────────────────────────────────────────
+    // Special Action: Interactive Video & Quiz Studio (Edpuzzle style)
+    // ─────────────────────────────────────────────────────────────
+    if (action === 'interactive_video_quiz') {
+      const {
+        videoTitle = 'Educational Video',
+        videoUrl = '',
+        duration = 300,
+        startTrim = 0,
+        endTrim = 300,
+        questionCount = 5,
+        dokLevel = 'DOK 2',
+        grade = 'Grade 8',
+        subject = 'General Science',
+        lang = 'ar',
+        customPrompt = '',
+        videoContext = '',
+        videoTranscript = '',
+      } = body;
+
+      const isArabic = lang === 'ar';
+      const effectiveDuration = Math.max(30, Math.floor(endTrim - startTrim));
+      const count = Math.min(15, Math.max(2, Number(questionCount) || 5));
+
+      const systemPrompt = isArabic
+        ? `أنت كبير الخبراء التربويين في تصميم الفيديوهات التفاعلية التعليمية (Interactive Video Studio على غرار Edpuzzle و Wayground).
+مهمتك المحورية: توليد عدد (${count}) أسئلة تفاعلية ذكية ومحكمة تربوياً ومطابقة 100% للمحتوى الحقيقي المعروض والمشروح داخل هذا الفيديو التعليمي بالتحديد.
+
+قواعد الارتباط بمحتوى الفيديو:
+1. الارتباط المباشر بموضوع الفيديو: يجب أن ترتبط الأسئلة ارتباطاً جوهرياً وحصرياً بالمفاهيم العلمية والشروحات والتجارب والأمثلة التي يطرحها الفيديو (${videoTitle}) في مادة (${subject}). ممنوع توليد أسئلة عامة أو سطحية لا صلة لها بالموضوع الدقيق.
+2. التوزيع الزمني الدقيق (Timestamp Synchronization): وزّع الأسئلة بتدرج زمني منطقي متسلسل على طول مدة الفيديو بين الثانية ${Math.floor(startTrim + 10)} والثانية ${Math.floor(endTrim - 5)}. يجب أن يطرح كل سؤال في لحظة شرح المفهوم المتعلق به أو بعدها مباشرة.
+3. نوع الأسئلة: استخدم حصراً القيم التالية لحقل "type": "mcq" (اختيار من متعدد بـ 4 خيارات دون كتابة كلمة صحيح داخل نص الخيار)، أو "true_false" (صواب وخطأ بخيارين ["صحيح", "خطأ"])، أو "open" (سؤال تفكير ناقد مفتوح).
+4. التغذية الراجعة الفورية: لكل سؤال، قدّم شرحاً تعليمياً موجزاً ودقيقاً يوضح سبب الإجابة الصحيحة ويثري فهم الطالب بناءً على شرح الفيديو.
+5. عمق المعرفة DOK: ${dokLevel} للمرحلة (${grade}).
+6. يجب أن يكون الرد بهيئة JSON صحيحة 100% بالحقول التالية حصراً (لا تكتب "(صحيح)" داخل نصوص الخيارات أبداً):
+{
+  "summary": "ملخص تربوي مركز لأهم المفاهيم التي يغطيها الفيديو وأهدافه",
+  "questions": [
+    {
+      "id": "q1",
+      "timestamp": 45,
+      "timeFormatted": "00:45",
+      "type": "mcq",
+      "question": "نص السؤال المرتبط بالدقيقة 00:45 من الفيديو بدقة...",
+      "options": ["الخيار الأول", "الخيار الثاني", "الخيار الثالث", "الخيار الرابع"],
+      "correctAnswer": "الخيار الأول",
+      "explanation": "تغذية راجعة تربوية فورية...",
+      "dokLevel": "${dokLevel}"
+    }
+  ]
+}`
+        : `You are an expert pedagogical designer for interactive educational videos (like Edpuzzle and Wayground).
+Your mission: Generate exactly (${count}) rigorous, timestamped interactive questions that strictly relate to the ACTUAL educational content of this specific video.
+
+Content Grounding Rules:
+1. Strict Relevance: Questions MUST directly assess the specific topic, concepts, experiments, definitions, and explanations presented in this video (${videoTitle}) for (${subject}) at (${grade}). Avoid vague or generic questions.
+2. Synchronized Timestamps: Distribute timestamps chronologically and evenly between ${Math.floor(startTrim + 10)}s and ${Math.floor(endTrim - 5)}s. Each question must appear at the logical moment the topic is discussed.
+3. Clear Options & Types: The "type" field MUST strictly be one of "mcq" (4 distinct options, never append "(correct)" to option text), "true_false" (options: ["True", "False"]), or "open" (critical thinking open-ended question). Include an insightful feedback explanation for every question.
+4. Target DOK Level: ${dokLevel}.
+5. Return strict valid JSON with format:
+{
+  "summary": "Educational summary of the video concepts",
+  "questions": [
+    {
+      "id": "q1",
+      "timestamp": 45,
+      "timeFormatted": "00:45",
+      "type": "mcq",
+      "question": "...",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswer": "Option A",
+      "explanation": "...",
+      "dokLevel": "${dokLevel}"
+    }
+  ]
+}`;
+
+      let extraContentContext = '';
+      if (videoContext && videoContext.trim()) {
+        extraContentContext += isArabic
+          ? `\nمعلومات وتفاصيل المحتوى المتاح عن الفيديو:\n${videoContext.trim()}\n`
+          : `\nAvailable video details & context:\n${videoContext.trim()}\n`;
+      }
+      if (videoTranscript && videoTranscript.trim()) {
+        extraContentContext += isArabic
+          ? `\nالنص المفرغ أو المحاور الأساسية للشرح:\n${videoTranscript.trim().slice(0, 3000)}\n`
+          : `\nVideo transcript or key discussion points:\n${videoTranscript.trim().slice(0, 3000)}\n`;
+      }
+
+      const userPrompt = isArabic
+        ? `بيانات الفيديو التعليمي للتحليل وتوليد الأسئلة:
+- عنوان الفيديو والموضوع: ${videoTitle}
+- المادة والمرحلة: ${subject} - ${grade}
+- الرابط أو المعرف: ${videoUrl}
+- مدة العرض الفعالة: ${effectiveDuration} ثانية (النطاق: ${Math.floor(startTrim)} ثانية إلى ${Math.floor(endTrim)} ثانية)
+- عدد الأسئلة المطلوبة: ${count}
+- عمق المعرفة المطلوب: ${dokLevel}
+${extraContentContext ? `${extraContentContext}` : ''}
+${customPrompt ? `- توجيهات إضافية من المعلم: ${customPrompt}` : ''}
+
+تنبيه إلزامي: احرص أن تكون كل الأسئلة متمحورة بدقة حول "${videoTitle}" والمفاهيم العلمية التخصصية المرتبطة بها في ${subject}. أخرج النتيجة بصيغة JSON فقط:`
+        : `Educational Video Information for Quiz Generation:
+- Video Title & Subject Topic: ${videoTitle}
+- Subject & Grade: ${subject} - ${grade}
+- Video URL / ID: ${videoUrl}
+- Effective Video Duration: ${effectiveDuration}s (Trim range: ${Math.floor(startTrim)}s - ${Math.floor(endTrim)}s)
+- Questions count: ${count}
+- DOK Depth: ${dokLevel}
+${extraContentContext ? `${extraContentContext}` : ''}
+${customPrompt ? `- Teacher instructions: ${customPrompt}` : ''}
+
+Mandatory: All questions must be strictly aligned with "${videoTitle}" and key concepts in ${subject}. Output valid JSON only:`;
+
+      // 1. Primary Engine: Google Gemini Flash with native JSON mode & automatic fallback
+      let lastVideoErr: any = null;
+      try {
+        const geminiRes = await callGemini(
+          [{ role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] }],
+          { fast: true, responseMimeType: 'application/json' }
+        );
+        const text = geminiRes.text || '{}';
+        const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+        const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+        const jsonToParse = jsonMatch ? jsonMatch[0] : cleaned;
+        const parsed = JSON.parse(jsonToParse);
+        if (!Array.isArray(parsed.questions) || parsed.questions.length === 0) {
+          throw new Error('AI returned empty questions array');
+        }
+
+        const stripHint = (val: any) =>
+          String(val ?? '')
+            .replace(/\s*\((?:صحيح|إجابة صحيحة|الإجابة الصحيحة|correct|correct answer)\)\s*/gi, '')
+            .trim();
+
+        const formatSec = (sec: number) => {
+          const safe = Math.max(0, Math.floor(sec));
+          const m = Math.floor(safe / 60);
+          const s = safe % 60;
+          return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        };
+
+        const minTs = Math.floor(Number(startTrim) || 0);
+        const maxTs = Math.max(minTs + 5, Math.floor(Number(endTrim) || Number(duration) || 300));
+        const tfDefaults = isArabic ? ['صحيح', 'خطأ'] : ['True', 'False'];
+
+        const normalizedQuestions = parsed.questions.map((q: any, idx: number) => {
+          const rawType = String(q?.type || 'mcq').toLowerCase().trim();
+          const type: 'mcq' | 'true_false' | 'open' =
+            rawType === 'true_false' || rawType === 'true/false' || rawType === 'tf' || rawType === 'boolean'
+              ? 'true_false'
+              : rawType === 'mcq' || rawType === 'multiple_choice'
+                ? 'mcq'
+                : 'open';
+
+          const rawTs = Number(q?.timestamp);
+          const fallbackTs = Math.floor(minTs + ((idx + 1) * (maxTs - minTs)) / (parsed.questions.length + 1));
+          const timestamp = Number.isFinite(rawTs) ? Math.min(maxTs, Math.max(minTs, Math.floor(rawTs))) : fallbackTs;
+
+          let options: string[] = Array.isArray(q?.options)
+            ? q.options.map((opt: any) => stripHint(opt)).filter(Boolean)
+            : [];
+          let correctAnswer = stripHint(q?.correctAnswer ?? '');
+
+          if (type === 'true_false') {
+            if (options.length !== 2) {
+              options = [...tfDefaults];
+            }
+            const lowerAns = correctAnswer.toLowerCase();
+            if (lowerAns === 'true' || lowerAns === 'صحيح' || lowerAns === 'صواب' || lowerAns === 'صح') {
+              correctAnswer = options[0];
+            } else if (lowerAns === 'false' || lowerAns === 'خطأ') {
+              correctAnswer = options[1];
+            } else if (!options.includes(correctAnswer)) {
+              correctAnswer = options[0];
+            }
+          } else if (type === 'mcq' && options.length > 0 && !options.includes(correctAnswer)) {
+            const matched = options.find((opt) => opt.toLowerCase() === correctAnswer.toLowerCase());
+            correctAnswer = matched || options[0];
+          }
+
+          return {
+            id: String(q?.id || `q${idx + 1}`),
+            timestamp,
+            timeFormatted: formatSec(timestamp),
+            type,
+            question: String(q?.question || '').trim(),
+            options,
+            correctAnswer,
+            explanation: String(q?.explanation || '').trim(),
+            dokLevel: String(q?.dokLevel || dokLevel),
+          };
+        });
+
+        return res.status(200).json({
+          success: true,
+          engine: geminiRes.engine || 'gemini',
+          model: geminiRes.model,
+          summary: String(parsed.summary || '').trim(),
+          questions: normalizedQuestions,
+        });
+      } catch (geminiErr: any) {
+        lastVideoErr = geminiErr;
+        console.warn('[Interactive Video] Primary generation failed:', geminiErr?.message || geminiErr);
+      }
+
+      const { status, message } = formatApiError(lastVideoErr);
+      return res.status(status).json({
+        error: message || (isArabic ? 'تعذر توليد الأسئلة التفاعلية للفيديو.' : 'Failed to generate video questions.'),
+        details: lastVideoErr?.attemptErrors?.join(' | ') || lastVideoErr?.message,
+      });
+    }
 
     let prompt = buildBasePrompt(settings, outputType);
     const isAr = settings.contentLanguage === 'ar';
@@ -1474,7 +1832,10 @@ Strict rule: Use the attached content below as the primary reference for this ge
   } catch (error: any) {
     console.error('executeGenerate error:', error);
     const { status, message } = formatApiError(error);
-    return res.status(status).json({ error: message, details: error?.message });
+    return res.status(status).json({
+      error: message,
+      details: error?.attemptErrors?.join(' | ') || error?.message,
+    });
   }
 }
 
@@ -2259,7 +2620,7 @@ export async function executePresentationCopilot(req: any, res: any) {
   "discussionPrompt": "سؤال تفكير ناقد مفتوح النهاية..."
 }`;
 
-      const aiResponse = await callGemini(prompt, { fast: true, model: 'gemini-3.8-flash' });
+      const aiResponse = await callGemini(prompt, { fast: true, model: 'gemini-4-hydrogen', responseMimeType: 'application/json' });
       const cleanJson = (aiResponse.text || '')
         .replace(/```json/gi, '')
         .replace(/```/g, '')
@@ -2305,7 +2666,7 @@ export async function executePresentationCopilot(req: any, res: any) {
       return res.status(400).json({ error: 'إجراء غير مدعوم' });
     }
 
-    const aiResponse = await callGemini(prompt, { fast: true, model: 'gemini-3.8-flash' });
+    const aiResponse = await callGemini(prompt, { fast: true, model: 'gemini-4-hydrogen' });
     const transformedText = (aiResponse.text || '').replace(/^["'«»]|["'«»]$/g, '').trim();
 
     return res.status(200).json({

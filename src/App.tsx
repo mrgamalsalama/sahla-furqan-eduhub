@@ -20,6 +20,7 @@ import FooterBarakahRibbon from '@/components/FooterBarakahRibbon';
 import EducatorWellnessModal from '@/components/EducatorWellnessModal';
 import MyResourcesPage from '@/components/MyResourcesPage';
 import PdfEditorStudio from '@/components/PdfEditorStudio';
+import InteractiveVideoStudio from '@/components/InteractiveVideoStudio';
 import type { View, OutputType, GenerationResult, SavedLesson, TeacherResource } from '@/types';
 import { getUILang, saveUILang } from '@/lib/i18n';
 import type { UILang } from '@/lib/i18n';
@@ -88,6 +89,34 @@ export default function App() {
 
   const [view, setView] = useState<View>(() => {
     try {
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlView = urlParams.get('view');
+        if (
+          urlView &&
+          [
+            'home',
+            'weekly-statement',
+            'lesson-plan',
+            'worksheet',
+            'slides',
+            'quiz-exam',
+            'qti-converter',
+            'grader-advisor',
+            'performance-task',
+            'interactive-video',
+            'editor',
+            'library',
+            'community',
+            'benchmark',
+            'resources',
+            'pdf-editor',
+          ].includes(urlView)
+        ) {
+          return urlView as View;
+        }
+      }
+
       const saved = localStorage.getItem(VIEW_STORAGE_KEY);
       if (
         saved &&
@@ -101,10 +130,13 @@ export default function App() {
           'qti-converter',
           'grader-advisor',
           'performance-task',
+          'interactive-video',
           'editor',
           'library',
           'community',
           'benchmark',
+          'resources',
+          'pdf-editor',
         ].includes(saved)
       ) {
         return saved as View;
@@ -328,6 +360,13 @@ export default function App() {
                   }
                   setView(target);
                 }}
+              />
+            )}
+
+            {view === 'interactive-video' && (
+              <InteractiveVideoStudio
+                uiLang={uiLang}
+                onNavigate={setView}
               />
             )}
 

@@ -2,7 +2,7 @@ import {
   Home, CalendarDays, ClipboardList, Layers, Presentation, FileQuestion, FileCode2,
   FileCheck2, Library, Globe, Compass, Edit3, Target, ChevronRight, ChevronLeft,
   Sparkles, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, X,
-  Briefcase, FileText
+  Briefcase, FileText, Video
 } from 'lucide-react';
 import type { View } from '@/types';
 import type { UILang } from '@/lib/i18n';
@@ -99,6 +99,13 @@ export default function Sidebar({
           labelAr: 'بنك الاختبارات والأسئلة',
           labelEn: 'Exam & Quiz Bank',
           icon: FileQuestion,
+        },
+        {
+          view: 'interactive-video',
+          labelAr: 'الفيديو التفاعلي الذكي',
+          labelEn: 'Interactive Video Quiz',
+          icon: Video,
+          badge: { ar: 'Edpuzzle', en: 'Edpuzzle', color: 'bg-rose-500/20 text-rose-700 border-rose-300' },
         },
         {
           view: 'qti-converter',

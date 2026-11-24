@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   ClipboardList, Layers, Presentation, FileQuestion, FileCode2,
   FileCheck2, Sparkles, ArrowLeft, ArrowRight, Globe, Mic, Compass, Wand2,
-  CalendarDays, FileText, Briefcase
+  CalendarDays, FileText, Briefcase, Video
 } from 'lucide-react';
 import type { View, GenerationResult, OutputType } from '@/types';
 import { INSTITUTIONS } from '@/types';
@@ -61,6 +61,17 @@ export default function HomePage({ onOpenResult, uiLang, onNavigate }: HomePageP
       icon: Compass,
       color: 'from-indigo-600 to-purple-800',
       badge: isAr ? 'جديد PBL 🧩' : 'New PBL 🧩',
+    },
+    {
+      id: 'interactive-video',
+      title: isAr ? 'استوديو الفيديو التفاعلي والأسئلة المتزامنة' : 'Interactive Video & Quiz Studio',
+      subtitle: isAr ? 'نمط Edpuzzle والتقييم المتزامن الذكي' : 'Edpuzzle / Wayground Style',
+      description: isAr
+        ? 'تحويل أي فيديو يوتيوب إلى تجربة تعليمية تفاعلية بأسئلة متزامنة مع الطوابع الزمنية، تشغيل تفاعلي للطلاب مع إيقاف تلقائي، وتصدير فوري لكاهوت و Word.'
+        : 'Transform YouTube videos into interactive lessons with AI timestamped questions, auto-pause student player, and Kahoot/Word export.',
+      icon: Video,
+      color: 'from-rose-600 via-pink-600 to-amber-600',
+      badge: isAr ? 'حصري Edpuzzle 🎬' : 'Edpuzzle 🎬',
     },
     {
       id: 'worksheet',

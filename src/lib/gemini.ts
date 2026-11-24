@@ -457,3 +457,40 @@ export async function generateDifferentiatedSlideVariant(payload: {
   return data.slide;
 }
 
+export async function generateInteractiveVideoQuestions(payload: {
+  videoTitle: string;
+  videoUrl?: string;
+  duration: number;
+  startTrim: number;
+  endTrim: number;
+  questionCount: number;
+  dokLevel: string;
+  grade: string;
+  subject: string;
+  lang: 'ar' | 'en';
+  customPrompt?: string;
+  videoContext?: string;
+  videoTranscript?: string;
+}): Promise<{
+  success: boolean;
+  engine?: string;
+  summary?: string;
+  questions: import('@/types').VideoQuestion[];
+}> {
+  const response = await fetch('/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'interactive_video_quiz',
+      ...payload,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || 'تعذر توليد الأسئلة التفاعلية للفيديو.');
+  }
+
+  return response.json();
+}
+

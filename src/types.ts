@@ -6,6 +6,7 @@ export type View =
   | 'worksheet'
   | 'slides'
   | 'quiz-exam'
+  | 'interactive-video'
   | 'qti-converter'
   | 'grader-advisor'
   | 'performance-task'
@@ -468,5 +469,41 @@ export interface WeeklyStatementDocument {
   weeklyEducationalValue?: string;
   updatedAt: number;
 }
+
+// ─────────────────────────────────────────────────────────────
+// Interactive Video & Quiz Studio Data Models
+// ─────────────────────────────────────────────────────────────
+export type VideoQuestionType = 'mcq' | 'true_false' | 'open';
+
+export interface VideoQuestion {
+  id: string;
+  timestamp: number; // In seconds
+  timeFormatted?: string; // e.g. "01:25"
+  question: string;
+  type: VideoQuestionType;
+  options: string[]; // 4 options for mcq, 2 for true_false, empty for open
+  correctAnswer: string;
+  explanation?: string;
+  dokLevel?: string; // DOK 1, DOK 2, DOK 3, DOK 4
+  points?: number;
+}
+
+export interface InteractiveVideoProject {
+  id: string;
+  title: string;
+  videoUrl: string;
+  youtubeId: string;
+  duration: number; // In seconds
+  startTrim: number;
+  endTrim: number;
+  grade: string;
+  subject: string;
+  dokLevel: string;
+  summary?: string;
+  questions: VideoQuestion[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 
 

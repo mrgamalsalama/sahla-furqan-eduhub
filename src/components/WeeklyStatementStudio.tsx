@@ -875,7 +875,9 @@ export default function WeeklyStatementStudio({
       setIsHodAuthenticated(true);
       try {
         sessionStorage.setItem('sahlah_hod_authenticated', 'true');
-      } catch {}
+      } catch {
+        /* ignore storage error */
+      }
       setIsHodPinModalOpen(false);
       setViewMode('master');
       showToast(isAr ? 'تم التحقق بنجاح! مرحباً بك في لوحة رئيس القسم والإدارة' : 'Welcome to HOD & Administration Hub', 'success');
@@ -888,7 +890,9 @@ export default function WeeklyStatementStudio({
     setIsHodAuthenticated(false);
     try {
       sessionStorage.removeItem('sahlah_hod_authenticated');
-    } catch {}
+    } catch {
+      /* ignore storage error */
+    }
     setViewMode('teacher');
     showToast(isAr ? 'تم قفل لوحة الإدارة والعودة لواجهة المعلم' : 'HOD Hub locked. Switched to Teacher mode', 'info');
   }
