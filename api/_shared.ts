@@ -256,6 +256,7 @@ function convertContentsToGroqMessages(contents: any): Array<{ role: 'system' | 
 }
 
 let cachedGroqTextModels: { models: string[]; fetchedAt: number } | null = null;
+const groqModelCooldownUntil = new Map<string, number>();
 
 async function discoverGroqTextModels(groq: Groq): Promise<string[]> {
   if (cachedGroqTextModels && Date.now() - cachedGroqTextModels.fetchedAt < 10 * 60 * 1000) {
@@ -290,7 +291,7 @@ async function discoverGroqTextModels(groq: Groq): Promise<string[]> {
     const ranked = Array.from(new Set(allIds)).sort((a, b) => scoreModel(a) - scoreModel(b));
     if (ranked.length > 0) {
       cachedGroqTextModels = { models: ranked, fetchedAt: Date.now() };
-      console.log(`[Dual-Engine / Groq] Discovered active models:`, ranked.slice(0, 5).join(', '));
+      console.log(`[Dual-Engine / Groq] Discovered active models:`, ranked.slice(0, 6).join(', '));
       return ranked;
     }
   } catch (err: any) {
@@ -300,9 +301,22 @@ async function discoverGroqTextModels(groq: Groq): Promise<string[]> {
   return ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
 }
 
+function stripModelThinkTags(raw: string): string {
+  return raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+}
+
+function hasBinaryMediaParts(contents: any): boolean {
+  if (!Array.isArray(contents)) return false;
+  return contents.some(
+    (item: any) =>
+      Boolean(item?.inlineData || item?.fileData) ||
+      (Array.isArray(item?.parts) && item.parts.some((p: any) => Boolean(p?.inlineData || p?.fileData)))
+  );
+}
+
 /**
- * Groq Text Engine:
- * Ultra-fast silent fallback engine and secondary processing core with dynamic model discovery.
+ * Groq Text Engine (PRIMARY for text generation):
+ * Ultra-fast inference engine with dynamic model discovery, per-model timeout, and 429 cooldown caching.
  */
 export async function callGroqText(
   contents: any,
@@ -310,7 +324,7 @@ export async function callGroqText(
 ): Promise<{ text: string; engine: 'groq'; model: string }> {
   const groqKey = getGroqApiKey();
   if (!groqKey) {
-    throw new Error('مفتاح التشغيل البديل (GROQ_API_KEY) غير مهيأ.');
+    throw new Error('مفتاح التشغيل الأساسي (GROQ_API_KEY) غير مهيأ.');
   }
 
   const groq = new Groq({ apiKey: groqKey });
@@ -326,25 +340,68 @@ export async function callGroqText(
   const discovered = hasImage ? [] : await discoverGroqTextModels(groq);
 
   const candidateModels = hasImage
-    ? ['meta-llama/llama-4-scout-17b-16e-instruct', 'llama-3.2-90b-vision-preview', 'llama-3.2-11b-vision-preview']
-    : Array.from(new Set([explicitGroqModel, ...discovered].filter(Boolean) as string[])).slice(0, 4);
+    ? ['meta-llama/llama-4-scout-17b-16e-instruct', 'llama-3.2-90b-vision-preview']
+    : Array.from(new Set([explicitGroqModel, ...discovered].filter(Boolean) as string[])).slice(0, 2);
 
   let lastGroqError: any = null;
-  for (const modelToUse of candidateModels) {
-    try {
-      console.log(`[Dual-Engine / Groq] Calling model: ${modelToUse} (fast=${Boolean(options?.fast)})...`);
-      const useJsonMode = options?.responseMimeType === 'application/json';
-      const completion = await groq.chat.completions.create({
-        model: modelToUse,
-        messages: messages as any,
-        temperature: options?.fast ? 0.2 : 0.4,
-        max_tokens: 4096,
-        top_p: 0.95,
-        ...(useJsonMode ? { response_format: { type: 'json_object' as const } } : {}),
+  const groqDeadline = Date.now() + 26000;
+
+  for (let mIdx = 0; mIdx < candidateModels.length; mIdx++) {
+    const modelToUse = candidateModels[mIdx];
+    const remainingMs = groqDeadline - Date.now();
+    if (remainingMs < 4000) break;
+
+    const cooldownUntil = groqModelCooldownUntil.get(modelToUse) || 0;
+    if (cooldownUntil > Date.now()) {
+      continue;
+    }
+
+    const useJsonMode = options?.responseMimeType === 'application/json';
+    const extraParams: Record<string, any> = {};
+    // Keep reasoning models ultra-fast on Groq instead of spending 15-20s on hidden reasoning tokens
+    if (/gpt-oss/i.test(modelToUse)) {
+      extraParams.reasoning_effort = 'low';
+    } else if (/qwen3|qwen\/qwen3/i.test(modelToUse)) {
+      extraParams.reasoning_effort = 'none';
+    }
+    if (useJsonMode) {
+      extraParams.response_format = { type: 'json_object' as const };
+    }
+
+    const runGroqCall = async (paramsOverride: Record<string, any>, timeoutBudgetMs: number) => {
+      let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          const timeoutErr = new Error(`Groq API call to ${modelToUse} timed out after ${Math.round(timeoutBudgetMs / 1000)}s`);
+          (timeoutErr as any).name = 'TimeoutError';
+          reject(timeoutErr);
+        }, timeoutBudgetMs);
       });
 
-      const text = completion.choices[0]?.message?.content || '';
-      if (!text.trim()) {
+      const completionPromise = groq.chat.completions.create({
+        model: modelToUse,
+        messages: messages as any,
+        temperature: options?.fast ? 0.2 : 0.35,
+        max_tokens: 6500,
+        top_p: 0.95,
+        ...paramsOverride,
+      } as any);
+
+      try {
+        return await Promise.race([completionPromise, timeoutPromise]);
+      } finally {
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+      }
+    };
+
+    try {
+      console.log(`[Dual-Engine / Groq] Calling model: ${modelToUse} (fast=${Boolean(options?.fast)}, reasoning=${extraParams.reasoning_effort || 'default'})...`);
+      const perModelTimeout = Math.min(mIdx === 0 ? 16000 : 12000, Math.max(5000, remainingMs));
+      const completion: any = await runGroqCall(extraParams, perModelTimeout);
+
+      const rawText = completion.choices?.[0]?.message?.content || '';
+      const text = stripModelThinkTags(rawText);
+      if (!text) {
         throw new Error(`Groq model ${modelToUse} returned empty content`);
       }
       return {
@@ -354,22 +411,25 @@ export async function callGroqText(
       };
     } catch (err: any) {
       const msg = err?.message || String(err);
-      // If json_object mode is unsupported by this specific Groq model, retry once without response_format
-      if (options?.responseMimeType === 'application/json' && /response_format|json_object|json/i.test(msg)) {
+      // If reasoning_effort or response_format is unsupported by this Groq model, retry once cleanly without them
+      if (/reasoning_effort|response_format|json_object|unsupported.*parameter|invalid_request_error/i.test(msg) && Object.keys(extraParams).length > 0) {
         try {
-          const retryCompletion = await groq.chat.completions.create({
-            model: modelToUse,
-            messages: messages as any,
-            temperature: 0.2,
-            max_tokens: 4096,
-          });
-          const retryText = retryCompletion.choices[0]?.message?.content || '';
-          if (retryText.trim()) {
+          const fallbackParams: Record<string, any> = {};
+          if (useJsonMode && !/response_format|json_object/i.test(msg)) {
+            fallbackParams.response_format = { type: 'json_object' as const };
+          }
+          const retryBudget = Math.min(13000, Math.max(5000, groqDeadline - Date.now()));
+          const retryCompletion: any = await runGroqCall(fallbackParams, retryBudget);
+          const retryText = stripModelThinkTags(retryCompletion.choices?.[0]?.message?.content || '');
+          if (retryText) {
             return { text: retryText, engine: 'groq', model: modelToUse };
           }
         } catch (retryErr: any) {
           lastGroqError = retryErr;
         }
+      }
+      if (/429|rate_limit|quota|model_not_found|decommissioned|404/i.test(msg)) {
+        groqModelCooldownUntil.set(modelToUse, Date.now() + 90_000);
       }
       console.warn(`[Dual-Engine / Groq] Model ${modelToUse} failed:`, msg.slice(0, 180));
       lastGroqError = err;
@@ -391,32 +451,49 @@ const modelQuotaCooldownUntil = new Map<string, number>();
 
 /**
  * Unified AI Caller with Dual-Engine Architecture:
- * - Primary: Google Gemini with multi-key rotation and intelligent model fallback
- * - Silent Fallback: Groq on 429 Rate Limits, 503 Overloads, 504 Timeouts, or model exhaustion
+ * - PRIMARY (Text): Groq ultra-fast inference with dynamic model discovery & 429 cooldown
+ * - AUTOMATIC FALLBACK (and PRIMARY for Binary PDFs/Images): Google Gemini with multi-key rotation
  */
 export async function callGemini(
   contents: any,
-  options?: { fast?: boolean; model?: string; responseMimeType?: string; thinkingLevel?: 'LOW' | 'MEDIUM' }
+  options?: { fast?: boolean; model?: string; responseMimeType?: string; thinkingLevel?: 'LOW' | 'MEDIUM'; preferGemini?: boolean }
 ) {
   const keys = getApiKeys();
   const groqKey = getGroqApiKey();
+  const hasBinaryMedia = hasBinaryMediaParts(contents);
+  const attemptErrors: string[] = [];
 
-  // If no Gemini keys are configured, but Groq key is available, seamless direct dispatch to Groq
+  // 1. PRIMARY ENGINE = GROQ for all text requests (unless binary PDF/image media or preferGemini is set)
+  const useGroqPrimary = Boolean(groqKey) && !hasBinaryMedia && !options?.preferGemini;
+  if (useGroqPrimary) {
+    try {
+      return await callGroqText(contents, options);
+    } catch (groqPrimaryErr: any) {
+      const msg = groqPrimaryErr?.message || String(groqPrimaryErr);
+      attemptErrors.push(`groq-primary: ${msg.slice(0, 140)}`);
+      console.warn('[Dual-Engine] Primary Groq failed, automatically falling back to Gemini:', msg.slice(0, 180));
+      if (keys.length === 0) {
+        throw groqPrimaryErr;
+      }
+    }
+  }
+
+  // If no Gemini keys are configured, dispatch to Groq if not already tried
   if (keys.length === 0) {
-    if (groqKey) {
+    if (groqKey && !useGroqPrimary) {
       console.log('[Dual-Engine] No Gemini API key detected. Seamlessly delegating request to Groq...');
       return await callGroqText(contents, options);
     }
     const err = new Error(
-      'مفتاح الذكاء الاصطناعي (GEMINI_API_KEY أو GROQ_API_KEY) غير مهيأ. يرجى إضافة مفتاح التشغيل في إعدادات البيئة.'
+      'مفتاح الذكاء الاصطناعي (GROQ_API_KEY أو GEMINI_API_KEY) غير مهيأ. يرجى إضافة مفتاح التشغيل في إعدادات البيئة.'
     );
     (err as any).statusCode = 401;
     throw err;
   }
 
-  // Determine model fallback sequence
+  // Determine Gemini model fallback sequence
   let modelsToTry = [...CANDIDATE_MODELS];
-  if (options?.model) {
+  if (options?.model && options.model.startsWith('gemini-')) {
     modelsToTry = [options.model, ...modelsToTry.filter((m) => m !== options.model)];
   } else if (options?.fast) {
     modelsToTry = ['gemini-3.1-flash-lite', 'gemini-4-hydrogen'];
@@ -432,16 +509,13 @@ export async function callGemini(
   ];
 
   let lastError: any;
-  const attemptErrors: string[] = [];
 
-  // Maximum time to spend across all Gemini attempts before activating Groq fallback (if available)
-  // Kept safely under Vercel's 60s maxDuration so Groq rescue still has ~14-16s if Gemini fails.
-  const geminiDeadline = Date.now() + (groqKey ? 44000 : 54000);
+  // Keep total Gemini window bounded safely under Vercel's 60s maxDuration
+  const geminiDeadline = Date.now() + (useGroqPrimary ? 26000 : groqKey ? 36000 : 50000);
 
   // Try each API key in case of quota exhaustion or rate limits (429 / RESOURCE_EXHAUSTED)
   for (let kIdx = 0; kIdx < orderedKeys.length; kIdx++) {
-    if (groqKey && geminiDeadline - Date.now() < 6000) {
-      console.warn('[Dual-Engine] Gemini deadline budget exhausted. Fast-forwarding directly to Groq fallback...');
+    if (geminiDeadline - Date.now() < 6000) {
       break;
     }
 
@@ -581,11 +655,11 @@ export async function callGemini(
     }
   }
 
-  // AUTOMATIC SILENT RESCUE FALLBACK TO GROQ
-  if (groqKey) {
+  // AUTOMATIC SILENT RESCUE FALLBACK TO GROQ (only when Groq was NOT already tried as primary)
+  if (groqKey && !useGroqPrimary) {
     try {
       console.warn(
-        `[Dual-Engine Fallback] Primary engine (Gemini) failed or timed out (${lastError?.message?.slice(0, 120) || 'All models exhausted'}). Automatically activating Groq fallback...`
+        `[Dual-Engine Fallback] Gemini failed or timed out (${lastError?.message?.slice(0, 120) || 'All models exhausted'}). Automatically activating Groq fallback...`
       );
       return await callGroqText(contents, options);
     } catch (groqErr: any) {
@@ -659,11 +733,19 @@ export function formatApiError(error: any): { status: number; message: string } 
 }
 
 export function extractHtml(text: string): string {
-  let cleaned = text.trim();
+  let cleaned = stripModelThinkTags(text || '');
   cleaned = cleaned.replace(/^```html\s*/i, '');
   cleaned = cleaned.replace(/^```xml\s*/i, '');
   cleaned = cleaned.replace(/^```\s*/i, '');
   cleaned = cleaned.replace(/```$/i, '');
+  cleaned = cleaned.trim();
+
+  // Strip full-document wrappers and embedded <head>/<style>/<script> blocks so raw CSS never leaks into the editor
+  cleaned = cleaned.replace(/<!DOCTYPE[^>]*>/gi, '');
+  cleaned = cleaned.replace(/<head[\s\S]*?<\/head>/gi, '');
+  cleaned = cleaned.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+  cleaned = cleaned.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+  cleaned = cleaned.replace(/<\/?(?:html|body)[^>]*>/gi, '');
   cleaned = cleaned.trim();
 
   // Strip conversational chat preambles (both raw text and inside <p>...</p>)
@@ -673,6 +755,96 @@ export function extractHtml(text: string): string {
   );
 
   return cleaned.trim();
+}
+
+function normalizeMcqCompareText(raw: string): string {
+  return raw
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '') // strip Arabic diacritics & tatweel
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/^[\s\[\]«»"'\(\)\-–:.،؛؟!?]+|[\s\[\]«»"'\(\)\-–:.،؛؟!?]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Deterministic verifier that ensures every Answer Key letter (أ/ب/ج/د or A/B/C/D)
+ * matches the actual column of the cited answer text inside the 6-column MCQ HTML table.
+ */
+function alignMcqTableAndAnswerKey(html: string, isAr: boolean): string {
+  try {
+    const tableMatch = html.match(/<table[\s\S]*?<\/table>/i);
+    if (!tableMatch) return html;
+
+    const optionMap = new Map<number, string[]>();
+    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let rowMatch: RegExpExecArray | null;
+    while ((rowMatch = rowRegex.exec(tableMatch[0])) !== null) {
+      const cells: string[] = [];
+      const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+      let tdMatch: RegExpExecArray | null;
+      while ((tdMatch = tdRegex.exec(rowMatch[1])) !== null) {
+        cells.push(tdMatch[1]);
+      }
+      if (cells.length >= 6) {
+        const numText = cells[0].replace(/<[^>]+>/g, '').replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))).trim();
+        const qNum = parseInt(numText, 10);
+        if (!Number.isNaN(qNum) && qNum > 0) {
+          optionMap.set(qNum, [
+            normalizeMcqCompareText(cells[2]),
+            normalizeMcqCompareText(cells[3]),
+            normalizeMcqCompareText(cells[4]),
+            normalizeMcqCompareText(cells[5]),
+          ]);
+        }
+      }
+    }
+
+    if (optionMap.size === 0) return html;
+
+    const letters = isAr ? ['أ', 'ب', 'ج', 'د'] : ['A', 'B', 'C', 'D'];
+    const tableEndIdx = (tableMatch.index || 0) + tableMatch[0].length;
+    const beforeAndTable = html.slice(0, tableEndIdx);
+    const afterTable = html.slice(tableEndIdx);
+
+    const fixedAfter = afterTable.replace(
+      /(<li[^>]*>\s*(?:<strong[^>]*>)?\s*)(\d+|[٠-٩]+)(\s*[-–:.]\s*\(\s*)([أابجدهA-Da-d])(\s*\)\s*)([^:<]+)(:?)/g,
+      (full, prefix, numStr, sep1, letter, sep2, answerLabel, colon) => {
+        const qNum = parseInt(
+          String(numStr).replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d))),
+          10
+        );
+        const opts = optionMap.get(qNum);
+        if (!opts) return full;
+
+        const normCited = normalizeMcqCompareText(answerLabel);
+        if (!normCited) return full;
+
+        let matchedIdx = opts.findIndex((opt) => opt && opt === normCited);
+        if (matchedIdx === -1) {
+          const partialMatches = opts
+            .map((opt, idx) => ({ opt, idx }))
+            .filter(({ opt }) => opt && (opt.includes(normCited) || normCited.includes(opt)));
+          if (partialMatches.length === 1) {
+            matchedIdx = partialMatches[0].idx;
+          }
+        }
+
+        if (matchedIdx >= 0 && matchedIdx < 4) {
+          const correctLetter = letters[matchedIdx];
+          return `${prefix}${numStr}${sep1}${correctLetter}${sep2}${answerLabel}${colon}`;
+        }
+        return full;
+      }
+    );
+
+    return beforeAndTable + fixedAfter;
+  } catch {
+    return html;
+  }
 }
 
 function isNonNativeSubject(subject?: string): boolean {
@@ -745,34 +917,48 @@ function buildGradeCalibrationDirective(grade?: string, isAr: boolean = true): s
   }
 
   const mapAr: Record<GradeAgeBand, string> = {
-    kg: `معايرة المرحلة العمرية (${gradeLabel} — 4 إلى 6 سنوات): جمل قصيرة جداً ومألوفة (2-4 كلمات)، تمييز الحروف والأصوات والحركات، وممنوع تماماً المصطلحات النحوية المجردة.`,
-    'lower-primary': `معايرة المرحلة العمرية (${gradeLabel} — الصفوف الأولية 6-9 سنوات): جمل قصيرة وسلسة (4-7 كلمات) من عالم الطفل. المهارات المناسبة فقط: المدود والتنوين، اللام الشمسية والقمرية، التاء المربوطة والمفتوحة، المذكر والمؤنث، المفرد والمثنى والجمع، أقسام الكلمة، أسماء الإشارة والضمائر، حروف الجر الأساسية، والفهم المباشر. ممنوع أبواب متقدمة (الحال، التمييز، المفعول المطلق، البدل، الممنوع من الصرف).`,
-    'upper-primary': `معايرة المرحلة العمرية (${gradeLabel} — الابتدائية العليا 9-12 سنة): جمل واضحة متوسطة الطول (6-12 كلمة). المهارات المناسبة: الجملة الاسمية والفعلية، حروف الجر والاسم المجرور، ظرف الزمان وظرف المكان (منصوبَين بلا حرف جر)، كان وإنّ وأخواتهما، النعت والمضاف إليه، علامات الإعراب للمثنى والجمع، والهمزات. ممنوع القواعد الإعدادية/الثانوية المعقدة (التمييز، الاستثناء، البدل).`,
-    middle: `معايرة المرحلة العمرية (${gradeLabel} — الإعدادية/المتوسطة 12-15 سنة): نصوص مترابطة متوسطة العمق. القواعد المناسبة: المعرب والمبني، الأفعال الخمسة، النعت والحال والتوكيد والعطف، المفعول المطلق ولأجله، اللازم والمتعدي، المبني للمجهول ونائب الفاعل، المجرد والمزيد، والمشتقات الأساسية.`,
-    high: `معايرة المرحلة العمرية (${gradeLabel} — الثانوية 15-18 سنة): نصوص أدبية وفكرية رصينة وشواهد أصيلة. القواعد والبلاغة: التوابع المتقدمة (البدل، التوكيد)، المنصوبات المتقدمة (التمييز، الاستثناء، المنادى)، إعمال المشتقات، المصادر، الممنوع من الصرف، وعلوم البلاغة والتحليل النقدي.`,
+    kg: `معايرة المرحلة العمرية (${gradeLabel} — 4 إلى 6 سنوات): جمل قصيرة جداً ومألوفة (2-4 كلمات)، ومفاهيم ملموسة، وممنوع تماماً المصطلحات النحوية المجردة.`,
+    'lower-primary': `معايرة المرحلة العمرية (${gradeLabel} — الصفوف الأولية 6-9 سنوات): جمل قصيرة وسلسة (4-7 كلمات) من عالم الطفل وبمستوى الصفوف الأولية فقط. ممنوع إدخال أبواب نحوية متقدمة لا تناسب هذا العمر.`,
+    'upper-primary': `معايرة المرحلة العمرية (${gradeLabel} — الابتدائية العليا 9-12 سنة): جمل واضحة متوسطة الطول (6-12 كلمة) بمفردات وتراكيب تناسب الصفوف العليا الابتدائية، وممنوع القواعد الإعدادية أو الثانوية المعقدة.`,
+    middle: `معايرة المرحلة العمرية (${gradeLabel} — الإعدادية/المتوسطة 12-15 سنة): نصوص وجمل مترابطة متوسطة العمق تناسب طلاب المرحلة المتوسطة/الإعدادية.`,
+    high: `معايرة المرحلة العمرية (${gradeLabel} — الثانوية 15-18 سنة): نصوص أدبية وفكرية رصينة وتحليل نحوي وبلاغي عميق يناسب المرحلة الثانوية.`,
     general: `معايرة المرحلة العمرية (${gradeLabel}): اضبط طول الجمل ومستوى المفردات والقواعد لتطابق عمر طلاب (${gradeLabel}) بدقة.`,
   };
 
   return `\n\n${mapAr[band]}`;
 }
 
-function buildArabicLinguistVerificationProtocol(isAssessment: boolean = true): string {
+function buildArabicLinguistVerificationProtocol(settings: any, isAssessment: boolean = true): string {
+  const topicTitle = String(settings?.lessonTitle || '').trim();
+  const topicBundle = [
+    settings?.lessonTitle,
+    settings?.teacherPrompt,
+    settings?.customStandards,
+    settings?.sourceText,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const isAdverbLesson = /ظرف|الظرف|ظروف|المفعول\s+فيه/.test(topicBundle);
+
+  const adverbSpecialRule = isAdverbLesson
+    ? `
+- قاعدة خاصة بدرس الظروف فقط: فرّق بدقة بين الظرف المنصوب بتقدير «في» بلا حرف جر ظاهر (زمان مثل: صباحاً، مساءً، ليلاً، غداً، أمسِ، قبلَ، بعدَ؛ ومكان مبهم مثل: أمامَ، خلفَ، فوقَ، تحتَ، بينَ، عندَ، حولَ) وبين الجار والمجرور (مثل: «في الصباحِ»، «في الحديقةِ»، «على الطاولةِ») أو اسم المكان المختص/المفعول به (مثل: «زارَ الطالبُ متحفاً»). ممنوع منعاً باتاً عدّ الجار والمجرور ظرفاً!`
+    : '';
+
   return `
 
 بروتوكول خبير اللغة العربية والتدقيق النحوي (إلزامي 100%):
-1. التفريق الحاسم بين (ظرف الزمان/المكان) وبين (الجار والمجرور والمفعول به):
-   - ممنوع منعاً باتاً عدّ الجار والمجرور (مثل: "فِي الصَّبَاحِ، فِي الْمَدْرَسَةِ، عَلَى الطَّاوِلَةِ، إِلَى الْحَدِيقَةِ") أو اسم المكان المختص/المفعول به (مثل: "مَحَطَّةً، حَدِيقَةً، مَتْحَفاً، شَجَرَةً" في نحو "زَارَ الطَّالِبُ مَتْحَفاً") ظرفَ زمانٍ أو مكانٍ!
-   - الظرف الصحيح اسم منصوب بتقدير (في) بلا حرف جر ظاهر:
-     * زمان: (صَبَاحاً، مَسَاءً، لَيْلاً، نَهَاراً، يَوْماً، سَاعَةً، شِتَاءً، صَيْفاً، غَداً، قَبْلَ، بَعْدَ، حِينَ).
-     * مكان مبهم: (أَمَامَ، خَلْفَ، فَوْقَ، تَحْتَ، بَيْنَ، عِنْدَ، يَمِينَ، يَسَارَ، وَسَطَ، حَوْلَ، دَاخِلَ، خَارِجَ).
-2. التدقيق النحوي الكامل لكل جملة قبل اعتمادها:
-   - تأكد من صحة الإعراب ومطابقة الفعل للفاعل تذكيراً وتأنيثاً (سَافَرَتِ الْعَائِلَةُ لا سَافَرَ الْعَائِلَةُ)، وتوافق زمن الفعل مع الظرف (الماضي مع أَمْسِ، والمستقبل مع غَداً)، وعدم الخلط بين النعت والمضاف إليه أو الحال، وسلامة الصيغ («أيُّ الجمل التالية» لا «أيُّ جملةٍ التالية»).
-   - لا تُشكّل كل حرف في النص؛ اكتب بعربية فصيحة واضحة وضع الحركات الإعرابية فقط على أواخر الكلمات المطلوبة والشواهد النحوية (مثل: صباحاً، أمامَ، تحتَ).${
+1. الالتزام الحصري الصارم بموضوع الدرس المطلوب:
+   - الموضوع المطلوب حصراً هو: ${topicTitle ? `«${topicTitle}»` : 'الموضوع المحدد في توجيهات المعلم أو الملفات المرفقة'}.
+   - يجب أن تتركز جميع الأسئلة والأمثلة والشرح حصراً على هذا الموضوع المطلوب فقط، ويُحظر تماماً الانحراف إلى أي درس أو باب نحوي آخر لم يطلبه المعلم!
+2. التدقيق النحوي واللغوي الكامل لكل جملة قبل اعتمادها:
+   - تحقق نحوياً من صحة كل جملة وشاهد وخيار: تأكد من تطابق الإعراب والتصنيف النحوي مع القاعدة الصحيحة للدرس المطلوب، ومطابقة الفعل للفاعل تذكيراً وتأنيثاً (مثل: «سافرتِ العائلةُ» لا «سافرَ العائلةُ»)، وتوافق زمن الفعل مع دلالة الجملة (لا تجمع فعلاً ماضياً مع زمن مستقبل)، وسلامة الصيغ («أيُّ الجمل التالية» لا «أيُّ جملةٍ التالية»).${adverbSpecialRule}
+   - لا تُشكّل كل حرف في النص؛ اكتب بعربية فصيحة واضحة وضع الحركات الإعرابية فقط على أواخر الكلمات المطلوبة والشواهد النحوية.${
      isAssessment
        ? `
 3. معايير صياغة الأسئلة:
-   - كل سؤال يجب أن يكون كامل الصيغة وينتهي بعلامة استفهام (؟) أو طلب واضح، وجمله طبيعية منطقية المعنى.
-   - إذا سألت عن إعراب أو نوع كلمة داخل جملة فاذكر الكلمة صراحة داخل الجملة ولا تترك مكانها فراغاً (استخدم الفراغ "......" فقط في أسئلة "أكمل الفراغ").
+   - كل سؤال يجب أن يكون كامل الصيغة وينتهي بعلامة استفهام (؟) أو طلب واضح، وجمله طبيعية منطقية المعنى ومناسبة تماماً لعمر طلاب (${settings?.grade || 'الصف المختار'}).
+   - إذا سألت عن إعراب أو استخراج أو نوع كلمة داخل جملة فاذكر الكلمة صراحة داخل الجملة ولا تترك مكانها فراغاً (استخدم الفراغ "......" فقط في أسئلة «أكمل الفراغ»).
    - في أسئلة الاستخراج من جملة، اجعل الخيارات الأربعة (أ، ب، ج، د) من كلمات نفس الجملة، ونوّع أنماط الأسئلة، ووزّع الإجابات الصحيحة بتوازن بين (أ، ب، ج، د) ومطابقة تماماً لنموذج الإجابة والتعليل.`
        : ''
    }`;
@@ -792,14 +978,14 @@ function buildSubjectGuidance(settings: any, outputType: string = ''): string {
     const base = isAr
       ? `\n\nتوجيهات خاصة: المادة لغير الناطقين بالعربية (AFL). بسّط التراكيب والمفردات، وأضف دعماً بصرياً ومفردات مساعدة مناسبة لمتعلمي اللغة الثانية.`
       : `\n\nSpecial guidance: This subject is designed for non-native speakers (AFL / Second Language Learners). Simplify language structures, include visual supports and bilingual glossaries, and calibrate difficulty accordingly.`;
-    return `${base}${gradeCalibration}${includeLinguistProtocol ? buildArabicLinguistVerificationProtocol(isAssessment) : ''}`;
+    return `${base}${gradeCalibration}${includeLinguistProtocol ? buildArabicLinguistVerificationProtocol(settings, isAssessment) : ''}`;
   }
 
   const base = isAr
     ? `\n\nتوجيهات خاصة: المادة للناطقين باللغة العربية. التزم بالدقة العلمية والنحوية وملاءمة المرحلة العمرية.`
     : `\n\nSpecial guidance: Designed for native-level learners. Focus on domain accuracy, age-appropriate rigor, and higher-order analytical competencies aligned with the selected grade level.`;
 
-  return `${base}${gradeCalibration}${includeLinguistProtocol ? buildArabicLinguistVerificationProtocol(isAssessment) : ''}`;
+  return `${base}${gradeCalibration}${includeLinguistProtocol ? buildArabicLinguistVerificationProtocol(settings, isAssessment) : ''}`;
 }
 
 function getLmsXmlSchemaDirective(lmsTarget?: string, isAr: boolean = true): string {
@@ -963,8 +1149,8 @@ function buildStandardizedPrompt(settings: any, isAr: boolean, ctx: string): str
       : '';
 
     return `${ctx}${sourceDirective}${formatDirectiveAr}
-المطلوب: توليد "اختبار معياري / تشخيصي متكامل" باللغة العربية الفصيحة السليمة على شكل HTML احترافي جاهز للعرض والطباعة (من 10 إلى 12 سؤالاً معيراً)، معدّ بميزان خبير اللغة العربية ومعاير تماماً للمرحلة العمرية لـ (${settings.grade || 'الصف المختار'}).
-قاعدة التدقيق النحوي الإلزامية: افحص كل سؤال وشاهد لغوي نحوياً قبل اعتماده (لا تخلط أبداً بين الجار والمجرور وبين ظرف الزمان أو المكان، وتأكد من صحة الإعراب والضبط الوظيفي وملاءمة المستوى لعمر الطالب).
+المطلوب: توليد "اختبار معياري / تشخيصي متكامل" حول موضوع «${settings.lessonTitle || 'المحتوى المحدد'}» باللغة العربية الفصيحة السليمة على شكل HTML احترافي جاهز للعرض والطباعة (من 10 إلى 12 سؤالاً معيراً)، معدّ بميزان خبير اللغة العربية ومعاير تماماً للمرحلة العمرية لـ (${settings.grade || 'الصف المختار'}).
+قاعدة التدقيق النحوي والالتزام بالموضوع: يجب أن تدور جميع الأسئلة حصراً حول الموضوع المطلوب (${settings.lessonTitle || 'المحتوى المرفق'})، مع فحص كل سؤال وشاهد لغوي نحوياً قبل اعتماده والتأكد من صحة الإعراب والضبط الوظيفي وملاءمة المستوى لعمر الطالب.
 تفاصيل الإطار المعياري المستهدف:
 ${frameworkDetails}
 ${subCriteriaText}
@@ -1080,7 +1266,7 @@ function buildBasePrompt(settings: any, outputType: string): string {
     const ctx = `أنت خبير أكاديمي متخصص في اللغة العربية والنحو والصرف وبناء المناهج والاختبارات التربوية لأكاديمية سهلة الدولية ومدرسة الفرقان العالمية، تصوغ كل محتوى وسؤال بدقة خبير اللغة والقياس والتقويم، وتراعي بصرامة المرحلة العمرية والصف الدراسي المختار.
 
 قاعدة لغوية ونحوية صارمة:
-يجب أن تخلو جميع الأسئلة والشواهد والخيارات من أي خطأ نحوي أو صرفي أو إملائي أو خلط بين الأبواب النحوية (مثل الخلط بين الجار والمجرور والظرف)، مع استخدام عربية فصيحة سليمة وضبط أواخر الكلمات الإعرابية والشواهد النحوية فقط (دون إثقال بالتشكيل الكامل على كل حرف من النص العادي لسرعة الإنتاج وسلاسة القراءة).
+يجب الالتزام الحصري بموضوع الدرس المطلوب («${settings.lessonTitle || 'حسب المحتوى المرفق'}»)، وأن تخلو جميع الأسئلة والشواهد والخيارات من أي خطأ نحوي أو صرفي أو إملائي أو خلط بين الأبواب النحوية، مع استخدام عربية فصيحة سليمة وضبط أواخر الكلمات الإعرابية والشواهد النحوية فقط (دون إثقال بالتشكيل الكامل على كل حرف من النص العادي لسرعة الإنتاج وسلاسة القراءة).
 
 معلومات الدرس:
 - المادة: ${settings.subject || 'غير محدد'}
@@ -1229,17 +1415,20 @@ ${isAutoPilot ? '- نظام الطيار الآلي (AI AutoPilot): مفعل - �
       case 'quiz': {
         const subj = settings.subject || 'اللغة العربية';
         const grd = settings.grade || 'الصف السادس';
+        const topic = settings.lessonTitle?.trim() || 'الدرس المحدد';
 
         return `${ctx}
-المطلوب حصرياً: توليد "اختبار قصير شامل (10 أسئلة اختيار من متعدد)" باللغة العربية الفصيحة مع ضبط أواخر الكلمات الإعرابية والشواهد النحوية بالشكل الصحيح بدقة 100%، بصيغة HTML منسق وجاهز، مُراجع نحوياً بدقة خبير اللغة العربية ومُعاير تماماً للمرحلة العمرية لـ (${grd}).
-قاعدة التدقيق قبل الإخراج:
-- راجع كل سؤال وجملة شاهد نحوياً قبل كتابتها: تأكد من وجود الظاهرة النحوية المطلوبة فعلاً في الجملة (لا تطلب ظرفاً في جملة ليس فيها إلا جار ومجرور أو مفعول به، ولا تخلط بين ظرف المكان المبهم مثل "أمام/خلف/فوق/تحت/بين/عند" وبين اسم المكان المختص مثل "حديقة/محطة/متحف/مدرسة").
-- تأكد من سلامة المعنى ومطابقة الفعل للفاعل تذكيراً وتأنيثاً، وملاءمة المفردات والقواعد لعمر طلاب (${grd}).
-- وزّع الإجابات الصحيحة بتوازن متنوع بين (أ، ب، ج، د) ولا تجعل الإجابة الصحيحة دائماً في (أ).
+المطلوب حصرياً: توليد "اختبار قصير شامل (10 أسئلة اختيار من متعدد)" حول موضوع «${topic}» فقط، باللغة العربية الفصيحة مع ضبط أواخر الكلمات الإعرابية والشواهد النحوية بدقة 100%، بصيغة HTML منسق وجاهز، مُراجع نحوياً بدقة خبير اللغة العربية ومُعاير تماماً للمرحلة العمرية لـ (${grd}).
+قاعدة الالتزام بالموضوع والتدقيق قبل الإخراج:
+- جميع الأسئلة العشرة يجب أن تقيس موضوع «${topic}» حصراً (وتوجيهات المعلم إن وُجدت)، وممنوع تماماً الانحراف إلى أي درس أو قاعدة أخرى لم تُطلب.
+- راجع كل سؤال وجملة شاهد نحوياً قبل كتابتها للتأكد من وجود الظاهرة المطلوبة فعلاً في الجملة، وصحة الإعراب، وسلامة المعنى، ومطابقة الفعل للفاعل، وملاءمة المفردات لعمر طلاب (${grd}).
+- قاعدة الخيار الصحيح الوحيد (إلزامية 100%): يجب أن يكون لكل سؤال خيار واحد صحيح فقط و3 خيارات خاطئة ومختلفة تماماً عن بعضها (يُحظر تكرار نفس الكلمة في خيارين، ويُحظر أن تصلح أكثر من إجابة للسؤال الواحد).
+- وزّع موضع الإجابة الصحيحة فعلياً داخل أعمدة الجدول (أ، ب، ج، د) بتوازن متنوع، وتأكد 100% أن الحرف المكتوب في نموذج الإجابة يطابق العمود الفعلي الذي وردت فيه الإجابة الصحيحة داخل الجدول.
+- نوّع في صياغة الجمل والأمثلة (لا تكرر نفس الجملة أو نفس التعليل الحرفي في كل الأسئلة).
 قاعدة ذهبية إلزامية: ممنوع تماماً أي كلام حواري أو مقدمات شخصية، وممنوع استخدام رموز ماركداون (\`\`\` أو ### أو **). ابدأ فوراً بوسوم HTML التالية:
 
 1. عنوان الاختبار في البداية:
-<h1 style="color:#0369a1; text-align:center; font-size:22px; font-weight:800; margin-bottom:20px;">اختبار قصير شامل (${subj} - ${grd})</h1>
+<h1 style="color:#0369a1; text-align:center; font-size:22px; font-weight:800; margin-bottom:20px;">اختبار قصير: ${topic} (${subj} - ${grd})</h1>
 
 2. الشكل الأول: جدول الأسئلة (10 أسئلة اختيار من متعدد)
 اعرض جميع الأسئلة العشرة (10 أسئلة) في جدول HTML أنيق من 6 أعمدة بالضبط (رقم السؤال | السؤال | أ | ب | ج | د):
@@ -1275,13 +1464,14 @@ ${isAutoPilot ? '- نظام الطيار الآلي (AI AutoPilot): مفعل - �
       case 'qti-exam': {
         const subj = settings.subject || 'اللغة العربية';
         const grd = settings.grade || 'الصف السادس';
+        const topic = settings.lessonTitle?.trim() || 'الدرس المحدد';
 
         return `${ctx}
-المطلوب حصرياً: توليد "امتحان اختيار من متعدد شامل لمستويات بلوم (20 سؤالاً معيارياً)" باللغة العربية الفصيحة مع ضبط أواخر الكلمات الإعرابية والشواهد النحوية بالشكل الصحيح بدقة 100% على شكل HTML، بدون أي مقدمات حوارية أو رموز ماركداون، مُعد بدقة خبير اللغة العربية ومُعاير تماماً للمرحلة العمرية لـ (${grd}).
-قاعدة التدقيق النحوي الإلزامية: افحص كل سؤال وجملة شاهد نحوياً قبل كتابتها (تمييز تام بين الظرف المنصوب وبين الجار والمجرور والمفعول به، صحة الإعراب والضبط ومطابقة الفعل للفاعل، ملاءمة المفردات والقواعد لـ ${grd}، وتوزيع الإجابات الصحيحة بتوازن بين أ، ب، ج، د).
+المطلوب حصرياً: توليد "امتحان اختيار من متعدد شامل لمستويات بلوم (20 سؤالاً معيارياً)" حول موضوع «${topic}» فقط، باللغة العربية الفصيحة مع ضبط أواخر الكلمات الإعرابية والشواهد النحوية بدقة 100% على شكل HTML، بدون أي مقدمات حوارية أو رموز ماركداون، مُعد بدقة خبير اللغة العربية ومُعاير تماماً للمرحلة العمرية لـ (${grd}).
+قاعدة الالتزام بالموضوع والتدقيق النحوي: جميع الأسئلة العشرين يجب أن تلتزم حصراً بموضوع «${topic}» (وتوجيهات المعلم إن وُجدت). افحص كل سؤال وجملة شاهد نحوياً قبل كتابتها للتأكد من صحة الإعراب والضبط ومطابقة الفعل للفاعل وملاءمة المفردات والقواعد لـ ${grd}، وتوزيع الإجابات الصحيحة بتوازن بين أ، ب، ج، د.
 
 1. عنوان الامتحان:
-<h1 style="color:#0369a1; text-align:center; font-size:22px; font-weight:800; margin-bottom:20px;">امتحان بلوم الشامل (${subj} - ${grd})</h1>
+<h1 style="color:#0369a1; text-align:center; font-size:22px; font-weight:800; margin-bottom:20px;">امتحان بلوم الشامل: ${topic} (${subj} - ${grd})</h1>
 
 2. الشكل الأول: جدول الأسئلة (20 سؤال اختيار من متعدد)
 جدول HTML أنيق بـ 6 أعمدة (رقم السؤال | السؤال | أ | ب | ج | د) لجميع الـ 20 سؤالاً موزعة حسب هرم بلوم:
@@ -1840,7 +2030,11 @@ Strict rule: Use the attached content below as the primary reference for this ge
     }
 
     const text = response.text || '';
-    const htmlContent = extractHtml(text);
+    const rawHtmlContent = extractHtml(text);
+    const htmlContent =
+      outputType === 'quiz' || outputType === 'qti-exam'
+        ? alignMcqTableAndAnswerKey(rawHtmlContent, isAr)
+        : rawHtmlContent;
     const institutionHeader = getInstitutionHeader(settings, outputType);
 
     const direction = isAr ? 'rtl' : 'ltr';
